@@ -5,7 +5,7 @@ services:
       - envs/.local.env
     build:
       context: .
-    working_dir: /PGTI
+    working_dir: /oz_union_16_BE
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
@@ -13,9 +13,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/PGTI
-      - static_volume:/PGTI/static
-      - media_volume:/PGTI/media
+      - .:/oz_union_16_BE
+      - static_volume:/oz_union_16_BE/static
+      - media_volume:/oz_union_16_BE/media
     networks:
       - ws
     depends_on:
@@ -29,13 +29,13 @@ services:
     container_name: pgti_nginx
     ports:
       - "80:80"
-      - "443:443"
+#      - "443:443"
     depends_on:
       - django
     volumes:
       - ./nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
-      - static_volume:/PGTI/static
-      - media_volume:/PGTI/media
+      - static_volume:/oz_union_16_BE/static
+      - media_volume:/oz_union_16_BE/media
     networks:
       - ws
 
