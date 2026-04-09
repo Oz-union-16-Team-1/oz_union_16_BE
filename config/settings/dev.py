@@ -10,7 +10,7 @@ DEBUG = True
 
 # ALLOWED_HOSTS = RAW_ALLOWED_HOSTS.split(" ")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "static"
