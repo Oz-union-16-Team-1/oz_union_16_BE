@@ -87,6 +87,8 @@ jobs:
           echo "${{ secrets.DJANGO_ENVS }}" >> envs/.local.env
 
       - name: Run Django Migration
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
           uv run python manage.py migrate
 
