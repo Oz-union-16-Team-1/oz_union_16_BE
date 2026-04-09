@@ -39,7 +39,7 @@ lint:  ## ruff 코드 검사
 	$(COMPOSE) exec django uv run ruff check .
 	$(COMPOSE) exec django uv run ruff format --check .
 
-code_format:  ## ruff 자동 포맷팅
+code_format:  ## isort black 코드 포메팅
 	$(COMPOSE) exec django uv run isort .
 	$(COMPOSE) exec django uv run black .
 
