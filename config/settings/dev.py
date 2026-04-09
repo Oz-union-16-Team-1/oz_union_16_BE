@@ -10,7 +10,7 @@ DEBUG = True
 
 # ALLOWED_HOSTS = RAW_ALLOWED_HOSTS.split(" ")
 
-ALLOWED_HOSTS = ['0.0.0.0', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ["0.0.0.0", "localhost", "127.0.0.1"]
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "static"
@@ -21,5 +21,3 @@ MEDIA_ROOT = BASE_DIR / "media"
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
-
-

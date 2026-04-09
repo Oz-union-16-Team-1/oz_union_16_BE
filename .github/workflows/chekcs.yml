@@ -21,7 +21,7 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.12 # uv를 통한 파이썬 설치
+        run: uv python install 3.14 # uv를 통한 파이썬 설치
 
       - name: Install dependencies
         run: uv sync --frozen # uv.lock 기반으로 동기화 (poetry install과 유사)
@@ -87,6 +87,10 @@ jobs:
           echo "${{ secrets.DJANGO_ENVS }}" >> envs/.local.env
 
       - name: Run Django Migration
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DB_HOST: localhost
+
         run: |
           uv run python manage.py migrate
 
