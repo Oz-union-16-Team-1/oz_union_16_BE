@@ -27,7 +27,7 @@ jobs:
       # 1. GitHub Actions 러너의 현재 퍼블릭 IP 가져오기
       - name: Get GitHub Actions IP
         id: ip
-        uses: echo "ipv4=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
+        run: echo "ipv4=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
 
       - name: Build and Push Docker Image
         run: |
