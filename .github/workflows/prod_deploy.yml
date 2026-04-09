@@ -95,13 +95,10 @@ jobs:
             docker run -d \
               --network ws \
               --name nginx \
-              -v static-volume:/vol/web/static \
-              -v media-volume:/vol/web/media \
+              -v static-volume:/oz_union_16_BE/static \
+              -v media-volume:/oz_union_16_BE/media \
               -p 80:80 \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
-#              -p 443:443 \
-#              -v certbot-conf:/etc/letsencrypt \
-#              -v certbot-www:/var/www/certbot \
             docker image prune -af
 
       - name: Remove GitHub IP from AWS SG
