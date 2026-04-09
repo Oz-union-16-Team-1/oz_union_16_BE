@@ -21,7 +21,7 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.12 # uv를 통한 파이썬 설치
+        run: uv python install 3.14 # uv를 통한 파이썬 설치
 
       - name: Install dependencies
         run: uv sync --frozen # uv.lock 기반으로 동기화 (poetry install과 유사)

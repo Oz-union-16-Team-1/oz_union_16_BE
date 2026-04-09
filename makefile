@@ -1,4 +1,4 @@
-COMPOSE := docker compose -f resource/docker-compose.yml --env-file envs/.env
+COMPOSE := docker compose -f docker-compose.local.yml --env-file envs/.local.env
 
 .PHONY: build up down restart logs ps \
         migrate makemigrations createsuperuser shell \
@@ -24,28 +24,28 @@ ps:  ## 컨테이너 상태 확인
 	$(COMPOSE) ps
 
 migrate:  ## 마이그레이션 실행
-	$(COMPOSE) exec web uv run python manage.py migrate
+	$(COMPOSE) exec django uv run python manage.py migrate
 
 makemigrations:  ## 마이그레이션 파일 생성
-	$(COMPOSE) exec web uv run python manage.py makemigrations
+	$(COMPOSE) exec django uv run python manage.py makemigrations
 
 createsuperuser:  ## 관리자 계정 생성
-	$(COMPOSE) exec web uv run python manage.py createsuperuser
+	$(COMPOSE) exec django uv run python manage.py createsuperuser
 
 shell:  ## Django shell 접속
-	$(COMPOSE) exec web uv run python manage.py shell
+	$(COMPOSE) exec django uv run python manage.py shell
 
 lint:  ## ruff 코드 검사
-	$(COMPOSE) exec web uv run ruff check .
-	$(COMPOSE) exec web uv run ruff format --check .
+	$(COMPOSE) exec django uv run ruff check .
+	$(COMPOSE) exec django uv run ruff format --check .
 
 code_format:  ## ruff 자동 포맷팅
-	$(COMPOSE) exec web uv run ruff check --fix .
-	$(COMPOSE) exec web uv run ruff format .
+	$(COMPOSE) exec django uv run isort .
+	$(COMPOSE) exec django uv run black .
 
 test:  ## mypy 타입체크 + Django 테스트
-	$(COMPOSE) exec web uv run mypy .
-	$(COMPOSE) exec web uv run python manage.py test apps
+	$(COMPOSE) exec django uv run mypy .
+	$(COMPOSE) exec django uv run python manage.py test apps
 
 db-shell:  ## PostgreSQL 직접 접속
 	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-template_db}
