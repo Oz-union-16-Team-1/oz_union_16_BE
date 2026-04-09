@@ -30,3 +30,12 @@ COPY . .
 
 # (선택 사항) 프로젝트 자체 설치
 RUN uv sync --frozen --no-dev
+
+EXPOSE 8000
+
+CMD ["uv", "run", "gunicorn", \
+     "--bind", "0.0.0.0:8000", \
+     "--workers", "3", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "config.wsgi:application"]
