@@ -101,6 +101,13 @@ jobs:
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
             docker image prune -af
 
+      - name: Get GitHub Actions IP
+        id: ip
+        run: echo "ipv4=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
+
+      - name: Check saved IP
+        run: echo "저장된 IP는 ${{ steps.ip.outputs.ipv4 }} 입니다."
+
       - name: Remove GitHub IP from AWS SG
         if: always()
         run: |
