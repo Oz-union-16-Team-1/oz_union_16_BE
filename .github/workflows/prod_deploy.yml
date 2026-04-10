@@ -52,7 +52,7 @@ jobs:
           --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
           --region ap-southeast-2
 
-      # 4. SSH 접속 및 배포 (에러 수정 버전)
+      # 4. SSH 접속 및 배포
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -60,44 +60,40 @@ jobs:
           username: ${{ secrets.EC2_PROD_USER }}
           key: ${{ secrets.EC2_PROD_SSH_KEY }}
           script: |
-            # 1. 환경 변수 파일 생성 (따옴표 에러 방지를 위해 cat 사용)
             sudo rm -f ${{ secrets.ENV_FILE_NAME }}
             cat <<EOF > ${{ secrets.ENV_FILE_NAME }}
             ${{ secrets.DJANGO_PROD_ENVS }}
             EOF
             
-            # 2. 도커 네트워크 및 볼륨 생성
+            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod
+            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
+
             docker network create ws || true
-            docker volume create static-volume || true
-            docker volume create media-volume || true
             
-            # 3. Django 배포
             docker stop django || true
             docker rm django || true
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod
             docker run -d \
               --name django \
               --network ws \
-              -v static-volume:/oz_union_16_BE/static \
-              -v media-volume:/oz_union_16_BE/media \
-              -p 8000:8000 \
+              -v static_volume:/oz_union_16_BE/static \
+              -v media_volume:/oz_union_16_BE/media \
               --env-file ${{ secrets.ENV_FILE_NAME }} \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod \
               sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
             
-            # 4. Nginx 배포
             docker stop nginx || true
             docker rm nginx || true
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
             docker run -d \
               --name nginx \
               --network ws \
-              -v static-volume:/oz_union_16_BE/static \
-              -v media-volume:/oz_union_16_BE/media \
+              -v static_volume:/oz_union_16_BE/static \
+              -v media_volume:/oz_union_16_BE/media \
               -p 80:80 \
+              -p 443:443 \
+              -v /etc/letsencrypt:/etc/letsencrypt:ro \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
-            
-            docker image prune -af
+
+            docker image prune -f
 
       # 5. AWS 보안 그룹에서 GitHub IP 삭제 (실패해도 실행)
       - name: Remove GitHub IP from AWS SG
@@ -108,3 +104,4 @@ jobs:
             --protocol tcp --port 22 \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
             --region ap-southeast-2
+          

@@ -2,7 +2,7 @@ services:
   django:
     container_name: pgti_django
     env_file:
-      - envs/.local.env
+      - envs/.env.prod
     build:
       context: .
     working_dir: /oz_union_16_BE
@@ -10,8 +10,8 @@ services:
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
              gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - .:/oz_union_16_BE
       - static_volume:/oz_union_16_BE/static
@@ -33,28 +33,25 @@ services:
     depends_on:
       - django
     volumes:
-      - ./nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - static_volume:/oz_union_16_BE/static
       - media_volume:/oz_union_16_BE/media
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
     networks:
       - ws
 
   db:
     image: postgres:14
     container_name: pgti_postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: pgti1234
-      POSTGRES_ROOT_USER: postgres
-      POSTGRES_DB: oz_combined_PGTI
-    ports:
-      - 5432:5432
+    env_file:
+      - envs/.env.prod
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - ws
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "postgres"]
+      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -63,8 +60,6 @@ services:
   redis:
     image: redis:latest
     container_name: pgti_redis
-    ports:
-      - "6379:6379"
     networks:
       - ws
     healthcheck:
