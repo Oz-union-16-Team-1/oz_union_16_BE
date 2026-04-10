@@ -97,6 +97,7 @@ jobs:
               --network ws \
               -v static_volume:/oz_union_16_BE/static \
               -v media_volume:/oz_union_16_BE/media \
+              -e DJANGO_SETTINGS_MODULE=config.settings.prod \
               --env-file ${{ secrets.ENV_FILE_NAME }} \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod \
               sh -c "python manage.py migrate --settings=config.settings.prod && \
