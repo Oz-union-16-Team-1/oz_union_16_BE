@@ -98,11 +98,10 @@ jobs:
               -v static_volume:/oz_union_16_BE/static \
               -v media_volume:/oz_union_16_BE/media \
               -e DJANGO_SETTINGS_MODULE=config.settings.prod \
+              -e STATIC_ROOT=/oz_union_16_BE/static \
               --env-file ${{ secrets.ENV_FILE_NAME }} \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod \
-              sh -c "python manage.py migrate --settings=config.settings.prod && \
-                     python manage.py collectstatic --noinput --settings=config.settings.prod && \
-                     gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
+              sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
 
             # 6. Nginx 이미지 Pull 및 실행
             docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
