@@ -65,11 +65,31 @@ jobs:
             ${{ secrets.DJANGO_PROD_ENVS }}
             EOF
             
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
-
+            # 2. 도커 네트워크 생성
             docker network create ws || true
-            
+
+            # 3. DB 컨테이너 실행 (이 부분이 추가되어야 합니다)
+            if [ ! "$(docker ps -q -f name=db)" ]; then
+                if [ "$(docker ps -aq -f status=exited -f name=db)" ]; then
+                    docker rm db
+                fi
+                docker run -d \
+                  --name db \
+                  --network ws \
+                  -e POSTGRES_USER=postgres \
+                  -e POSTGRES_PASSWORD=pgti1234 \
+                  -e POSTGRES_DB=oz_combined_PGTI \
+                  -v postgres_data:/var/lib/postgresql/data \
+                  postgres:14
+            fi
+
+            # 4. Redis 컨테이너 실행 (필요한 경우)
+            if [ ! "$(docker ps -q -f name=redis)" ]; then
+                docker run -d --name redis --network ws redis:latest
+            fi
+
+            # 5. Django 이미지 Pull 및 실행
+            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod
             docker stop django || true
             docker rm django || true
             docker run -d \
@@ -80,16 +100,17 @@ jobs:
               --env-file ${{ secrets.ENV_FILE_NAME }} \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod \
               sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
-            
+
+            # 6. Nginx 이미지 Pull 및 실행
+            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
             docker stop nginx || true
             docker rm nginx || true
             docker run -d \
               --name nginx \
               --network ws \
+              -p 80:80 -p 443:443 \
               -v static_volume:/oz_union_16_BE/static \
               -v media_volume:/oz_union_16_BE/media \
-              -p 80:80 \
-              -p 443:443 \
               -v /etc/letsencrypt:/etc/letsencrypt:ro \
               ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
 
