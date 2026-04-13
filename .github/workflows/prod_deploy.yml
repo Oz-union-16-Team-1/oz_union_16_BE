@@ -80,7 +80,7 @@ jobs:
                   -e POSTGRES_PASSWORD=pgti1234 \
                   -e POSTGRES_DB=oz_combined_PGTI \
                   -v postgres_data:/var/lib/postgresql/data \
-                  postgres:14
+                  pgvector/pgvector:pg14
             fi
 
             # 4. Redis 컨테이너 실행 (필요한 경우)

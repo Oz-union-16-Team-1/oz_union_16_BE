@@ -40,7 +40,7 @@ services:
       - ws
 
   db:
-    image: postgres:14
+    image: pgvector/pgvector:pg14
     container_name: pgti_postgres
     environment:
       POSTGRES_USER: postgres
