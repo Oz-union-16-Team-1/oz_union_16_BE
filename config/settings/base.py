@@ -17,6 +17,9 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# 로그로 경로를 확인해보는 코드를 임시로 넣어보세요 (디버깅용)
+print(f"DEBUG: BASE_DIR is {BASE_DIR}")
+print(f"DEBUG: STATIC_ROOT is {os.path.join(BASE_DIR, 'static')}")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/

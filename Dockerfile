@@ -3,7 +3,9 @@ FROM ghcr.io/astral-sh/uv:latest AS uv_bin
 FROM python:3.14-rc-slim
 
 # 작업 디렉토리 설정
-WORKDIR /PGTI
+WORKDIR /oz_union_16_BE
+
+ENV PYTHONPATH=/oz_union_16_BE
 
 # uv 바이너리 복사 (설치 과정 생략으로 빌드 속도 향상)
 COPY --from=uv_bin /uv /uvx /bin/
@@ -33,9 +35,7 @@ RUN uv sync --frozen --no-dev
 
 EXPOSE 8000
 
-CMD ["uv", "run", "gunicorn", \
+CMD ["gunicorn", \
      "--bind", "0.0.0.0:8000", \
      "--workers", "3", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
      "config.wsgi:application"]
