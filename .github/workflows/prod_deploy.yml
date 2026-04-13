@@ -28,6 +28,7 @@ jobs:
         id: ip
         run: echo "ipv4=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
 
+      # 2. Docker 이미지 빌드 및 푸시
       - name: Build and Push Docker Image
         run: |
           docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod .
@@ -35,7 +36,7 @@ jobs:
           docker build --platform linux/amd64 -t ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod -f ./nginx/prod.Dockerfile ./nginx
           docker push ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
 
-      # 2. AWS 자격 증명 설정
+      # 3. AWS 자격 증명 설정
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -43,7 +44,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
 
-      # 3. AWS 보안 그룹에 GitHub IP 일시 허용
+      # 4. AWS 보안 그룹에 GitHub IP 일시 허용
       - name: Add GitHub IP to AWS Security Group
         run: |
           aws ec2 authorize-security-group-ingress \
@@ -52,7 +53,7 @@ jobs:
           --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
           --region ap-southeast-2
 
-      # 4. SSH 접속 및 배포
+      # 5. SSH 접속 및 Docker Compose 배포
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -60,65 +61,24 @@ jobs:
           username: ${{ secrets.EC2_PROD_USER }}
           key: ${{ secrets.EC2_PROD_SSH_KEY }}
           script: |
-            sudo rm -f ${{ secrets.ENV_FILE_NAME }}
-            cat <<EOF > ${{ secrets.ENV_FILE_NAME }}
+            mkdir -p ~/oz_union_16_BE
+            cd ~/oz_union_16_BE 
+
+            mkdir -p envs
+            cat <<EOF > envs/.env.prod
             ${{ secrets.DJANGO_PROD_ENVS }}
             EOF
             
-            # 2. 도커 네트워크 생성
-            docker network create ws || true
+            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
+            export DOCKER_REPO=${{ secrets.DOCKER_REPO }}
+            
+            docker-compose -f docker-compose.prod.yml pull
 
-            # 3. DB 컨테이너 실행 (이 부분이 추가되어야 합니다)
-            if [ ! "$(docker ps -q -f name=db)" ]; then
-                if [ "$(docker ps -aq -f status=exited -f name=db)" ]; then
-                    docker rm db
-                fi
-                docker run -d \
-                  --name db \
-                  --network ws \
-                  -e POSTGRES_USER=postgres \
-                  -e POSTGRES_PASSWORD=pgti1234 \
-                  -e POSTGRES_DB=oz_combined_PGTI \
-                  -v postgres_data:/var/lib/postgresql/data \
-                  pgvector/pgvector:pg14
-            fi
-
-            # 4. Redis 컨테이너 실행 (필요한 경우)
-            if [ ! "$(docker ps -q -f name=redis)" ]; then
-                docker run -d --name redis --network ws redis:latest
-            fi
-
-            # 5. Django 이미지 Pull 및 실행
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod
-            docker stop django || true
-            docker rm django || true
-            docker run -d \
-              --name django \
-              --network ws \
-              -v static_volume:/oz_union_16_BE/static \
-              -v media_volume:/oz_union_16_BE/media \
-              -e DJANGO_SETTINGS_MODULE=config.settings.prod \
-              -e STATIC_ROOT=/oz_union_16_BE/static \
-              --env-file ${{ secrets.ENV_FILE_NAME }} \
-              ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:django-prod \
-              sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn --workers 3 --bind 0.0.0.0:8000 config.wsgi:application"
-
-            # 6. Nginx 이미지 Pull 및 실행
-            docker pull ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
-            docker stop nginx || true
-            docker rm nginx || true
-            docker run -d \
-              --name nginx \
-              --network ws \
-              -p 80:80 -p 443:443 \
-              -v static_volume:/oz_union_16_BE/static \
-              -v media_volume:/oz_union_16_BE/media \
-              -v /etc/letsencrypt:/etc/letsencrypt:ro \
-              ${{ secrets.DOCKER_USERNAME }}/${{ secrets.DOCKER_REPO }}:nginx-prod
+            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
 
             docker image prune -f
 
-      # 5. AWS 보안 그룹에서 GitHub IP 삭제 (실패해도 실행)
+      # 6. AWS 보안 그룹에서 GitHub IP 삭제 (성공/실패 상관없이 실행)
       - name: Remove GitHub IP from AWS SG
         if: always()
         run: |
@@ -126,6 +86,4 @@ jobs:
             --group-id ${{ secrets.AWS_SG_ID }} \
             --protocol tcp --port 22 \
             --cidr ${{ steps.ip.outputs.ipv4 }}/32 \
-            --region ap-southeast-2
-
-          docker image prune -f
+            --region ap-
