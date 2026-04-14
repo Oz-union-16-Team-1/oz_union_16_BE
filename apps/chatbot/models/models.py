@@ -1,16 +1,11 @@
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Max
 
 
 class ChatbotSession(models.Model):
     chatbot_sessions_id = models.BigAutoField(primary_key=True)
 
-    # 현재 화면에서만 사용하는 임시 세션 식별자
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    # 임시 세션 만료 시각
-    expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "chatbot_sessions"
@@ -23,24 +18,31 @@ class ChatbotMessage(models.Model):
 
     chatbot_completions_id = models.BigAutoField(primary_key=True)
 
-    # 사용자 / 챗봇 메시지 구분
     role = models.CharField(max_length=10, choices=RoleChoices.choices)
 
-    # 세션 내 메시지 순서
     sequence = models.PositiveIntegerField()
 
-    # 실제 대화 내용
     message = models.TextField()
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # 한 세션에 여러 메시지 (1:N)
     chatbot_session = models.ForeignKey(
         ChatbotSession,
         on_delete=models.CASCADE,
         db_column="chatbot_sessions_id",
         related_name="messages",
     )
+
+    # 🔥 자동 sequence 처리
+    def save(self, *args, **kwargs):
+        if not self.sequence:
+            last = ChatbotMessage.objects.filter(
+                chatbot_session=self.chatbot_session
+            ).aggregate(max_seq=Max("sequence"))["max_seq"]
+
+            self.sequence = (last or 0) + 1
+
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = "chatbot_messages"
