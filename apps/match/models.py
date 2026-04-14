@@ -6,7 +6,7 @@ from django.db.models import Q
 class MatchResult(models.Model):  # 매칭 결과는 이력 저장 없이 최신 1건만 유지
     match_results_id = models.BigAutoField(primary_key=True)
     game_id = models.IntegerField(db_index=True)
-    rating = models.FloatField()  # 매칭 점수 0.0 ~ 5.0
+    rating = models.PositiveSmallIntegerField()  # 매칭 점수 1 ~ 5
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(
@@ -24,8 +24,20 @@ class MatchResult(models.Model):  # 매칭 결과는 이력 저장 없이 최신
                 name="uq_match_results_user_game",
             ),
             models.CheckConstraint(
-                condition=Q(rating__gte=0.0)
-                & Q(rating__lte=5.0),  # 별점 스케일은 0.0~5.0으로 고정
-                name="ck_match_results_rating_0_5",
+                condition=Q(rating__gte=1)
+                & Q(rating__lte=5),  # 별점 스케일은 1 ~ 5로 고정
+                name="ck_match_results_rating_1_5",
+            ),
+        ]
+        indexes = [
+            # latest_desc + cursor(match_results_id) 용
+            models.Index(
+                fields=["user", "-updated_at", "-match_results_id"],
+                name="ix_match_user_latest_cursor",
+            ),
+            # popular_desc(rating desc) + cursor(match_results_id) 용
+            models.Index(
+                fields=["user", "-rating", "-match_results_id"],
+                name="ix_match_user_popular_cursor",
             ),
         ]
