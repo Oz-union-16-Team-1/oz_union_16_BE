@@ -1,6 +1,7 @@
+from django.conf import settings
 from django.db import models
 from django.db.models import Q
-from django.conf import settings
+
 
 # 1. 유저별 좋아요 기록
 class UserGamelike(models.Model):
@@ -9,20 +10,17 @@ class UserGamelike(models.Model):
         on_delete=models.CASCADE,
         related_name="game_likes",
     )
-    game_id = models.IntegerField() # IGDB 게임_ID
+    game_id = models.IntegerField()  # IGDB 게임_ID
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "user_game_likes"
         constraints = [
             models.UniqueConstraint(
-                fields=[
-                    'user',
-                    'game_id'
-                ],
-                name="user_game_likes_unique"
+                fields=["user", "game_id"], name="user_game_likes_unique"
             ),
         ]
+
 
 # 2. 게임당 총 좋아요 수
 class GameLikeCount(models.Model):
@@ -43,12 +41,11 @@ class GameLikeCount(models.Model):
             ),
         ]
 
-#3. 블랙리스트 관리
+
+# 3. 블랙리스트 관리
 class GameExclusion(models.Model):
     game_exclusion_id = models.BigAutoField(primary_key=True)
-    game_id = models.IntegerField(
-        unique=True
-    )
+    game_id = models.IntegerField(unique=True)
     title = models.CharField(max_length=255)
     reason = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
