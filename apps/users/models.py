@@ -3,6 +3,7 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from pgvector.django import VectorField
+from apps.users.choices import StatusChoices, SocialProvider, GenderChoices
 
 EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정해야 함
 
@@ -14,7 +15,6 @@ class UserManager(BaseUserManager):
         if not login_id:
             raise ValueError("login_id is required")
 
-        # email이 들어온 경우에만 정규화 진행
         email = extra_fields.get('email')
         if email:
             extra_fields['email'] = self.normalize_email(email)
@@ -38,23 +38,15 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    class GenderChoices(models.TextChoices):
-        MALE = "M", "M"
-        WOMAN = "W", "W"
-
-    class StatusChoices(models.TextChoices):
-        ACTIVE = "ACTIVE", "active"
-        BLOCKED = "SUSPENDED", "suspended"
-
     login_id = models.CharField(max_length=30, unique=True, db_index=True)
     email = models.EmailField(max_length=255, blank=True, null=True)
     password = models.CharField(max_length=128, db_column="hashed_password")
 
     name = models.CharField(max_length=30)
     nickname = models.CharField(max_length=30)
-    gender = models.CharField(max_length=1, choices=GenderChoices.choices, null=True, blank=True)
+    gender = models.CharField(max_length=5, choices=GenderChoices.choices, null=True, blank=True)
     status = models.CharField(
-        max_length=10, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
+        max_length=9, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
     )
     profile_img_url = models.CharField(max_length=255, blank=True, null=True)
 
@@ -73,13 +65,14 @@ class User(AbstractBaseUser, PermissionsMixin):
         db_table = "users"
 
     def __str__(self):
-        return self.login_id
+        return f"{self.login_id} ({self.name})"
 
 
 class SocialUser(models.Model):
-    provider = models.CharField(max_length=20)
-    provider_id = models.CharField(max_length=100)
+    provider = models.CharField(max_length=10, choices=SocialProvider.choices)
+    provider_id = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -88,7 +81,7 @@ class SocialUser(models.Model):
 
     class Meta:
         db_table = (
-            "social_users"  # 동일 소셜 계정(provider+provider_id)의 중복 연동 방지
+            "social_users"
         )
         constraints = [
             models.UniqueConstraint(
@@ -120,7 +113,6 @@ class UserLikeBookmark(models.Model):
 
 
 class UserPreference(models.Model):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
-    user_preferences_id = models.BigAutoField(primary_key=True)
     survey_vector = VectorField(
         null=True, blank=True
     )  # TODO: 임베딩 모델 확정 후 VectorField(dimensions=...)로 차원 고정.
