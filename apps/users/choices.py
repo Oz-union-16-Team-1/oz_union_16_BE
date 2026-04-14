@@ -2,8 +2,8 @@ from django.db import models
 
 
 class GenderChoices(models.TextChoices):
-    MALE = "M", "M", "m"
-    WOMAN = "W", "W", "w"
+    MALE = "M", "M"
+    WOMAN = "W", "W"
 
 
 class StatusChoices(models.TextChoices):

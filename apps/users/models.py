@@ -3,7 +3,8 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from pgvector.django import VectorField
-from apps.users.choices import StatusChoices, SocialProvider, GenderChoices
+
+from apps.users.choices import GenderChoices, SocialProvider, StatusChoices
 
 EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정해야 함
 
@@ -15,9 +16,9 @@ class UserManager(BaseUserManager):
         if not login_id:
             raise ValueError("login_id is required")
 
-        email = extra_fields.get('email')
+        email = extra_fields.get("email")
         if email:
-            extra_fields['email'] = self.normalize_email(email)
+            extra_fields["email"] = self.normalize_email(email)
 
         user = self.model(login_id=login_id, **extra_fields)
         user.set_password(password)
@@ -82,9 +83,7 @@ class SocialUser(models.Model):
     )
 
     class Meta:
-        db_table = (
-            "social_users"
-        )
+        db_table = "social_users"
         constraints = [
             models.UniqueConstraint(
                 fields=["provider", "provider_id"],
