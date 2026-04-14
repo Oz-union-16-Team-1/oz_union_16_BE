@@ -10,19 +10,21 @@ EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정�
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
-    def create_user(self, login_id, email, password=None, **extra_fields):
+    def create_user(self, login_id, password=None, **extra_fields):
         if not login_id:
             raise ValueError("login_id is required")
-        if not email:
-            raise ValueError("email is required")
 
-        email = self.normalize_email(email)
-        user = self.model(login_id=login_id, email=email, **extra_fields)
-        user.set_password(password)  # 해시 저장
+        # email이 들어온 경우에만 정규화 진행
+        email = extra_fields.get('email')
+        if email:
+            extra_fields['email'] = self.normalize_email(email)
+
+        user = self.model(login_id=login_id, **extra_fields)
+        user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, login_id, email, password=None, **extra_fields):
+    def create_superuser(self, login_id, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -32,7 +34,7 @@ class UserManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("superuser must have is_superuser=True")
 
-        return self.create_user(login_id, email, password, **extra_fields)
+        return self.create_user(login_id, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -42,35 +44,28 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class StatusChoices(models.TextChoices):
         ACTIVE = "ACTIVE", "active"
-        BLOCKED = "BLOCKED", "blocked"
+        BLOCKED = "SUSPENDED", "suspended"
 
-    user_id = models.BigAutoField(primary_key=True)
     login_id = models.CharField(max_length=30, unique=True, db_index=True)
-    email = models.EmailField(unique=True)
-
-    # AbstractBaseUser.password를 오버라이드해서, ERD의 hashed_password 컬럼명만 db_column으로 매핑
+    email = models.EmailField(max_length=255, blank=True, null=True)
     password = models.CharField(max_length=128, db_column="hashed_password")
 
     name = models.CharField(max_length=30)
-    nickname = models.CharField(max_length=10)
-    phone_number = models.CharField(max_length=20)
-    gender = models.CharField(max_length=1, choices=GenderChoices.choices)
-    birthday = models.DateField()
+    nickname = models.CharField(max_length=30)
+    gender = models.CharField(max_length=1, choices=GenderChoices.choices, null=True, blank=True)
     status = models.CharField(
-        max_length=10, choices=StatusChoices, default=StatusChoices.ACTIVE
+        max_length=10, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
     )
     profile_img_url = models.CharField(max_length=255, blank=True, null=True)
 
-    is_staff = models.BooleanField(default=False)  # admin 로그인 권한
-    is_active = models.BooleanField(default=True)  # 계정 활성화 여부
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    USERNAME_FIELD = (
-        "login_id"  # 로그인 식별자는 login_id를 사용 (AUTH_USER_MODEL 기준)
-    )
-    REQUIRED_FIELDS = ["email", "name"]
+    USERNAME_FIELD = "login_id"
+    REQUIRED_FIELDS = ["name"]
 
     objects = UserManager()
 
@@ -82,14 +77,12 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 
 class SocialUser(models.Model):
-    id = models.BigAutoField(primary_key=True)
     provider = models.CharField(max_length=20)
     provider_id = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        User,
         on_delete=models.CASCADE,
-        db_column="user_id",
         related_name="social_users",
     )
 
@@ -106,7 +99,6 @@ class SocialUser(models.Model):
 
 
 class UserLikeBookmark(models.Model):
-    user_game_like_id = models.BigAutoField(primary_key=True)
     game_id = models.IntegerField()
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
