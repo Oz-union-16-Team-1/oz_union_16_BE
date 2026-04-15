@@ -8,7 +8,7 @@ class GenderChoices(models.TextChoices):
 
 class StatusChoices(models.TextChoices):
     ACTIVE = "ACTIVE", "active"
-    BLOCKED = "SUSPENDED", "suspended"
+    SUSPENDED = "SUSPENDED", "suspended"
 
 
 class SocialProvider(models.TextChoices):
