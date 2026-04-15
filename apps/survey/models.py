@@ -4,17 +4,16 @@ from django.conf import settings
 from django.db import models
 from pgvector.django import VectorField
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import BaseUUIDModel, TimeStampedModel
 from apps.survey.choices import SurveyRoleChoices, SurveyStatusChoices
 
 
 # 1. 설문/대화 세션 모델
-class SurveyChatbotSession(TimeStampedModel):
+class SurveyChatbotSession(BaseUUIDModel):
     """
     사용자와 AI 간의 추천 설문 세션을 관리하는 모델입니다.
     """
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -22,21 +21,13 @@ class SurveyChatbotSession(TimeStampedModel):
         verbose_name="사용자",
     )
     status = models.CharField(
-        max_length=20,
+        max_length=10,
         choices=SurveyStatusChoices.choices,
         default=SurveyStatusChoices.OPEN,
         verbose_name="세션 상태",
     )
-
-    # 33%, 66%, 100% 등 퍼센트 단위로 진행률 표시
     progress_rate = models.CharField(max_length=4, default="0%", verbose_name="진행률")
-
-    summary_text = models.TextField(
-        null=True,
-        blank=True,
-        help_text="LLM이 대화 종료 후 요약한 유저의 취향 문장",
-        verbose_name="취향 요약",
-    )
+    summary_text = models.TextField(null=True, blank=True, verbose_name="취향 요약")
 
     class Meta:
         db_table = "chatbot_sessions"
@@ -75,24 +66,47 @@ class ChatbotMessage(TimeStampedModel):
         return f"[{self.session.id}] {self.role}: {self.content[:20]}"
 
 
-# 3. 유저 취향 벡터 모델
+from django.conf import settings
+from django.db import models
+from pgvector.django import VectorField
+
+from apps.core.models import TimeStampedModel
+
+
 class SurveyPreference(TimeStampedModel):
+    id = models.BigAutoField(
+        primary_key=True, db_column="survey_results_id", verbose_name="설문 결과 ID"
+    )
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         db_column="user_id",
-        related_name="survey_preference",  # 역참조 이름 변경 (중요!)
+        related_name="survey_preference",
+        verbose_name="사용자",
     )
 
-    # OpenAI text-embedding-3-small 모델 기준 1536차원 설정
-    survey_vector = VectorField(dimensions=1536, null=True, blank=True)
-    match_vector = VectorField(null=True, blank=True)
+    # OpenAI 임베딩 모델(1536차원) 결과값 저장 필드
+    survey_vector = VectorField(
+        dimensions=1536, null=True, blank=True, verbose_name="취향 벡터"
+    )
 
-    # 설문 답변 기록 보관용 필드 (JSON 형식)
-    survey_results = models.JSONField(default=dict, blank=True)
+    # JSON 파싱 없이 대화 요약본을 직접 저장하는 필드
+    raw_preference_text = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="원본 취향 텍스트",
+        help_text="LLM이 요약한 자연어 취향 문장을 저장하며, 벡터 생성의 소스로 사용됩니다.",
+    )
 
     class Meta:
-        db_table = "survey_preferences"
+        # ERD에 명시된 테이블명 준수
+        db_table = "survey_results"
+        verbose_name = "설문 결과 및 취향"
+        verbose_name_plural = "설문 결과 및 취향 목록"
+
+    def __str__(self):
+        return f"{self.user} - Preference Profile"
 
 
 # 4. 게임 마스터 데이터 모델 (추천용 캐시)
