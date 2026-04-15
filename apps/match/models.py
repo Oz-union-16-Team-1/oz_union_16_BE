@@ -28,8 +28,4 @@ class MatchResult(TimeStampedModel):  # 매칭 결과는 이력 저장 없이 �
                 & Q(rating__lte=5),  # 별점 스케일은 1 ~ 5로 고정
                 name="ck_match_results_rating_1_5",
             ),
-            models.CheckConstraint(
-                condition=Q(game_id__gt=0),
-                name="ck_match_results_game_id_positive",
-            ),
         ]
