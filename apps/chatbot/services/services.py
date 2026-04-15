@@ -7,7 +7,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
-from .models import ChatbotSession
+from apps.chatbot.models.models import ChatbotSession
 
 
 SESSION_EXPIRE_MINUTES = 30
