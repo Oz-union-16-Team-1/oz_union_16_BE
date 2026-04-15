@@ -97,7 +97,7 @@ class Surveyresults(TimeStampedModel):
 class GameCache(models.Model):
     id = models.BigIntegerField(primary_key=True, help_text="IGDB 고유 ID")
     title = models.CharField(max_length=255)
-    genres = models.JSONField(default=list, help_text="장르 리스트")
+    genres = models.TextField()
     description = models.TextField()
     cover_url = models.URLField(max_length=500, null=True, blank=True)
     rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
