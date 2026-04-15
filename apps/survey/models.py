@@ -73,26 +73,17 @@ from pgvector.django import VectorField
 from apps.core.models import TimeStampedModel
 
 
-class SurveyPreference(TimeStampedModel):
-    id = models.BigAutoField(
-        primary_key=True, db_column="survey_results_id", verbose_name="설문 결과 ID"
-    )
-
+class Surveyresults(TimeStampedModel):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         db_column="user_id",
-        related_name="survey_preference",
+        related_name="survey_results",
         verbose_name="사용자",
     )
 
-    # OpenAI 임베딩 모델(1536차원) 결과값 저장 필드
-    survey_vector = VectorField(
-        dimensions=1536, null=True, blank=True, verbose_name="취향 벡터"
-    )
-
     # JSON 파싱 없이 대화 요약본을 직접 저장하는 필드
-    raw_preference_text = models.TextField(
+    raw_results_text = models.TextField(
         null=True,
         blank=True,
         verbose_name="원본 취향 텍스트",
