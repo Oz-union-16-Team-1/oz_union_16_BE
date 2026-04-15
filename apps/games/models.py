@@ -39,7 +39,7 @@ class GameExclusion(TimeStampedModel):
     game_exclusion_id = models.BigAutoField(primary_key=True)
     game_id = models.IntegerField(unique=True)
     title = models.CharField(max_length=255)
-    reason = models.CharField(max_length=255, null=True)
+    reason = models.CharField(max_length=255, null=True, blank=True)
     is_excluded = models.BooleanField(default=True)
 
     class Meta:
