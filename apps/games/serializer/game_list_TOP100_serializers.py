@@ -27,4 +27,4 @@ class GameListTop100Serializer(serializers.Serializer):
         rating = obj.get("rating")
         if rating:
             return round(rating / 10, 1)
-        return None
+        return "N/A"
