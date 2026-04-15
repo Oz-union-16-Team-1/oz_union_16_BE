@@ -2,12 +2,12 @@ from django.http import JsonResponse, StreamingHttpResponse
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from .serializers import (
+from apps.chatbot.serializers.chatbot_serializers import (
     ChatbotMessageRequestSerializer,
     ChatbotMessageResponseSerializer,
     ChatbotStreamQuerySerializer,
 )
-from .services import (
+from apps.chatbot.services.chatbot_services import (
     acquire_stream_lock,
     create_chatbot_session,
     delete_question_from_cache,
