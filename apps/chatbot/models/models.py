@@ -4,19 +4,29 @@ from datetime import timedelta
 
 
 class ChatbotSession(models.Model):
+    class SessionTypeChoices(models.TextChoices):
+        CHATBOT = "CHATBOT", "챗봇"
+        SURVEY = "SURVEY", "설문"
+
     chatbot_sessions_id = models.BigAutoField(primary_key=True)
 
-    # 세션 생성 시각
+    # 세션 타입 추가
+    session_type = models.CharField(
+        max_length=20,
+        choices=SessionTypeChoices.choices,
+        default=SessionTypeChoices.CHATBOT,
+    )
+
+    # 생성 시각
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # 세션 만료 시각
+    # 만료 시각
     expires_at = models.DateTimeField()
 
     class Meta:
         db_table = "chatbot_sessions"
 
     def save(self, *args, **kwargs):
-        # expires_at이 없으면 기본 30분 뒤로 설정
         if not self.expires_at:
             self.expires_at = timezone.now() + timedelta(minutes=30)
         super().save(*args, **kwargs)
