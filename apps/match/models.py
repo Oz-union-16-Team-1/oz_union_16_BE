@@ -33,15 +33,3 @@ class MatchResult(TimeStampedModel):  # 매칭 결과는 이력 저장 없이 �
                 name="ck_match_results_game_id_positive",
             ),
         ]
-        indexes = [
-            # latest_desc + cursor(match_results_id) 용
-            models.Index(
-                fields=["user", "-updated_at", "-match_results_id"],
-                name="ix_match_user_latest_cursor",
-            ),
-            # popular_desc(rating desc) + cursor(match_results_id) 용
-            models.Index(
-                fields=["user", "-rating", "-match_results_id"],
-                name="ix_match_user_popular_cursor",
-            ),
-        ]
