@@ -27,11 +27,6 @@ class ChatbotSession(models.Model):
     class Meta:
         db_table = "chatbot_sessions"
 
-    def save(self, *args, **kwargs):
-        if not self.expires_at:
-            self.expires_at = timezone.now() + timedelta(minutes=30)
-        super().save(*args, **kwargs)
-
     @property
     def is_expired(self):
         return timezone.now() >= self.expires_at
