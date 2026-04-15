@@ -75,8 +75,12 @@ jobs:
             docker-compose -f docker-compose.prod.yml pull
 
             docker-compose -f docker-compose.prod.yml up -d --remove-orphans
-
-            docker image prune -f
+            
+            docker image prune -af
+            
+            docker volume ls -qf dangling=true | xargs -r docker volume rm
+            
+            docker builder prune -af 2>/dev/null || true    
 
       # 6. AWS 보안 그룹에서 GitHub IP 삭제 (성공/실패 상관없이 실행)
       - name: Remove GitHub IP from AWS SG
