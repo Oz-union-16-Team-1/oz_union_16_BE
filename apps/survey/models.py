@@ -66,13 +66,6 @@ class ChatbotMessage(TimeStampedModel):
         return f"[{self.session.id}] {self.role}: {self.content[:20]}"
 
 
-from django.conf import settings
-from django.db import models
-from pgvector.django import VectorField
-
-from apps.core.models import TimeStampedModel
-
-
 class Surveyresults(TimeStampedModel):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
