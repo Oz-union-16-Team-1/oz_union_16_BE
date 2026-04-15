@@ -1,14 +1,13 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from apps.core.models import TimeStampedModel
 
 
-class MatchResult(models.Model):  # 매칭 결과는 이력 저장 없이 최신 1건만 유지
+class MatchResult(TimeStampedModel):  # 매칭 결과는 이력 저장 없이 최신 1건만 유지
     match_results_id = models.BigAutoField(primary_key=True)
     game_id = models.IntegerField(db_index=True)
     rating = models.PositiveSmallIntegerField()  # 매칭 점수 1 ~ 5
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,  # settings.AUTH_USER_MODEL FK로 인증 중심형 유저와 안전하게 연결
         on_delete=models.CASCADE,
