@@ -4,25 +4,29 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from pgvector.django import VectorField
 
+from apps.core.models import TimeStampedModel
+from apps.users.choices import GenderChoices, SocialProvider, StatusChoices
+
 EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정해야 함
 
 
 class UserManager(BaseUserManager):
     use_in_migrations = True
 
-    def create_user(self, login_id, email, password=None, **extra_fields):
+    def create_user(self, login_id, password=None, **extra_fields):
         if not login_id:
             raise ValueError("login_id is required")
-        if not email:
-            raise ValueError("email is required")
 
-        email = self.normalize_email(email)
-        user = self.model(login_id=login_id, email=email, **extra_fields)
-        user.set_password(password)  # 해시 저장
+        email = extra_fields.get("email")
+        if email:
+            extra_fields["email"] = self.normalize_email(email)
+
+        user = self.model(login_id=login_id, **extra_fields)
+        user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, login_id, email, password=None, **extra_fields):
+    def create_superuser(self, login_id, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -32,45 +36,29 @@ class UserManager(BaseUserManager):
         if extra_fields.get("is_superuser") is not True:
             raise ValueError("superuser must have is_superuser=True")
 
-        return self.create_user(login_id, email, password, **extra_fields)
+        return self.create_user(login_id, password, **extra_fields)
 
 
-class User(AbstractBaseUser, PermissionsMixin):
-    class GenderChoices(models.TextChoices):
-        MALE = "M", "M"
-        WOMAN = "W", "W"
-
-    class StatusChoices(models.TextChoices):
-        ACTIVE = "ACTIVE", "active"
-        BLOCKED = "BLOCKED", "blocked"
-
-    user_id = models.BigAutoField(primary_key=True)
+class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     login_id = models.CharField(max_length=30, unique=True, db_index=True)
-    email = models.EmailField(unique=True)
-
-    # AbstractBaseUser.password를 오버라이드해서, ERD의 hashed_password 컬럼명만 db_column으로 매핑
+    email = models.EmailField(max_length=255, blank=True, null=True)
     password = models.CharField(max_length=128, db_column="hashed_password")
 
     name = models.CharField(max_length=30)
-    nickname = models.CharField(max_length=10)
-    phone_number = models.CharField(max_length=20)
+    nickname = models.CharField(max_length=30)
+    phone_number = models.CharField(max_length=20, blank=True, null=True)
     gender = models.CharField(max_length=1, choices=GenderChoices.choices)
-    birthday = models.DateField()
+    birthday = models.DateField(blank=True, null=True)
     status = models.CharField(
-        max_length=10, choices=StatusChoices, default=StatusChoices.ACTIVE
+        max_length=9, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
     )
     profile_img_url = models.CharField(max_length=255, blank=True, null=True)
 
-    is_staff = models.BooleanField(default=False)  # admin 로그인 권한
-    is_active = models.BooleanField(default=True)  # 계정 활성화 여부
+    is_staff = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    USERNAME_FIELD = (
-        "login_id"  # 로그인 식별자는 login_id를 사용 (AUTH_USER_MODEL 기준)
-    )
-    REQUIRED_FIELDS = ["email", "name"]
+    USERNAME_FIELD = "login_id"
+    REQUIRED_FIELDS = ["name", "nickname", "gender"]
 
     objects = UserManager()
 
@@ -78,25 +66,20 @@ class User(AbstractBaseUser, PermissionsMixin):
         db_table = "users"
 
     def __str__(self):
-        return self.login_id
+        return f"{self.login_id} ({self.name})"
 
 
-class SocialUser(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    provider = models.CharField(max_length=20)
-    provider_id = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
+class SocialUser(TimeStampedModel):
+    provider = models.CharField(max_length=10, choices=SocialProvider.choices)
+    provider_id = models.CharField(max_length=255)
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        User,
         on_delete=models.CASCADE,
-        db_column="user_id",
         related_name="social_users",
     )
 
     class Meta:
-        db_table = (
-            "social_users"  # 동일 소셜 계정(provider+provider_id)의 중복 연동 방지
-        )
+        db_table = "social_users"
         constraints = [
             models.UniqueConstraint(
                 fields=["provider", "provider_id"],
@@ -105,8 +88,7 @@ class SocialUser(models.Model):
         ]
 
 
-class UserLikeBookmark(models.Model):
-    user_game_like_id = models.BigAutoField(primary_key=True)
+class UserLikeBookmark(TimeStampedModel):
     game_id = models.IntegerField()
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -127,8 +109,9 @@ class UserLikeBookmark(models.Model):
         ]
 
 
-class UserPreference(models.Model):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
-    user_preferences_id = models.BigAutoField(primary_key=True)
+class UserPreference(
+    TimeStampedModel
+):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
     survey_vector = VectorField(
         null=True, blank=True
     )  # TODO: 임베딩 모델 확정 후 VectorField(dimensions=...)로 차원 고정.
