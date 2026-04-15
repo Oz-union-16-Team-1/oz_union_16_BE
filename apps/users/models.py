@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from pgvector.django import VectorField
 
+from apps.core.models import TimeStampedModel
 from apps.users.choices import GenderChoices, SocialProvider, StatusChoices
 
 EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정해야 함
@@ -38,7 +39,7 @@ class UserManager(BaseUserManager):
         return self.create_user(login_id, password, **extra_fields)
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     login_id = models.CharField(max_length=30, unique=True, db_index=True)
     email = models.EmailField(max_length=255, blank=True, null=True)
     password = models.CharField(max_length=128, db_column="hashed_password")
@@ -56,11 +57,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
     USERNAME_FIELD = "login_id"
-    REQUIRED_FIELDS = ["name"]
+    REQUIRED_FIELDS = ["name", "nickname", "gender"]
 
     objects = UserManager()
 
@@ -71,11 +69,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         return f"{self.login_id} ({self.name})"
 
 
-class SocialUser(models.Model):
+class SocialUser(TimeStampedModel):
     provider = models.CharField(max_length=10, choices=SocialProvider.choices)
     provider_id = models.CharField(max_length=255)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -92,7 +88,7 @@ class SocialUser(models.Model):
         ]
 
 
-class UserLikeBookmark(models.Model):
+class UserLikeBookmark(TimeStampedModel):
     game_id = models.IntegerField()
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -113,7 +109,9 @@ class UserLikeBookmark(models.Model):
         ]
 
 
-class UserPreference(models.Model):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
+class UserPreference(
+    TimeStampedModel
+):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
     survey_vector = VectorField(
         null=True, blank=True
     )  # TODO: 임베딩 모델 확정 후 VectorField(dimensions=...)로 차원 고정.
