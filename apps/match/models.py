@@ -52,3 +52,18 @@ class MatchGamePreference(TimeStampedModel):
                 name="idx_match_game_preference_genre_id",
             ),
         ]
+
+class MatchGameGenreMap(models.Model):
+    match_game_genre_map_id = models.BigAutoField(primary_key=True)
+    game_id = models.IntegerField(db_index=True)
+    igdb_genre_id = models.IntegerField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "match_game_genre_map"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["game_id", "igdb_genre_id"],
+                name="uq_match_game_genre_map_game_genre",
+            ),
+        ]
