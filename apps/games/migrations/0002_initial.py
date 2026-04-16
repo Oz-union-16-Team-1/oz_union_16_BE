@@ -10,26 +10,24 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("survey", "0001_initial"),
+        ("games", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="surveyresult",
+            model_name="usergamelike",
             name="user",
-            field=models.OneToOneField(
-                db_column="user_id",
+            field=models.ForeignKey(
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name="survey_result",
+                related_name="game_likes",
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddConstraint(
-            model_name="surveyresult",
-            constraint=models.CheckConstraint(
-                condition=models.Q(("survey_answer__gte", 0)),
-                name="ck_survey_results_answer_non_negative",
+            model_name="usergamelike",
+            constraint=models.UniqueConstraint(
+                fields=("user", "game_id"), name="user_game_likes_unique"
             ),
         ),
     ]
