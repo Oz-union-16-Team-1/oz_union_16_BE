@@ -7,7 +7,6 @@ from pgvector.django import VectorField
 
 class MatchGameRating(TimeStampedModel):
     match_game_rating_id = models.BigAutoField(primary_key=True)
-    game_id = models.IntegerField(db_index=True)
     star_rating = models.PositiveSmallIntegerField()  # 매칭 점수 1 ~ 5
     effective_rating = models.DecimalField(max_digits=4, decimal_places=2)
     rating_count = models.PositiveIntegerField(default=0)
@@ -17,13 +16,19 @@ class MatchGameRating(TimeStampedModel):
         db_column="user_id",
         related_name="match_game_ratings",
     )
+    match_game_preference = models.ForeignKey(
+        "match.MatchGamePreference",
+        on_delete=models.CASCADE,
+        db_column="match_game_preference_id",
+        related_name="ratings",
+    )
 
     class Meta:
         db_table = "match_game_ratings"
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "game_id"],
-                name="uq_match_results_user_game",
+                fields=["user", "match_game_preference"],
+                name="uq_match_game_ratings_user_preference",
             ),
             models.CheckConstraint(
                 condition=Q(star_rating__gte=1)
@@ -39,7 +44,7 @@ class MatchGamePreference(TimeStampedModel):
     game_preference_vector = VectorField(dimensions=14)
 
     class Meta:
-        db_table = "match_game_preferences"
+        db_table = "match_game_preference"
         constraints = [
             models.UniqueConstraint(
                 fields=["game_id"],
