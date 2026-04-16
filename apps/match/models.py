@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
+from pgvector.django import VectorField
 
 from apps.core.models import TimeStampedModel
-from pgvector.django import VectorField
+
 
 class MatchGameRating(TimeStampedModel):
     match_game_rating_id = models.BigAutoField(primary_key=True)
@@ -37,6 +38,7 @@ class MatchGameRating(TimeStampedModel):
             ),
         ]
 
+
 class MatchGamePreference(TimeStampedModel):
     match_game_preference_id = models.BigAutoField(primary_key=True)
     game_id = models.IntegerField(db_index=True)
@@ -57,6 +59,7 @@ class MatchGamePreference(TimeStampedModel):
                 name="idx_match_game_preference_genre_id",
             ),
         ]
+
 
 class MatchGameGenreMap(models.Model):
     match_game_genre_map_id = models.BigAutoField(primary_key=True)
