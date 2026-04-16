@@ -113,11 +113,11 @@ class UserPreference(
     TimeStampedModel
 ):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
     survey_vector = VectorField(
-        null=True, blank=True
-    )  # TODO: 임베딩 모델 확정 후 VectorField(dimensions=...)로 차원 고정.
+        dimensions=1536, null=True, blank=True, verbose_name="취향 벡터"
+    )
     match_vector = VectorField(
-        null=True, blank=True
-    )  # TODO: 임베딩 모델 확정 후 VectorField(dimensions=...)로 차원 고정.
+        dimensions=1536, null=True, blank=True, verbose_name="매치 벡터"
+    )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
