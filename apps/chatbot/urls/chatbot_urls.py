@@ -1,5 +1,4 @@
 from django.urls import path
-
 from apps.chatbot.views.chatbot_views import ChatbotMessageAPIView, ChatbotStreamAPIView
 
 urlpatterns = [
