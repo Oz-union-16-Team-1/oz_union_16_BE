@@ -1,10 +1,9 @@
 services:
   django:
     container_name: pgti_django
+    image: [DOCKER_USERNAME]/[DOCKER_REPO]:django-prod
     env_file:
       - envs/.env.prod
-    build:
-      context: .
     working_dir: /oz_union_16_BE
     command: >
       sh -c "python manage.py migrate &&
@@ -13,7 +12,6 @@ services:
     expose:
       - "8000"
     volumes:
-      - .:/oz_union_16_BE
       - static_volume:/oz_union_16_BE/static
       - media_volume:/oz_union_16_BE/media
     networks:
@@ -25,7 +23,7 @@ services:
         condition: service_healthy
 
   nginx:
-    image: nginx:latest
+    image: [DOCKER_USERNAME]/[DOCKER_REPO]:nginx-prod
     container_name: pgti_nginx
     ports:
       - "80:80"
@@ -33,7 +31,6 @@ services:
     depends_on:
       - django
     volumes:
-      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - static_volume:/oz_union_16_BE/static
       - media_volume:/oz_union_16_BE/media
       - /etc/letsencrypt:/etc/letsencrypt
@@ -51,11 +48,10 @@ services:
     networks:
       - ws
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "${POSTGRES_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 5s
 
   redis:
     image: redis:latest
@@ -63,17 +59,16 @@ services:
     networks:
       - ws
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
       timeout: 5s
       retries: 5
-      start_period: 5s
 
 networks:
   ws:
     driver: bridge
 
 volumes:
+  postgres_data:
   static_volume:
   media_volume:
-  postgres_data:
