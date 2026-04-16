@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models import Q
 
 from apps.core.models import TimeStampedModel
-
+from pgvector.django import VectorField
 
 class MatchGameRating(TimeStampedModel):
     match_game_rating_id = models.BigAutoField(primary_key=True)
@@ -29,5 +29,26 @@ class MatchGameRating(TimeStampedModel):
                 condition=Q(star_rating__gte=1)
                 & Q(star_rating__lte=5),  # 별점 스케일은 1 ~ 5로 고정
                 name="ck_match_game_ratings_star_rating_1_5",
+            ),
+        ]
+
+class MatchGamePreference(TimeStampedModel):
+    match_game_preference_id = models.BigAutoField(primary_key=True)
+    game_id = models.IntegerField(db_index=True)
+    genre_id = models.IntegerField(db_index=True)
+    game_preference_vector = VectorField(dimensions=14)
+
+    class Meta:
+        db_table = "match_game_preferences"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["game_id"],
+                name="uq_match_game_preference_game_id",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["genre_id"],
+                name="idx_match_game_preference_genre_id",
             ),
         ]
