@@ -3,103 +3,109 @@ from django.db import models
 from pgvector.django import VectorField
 
 from apps.core.models import TimeStampedModel, UUIDModel
-from apps.survey.choices import SurveyRoleChoices, SurveyStatusChoices
+from apps.survey.choices import SurveyRoleChoices
 
 
-# 1. 설문/대화 세션 모델
-class SurveyChatbotSession(UUIDModel, TimeStampedModel):
-    """
-    사용자와 AI 간의 추천 설문 세션을 관리하는 모델입니다.
-    """
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="chatbot_sessions",
-        verbose_name="사용자",
+# 챗봇 메시지 모델
+class SurveyChatbotMessage(TimeStampedModel):
+    survey_chatbot_messages_id = models.BigAutoField(
+        primary_key=True, db_column="survey_chatbot_messages_id"
     )
-    status = models.CharField(
-        max_length=10,
-        choices=SurveyStatusChoices.choices,
-        default=SurveyStatusChoices.OPEN,
-        verbose_name="세션 상태",
-    )
-    progress_rate = models.CharField(max_length=4, default="0%", verbose_name="진행률")
-    summary_text = models.TextField(null=True, blank=True, verbose_name="취향 요약")
-
-    class Meta:
-        db_table = "chatbot_sessions"
-        verbose_name = "챗봇 세션"
-        verbose_name_plural = "챗봇 세션 목록"
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"{self.user.email} - {self.status} ({self.progress_rate})"
-
-
-# 2. 대화 메시지 이력 모델
-class ChatbotMessage(TimeStampedModel):
-    """
-    세션 내에서 발생하는 개별 대화 메시지를 저장하는 모델입니다.
-    """
-
-    session = models.ForeignKey(
-        SurveyChatbotSession,
-        on_delete=models.CASCADE,
-        related_name="messages",
-        verbose_name="세션",
+    message = models.TextField(
+        db_column="message", null=True, verbose_name="메시지 내용"
     )
     role = models.CharField(
-        max_length=10, choices=SurveyRoleChoices.choices, verbose_name="발신 주체"
+        max_length=10,
+        choices=SurveyRoleChoices.choices,
+        db_column="role",
+        null=True,
+        verbose_name="발신 주체",
     )
-    content = models.TextField(verbose_name="내용")
+    sequence = models.IntegerField(db_column="sequence", null=True, verbose_name="순서")
 
     class Meta:
-        db_table = "chatbot_messages"
+        db_table = "survey_chatbot_messages"
         verbose_name = "챗봇 메시지"
-        verbose_name_plural = "챗봇 메시지 목록"
-        ordering = ["created_at"]
-
-    def __str__(self):
-        return f"[{self.session.id}] {self.role}: {self.content[:20]}"
+        ordering = ["sequence"]
 
 
-class Surveyresults(TimeStampedModel):
-    user = models.OneToOneField(
+# 챗봇 세션 모델
+class SurveyChatbotSession(UUIDModel, TimeStampedModel):
+    chatbot_message = models.ForeignKey(
+        "SurveyChatbotMessage",
+        on_delete=models.CASCADE,
+        db_column="survey_chatbot_messages_id",
+        related_name="sessions",
+        verbose_name="참조 메시지",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "survey_chatbot_sessions"
+        verbose_name = "챗봇 세션"
+
+
+# 설문 결과 모델
+class SurveyResults(TimeStampedModel):
+    survey_results_id = models.BigAutoField(
+        primary_key=True, db_column="survey_results_id"
+    )
+    survey_answer = models.TextField(
+        db_column="survey_answer", null=True, blank=True, verbose_name="유저 답변 요약"
+    )
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         db_column="user_id",
         related_name="survey_results",
-        verbose_name="사용자",
     )
-
-    # JSON 파싱 없이 대화 요약본을 직접 저장하는 필드
-    raw_results_text = models.TextField(
+    chatbot_session = models.ForeignKey(
+        "SurveyChatbotSession",
+        on_delete=models.CASCADE,
+        db_column="survey_chatbot_sessions_id",
+        related_name="results",
         null=True,
         blank=True,
-        verbose_name="원본 취향 텍스트",
-        help_text="LLM이 요약한 자연어 취향 문장을 저장하며, 벡터 생성의 소스로 사용됩니다.",
     )
 
     class Meta:
-        # ERD에 명시된 테이블명 준수
         db_table = "survey_results"
-        verbose_name = "설문 결과 및 취향"
-        verbose_name_plural = "설문 결과 및 취향 목록"
-
-    def __str__(self):
-        return f"{self.user} - Preference Profile"
+        verbose_name = "설문 결과"
 
 
-# 4. 게임 마스터 데이터 모델 (추천용 캐시)
-class GameCache(models.Model):
-    id = models.BigIntegerField(primary_key=True, help_text="IGDB 고유 ID")
-    title = models.CharField(max_length=255)
-    genres = models.TextField()
-    description = models.TextField()
-    cover_url = models.URLField(max_length=500, null=True, blank=True)
-    rating = models.DecimalField(max_digits=3, decimal_places=2, default=0.00)
-    embedding = VectorField(dimensions=1536)
+# 게임 마스터 벡터
+class SurveyGameVector(TimeStampedModel):
+    survey_game_vector_id = models.BigAutoField(
+        primary_key=True, db_column="survey_game_vector_id"
+    )
+    embedding = VectorField(dimensions=1536, db_column="embedding", null=True)
 
     class Meta:
-        db_table = "game_cache"
+        db_table = "survey_game_vector"
+        verbose_name = "게임 벡터"
+
+
+# 게임 리스트
+class SurveyRecommendGameList(TimeStampedModel):
+    survey_recommend_game_list_id = models.BigAutoField(
+        primary_key=True, db_column="survey_recommend_game_list_id"
+    )
+    game_id = models.IntegerField(
+        db_column="game_id", null=True, verbose_name="IGDB 게임 ID"
+    )
+    title = models.CharField(max_length=30, db_column="title", null=True)
+    genre = models.TextField(db_column="genre", null=True)
+    description = models.TextField(db_column="description", null=True)
+    cover_url = models.URLField(db_column="cover_url", null=True)
+
+    survey_game_vector = models.ForeignKey(
+        SurveyGameVector,
+        on_delete=models.CASCADE,
+        db_column="survey_game_vector_id",
+        related_name="games",
+    )
+
+    class Meta:
+        db_table = "survey_recommend_game_list"
+        verbose_name = "게임 마스터 정보"
