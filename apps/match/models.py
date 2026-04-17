@@ -56,7 +56,7 @@ class MatchGamePreference(TimeStampedModel):
         indexes = [
             models.Index(
                 fields=["genre_id"],
-                name="idx_match_game_preference_genre_id",
+                name="idx_mgp_genre_id",
             ),
         ]
 

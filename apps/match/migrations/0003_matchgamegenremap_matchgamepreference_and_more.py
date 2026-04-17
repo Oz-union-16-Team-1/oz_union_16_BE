@@ -98,9 +98,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="matchgamepreference",
-            index=models.Index(
-                fields=["genre_id"], name="idx_match_game_preference_genre_id"
-            ),
+            index=models.Index(fields=["genre_id"], name="idx_mgp_genre_id"),
         ),
         migrations.AddConstraint(
             model_name="matchgamepreference",
