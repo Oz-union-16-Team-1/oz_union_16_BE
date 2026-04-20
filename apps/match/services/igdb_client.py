@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Iterator
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -83,10 +83,8 @@ class IgdbClient:
             raise IgdbAuthError("IGDB access_token 발급에 실패했습니다.")
         return token
 
-    def fetch_games_page(
-        self, *, access_token: str, limit: int, offset: int
-    ) -> list[dict[str, Any]]:
-        body = build_games_query(limit=limit, offset=offset).encode("utf-8")
+    def fetch_games_page(self, *, access_token: str, query: str) -> list[dict[str, Any]]:
+        body = query.encode("utf-8")
         payload = self._request_json(
             url=self.games_url,
             method="POST",
@@ -102,24 +100,3 @@ class IgdbClient:
         if not isinstance(payload, list):
             raise IgdbRequestError("IGDB games 응답 형식이 올바르지 않습니다.")
         return payload
-
-    def iter_games(self) -> Iterator[dict[str, Any]]:
-        token = self.get_access_token()
-        offset = 0
-
-        for _ in range(self.max_pages):
-            rows = self.fetch_games_page(
-                access_token=token,
-                limit=self.page_size,
-                offset=offset,
-            )
-            if not rows:
-                break
-
-            for row in rows:
-                yield row
-
-            if len(rows) < self.page_size:
-                break
-
-            offset += self.page_size
