@@ -3,7 +3,24 @@ from django.db import models
 from pgvector.django import VectorField
 
 from apps.core.models import TimeStampedModel, UUIDModel
-from apps.survey.choices import SurveyRoleChoices
+from apps.survey.choices import ChatbotModelChoices, SurveyRoleChoices
+
+
+# 챗봇 세션 모델
+class SurveyChatbotSession(UUIDModel, TimeStampedModel):
+
+    using_model = models.CharField(
+        max_length=50,
+        choices=ChatbotModelChoices.choices,
+        db_column="using_model",
+        null=True,
+        blank=True,
+        verbose_name="사용 모델",
+    )
+
+    class Meta:
+        db_table = "survey_chatbot_sessions"
+        verbose_name = "챗봇 세션"
 
 
 # 챗봇 메시지 모델
@@ -22,28 +39,18 @@ class SurveyChatbotMessage(TimeStampedModel):
         verbose_name="발신 주체",
     )
     sequence = models.IntegerField(db_column="sequence", null=True, verbose_name="순서")
+    session = models.ForeignKey(
+        SurveyChatbotSession,
+        on_delete=models.CASCADE,
+        db_column="survey_chatbot_sessions_id",
+        related_name="messages",
+        verbose_name="소속 세션",
+    )
 
     class Meta:
         db_table = "survey_chatbot_messages"
         verbose_name = "챗봇 메시지"
         ordering = ["sequence"]
-
-
-# 챗봇 세션 모델
-class SurveyChatbotSession(UUIDModel, TimeStampedModel):
-    chatbot_message = models.ForeignKey(
-        "SurveyChatbotMessage",
-        on_delete=models.CASCADE,
-        db_column="survey_chatbot_messages_id",
-        related_name="sessions",
-        verbose_name="참조 메시지",
-        null=True,
-        blank=True,
-    )
-
-    class Meta:
-        db_table = "survey_chatbot_sessions"
-        verbose_name = "챗봇 세션"
 
 
 # 설문 결과 모델
