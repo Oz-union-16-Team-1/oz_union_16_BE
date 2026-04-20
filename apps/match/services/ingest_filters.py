@@ -11,6 +11,20 @@ ALLOWED_STATUS = {0}  # released
 PC_PLATFORM_ID = 6
 
 
+def _to_int(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return int(text)
+    return None
+
+
 def _as_set(value: Any) -> set[int]:
     if not value:
         return set()
@@ -67,19 +81,13 @@ def _valid_platform(game: dict[str, Any]) -> bool:
 
 
 def _valid_category(game: dict[str, Any]) -> bool:
-    category = game.get("category")
-    try:
-        return int(category) in ALLOWED_CATEGORIES
-    except TypeError, ValueError:
-        return False
+    category = _to_int(game.get("category"))
+    return category is not None and category in ALLOWED_CATEGORIES
 
 
 def _valid_status(game: dict[str, Any]) -> bool:
-    status = game.get("status")
-    try:
-        return int(status) in ALLOWED_STATUS
-    except TypeError, ValueError:
-        return False
+    status = _to_int(game.get("status"))
+    return status is not None and status in ALLOWED_STATUS
 
 
 def _valid_completeness(game: dict[str, Any]) -> bool:
@@ -115,7 +123,7 @@ def filter_games_with_reasons(
     games: list[dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     passed: list[dict[str, Any]] = []
-    reasons = Counter()
+    reasons: Counter[str] = Counter()
 
     for game in games:
         reason = validate_game(game)
