@@ -116,7 +116,7 @@ class UserPreference(
         dimensions=1536, null=True, blank=True, verbose_name="취향 벡터"
     )
     match_vector = VectorField(
-        dimensions=1536, null=True, blank=True, verbose_name="매치 벡터"
+        dimensions=14, null=True, blank=True, verbose_name="매치 벡터"
     )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
