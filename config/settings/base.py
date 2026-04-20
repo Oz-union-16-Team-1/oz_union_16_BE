@@ -227,3 +227,8 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
+
+MATCH_GENRE_IMAGE_CACHE_KEY = os.getenv(
+    "MATCH_GENRE_IMAGE_CACHE_KEY",
+    "match:genre:image_map:v1",
+)
