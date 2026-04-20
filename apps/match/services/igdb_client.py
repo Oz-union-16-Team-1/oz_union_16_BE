@@ -37,6 +37,7 @@ class IgdbClient:
         self.max_pages: int = settings.IGDB_MAX_PAGES
         self.max_retries: int = settings.IGDB_MAX_RETRIES
         self.retry_delay: float = settings.IGDB_RETRY_DELAY
+        self.request_interval: float = settings.IGDB_REQUEST_INTERVAL
 
     def _request_json(
         self,
@@ -49,6 +50,7 @@ class IgdbClient:
         req = Request(url=url, data=body, headers=headers or {}, method=method)
         last_error: Exception | None = None
 
+        # Transient 오류(429/5xx, network)는 재시도하고, 그 외는 즉시 실패 처리.
         for attempt in range(self.max_retries + 1):
             try:
                 with urlopen(req, timeout=self.timeout) as res:
@@ -74,6 +76,7 @@ class IgdbClient:
         raise last_error if last_error else IgdbRequestError("IGDB 요청 실패")
 
     def get_access_token(self) -> str:
+        # 배치 실행마다 1회 발급해서 페이지 수집에 재사용
         if not self.client_id or not self.client_secret:
             raise IgdbCredentialsError(
                 "IGDB_CLIENT_ID/IGDB_CLIENT_SECRET가 설정되지 않았습니다."
@@ -100,6 +103,7 @@ class IgdbClient:
     def fetch_games_page(
         self, *, access_token: str, query: str
     ) -> list[dict[str, Any]]:
+        # IGDB games endpoint는 APICALYPSE query(text/plain)를 POST body로
         body = query.encode("utf-8")
         payload = self._request_json(
             url=self.games_url,
@@ -113,6 +117,7 @@ class IgdbClient:
             body=body,
         )
 
+        # 이 단계에서는 list 형태만 보장하고, 상세 필드 검증은 필터 파이프라인에서 처리.
         if not isinstance(payload, list):
             raise IgdbRequestError("IGDB games 응답 형식이 올바르지 않습니다.")
         return payload

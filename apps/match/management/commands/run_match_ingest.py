@@ -9,6 +9,7 @@ class Command(BaseCommand):
     help = "매칭 IGDB 수집 배치를 실행하고 필터 통계를 출력합니다."
 
     def handle(self, *args, **options):
+        # 운영 전 수동 점검 시, 필터 품질을 reason 분포로 빠르게 확인하기 위한 커맨드.
         service = MatchBatchIngestService()
         passed, stats = service.run()
 

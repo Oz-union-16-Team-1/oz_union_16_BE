@@ -1,6 +1,7 @@
 # apps/match/services/batch_ingest.py
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -30,6 +31,7 @@ class MatchBatchIngestService:
         self.client = client or IgdbClient()
 
     def run(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        # 수집/필터/집계까지만 수행 (DB 업서트/Redis 적재는 후속 PR)
         token = self.client.get_access_token()
 
         all_rows: list[dict[str, Any]] = []
@@ -47,6 +49,9 @@ class MatchBatchIngestService:
                 break
 
             offset += self.client.page_size
+            # IGDB 4req/s 제한 대응: 페이지 요청 간 간격두기
+            if self.client.request_interval > 0:
+                time.sleep(self.client.request_interval)
 
         passed, reason_counts = filter_games_with_reasons(all_rows)
 

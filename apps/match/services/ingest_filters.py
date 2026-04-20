@@ -100,7 +100,8 @@ def _valid_completeness(game: dict[str, Any]) -> bool:
 
 def validate_game(game: dict[str, Any]) -> str | None:
     """
-    통과면 None, 탈락이면 reason 문자열 반환
+    통과면 None, 탈락이면 reason 문자열 반환.
+    reason은 배치 통계(excluded_reasons)와 운영 로그에서 그대로 사용한다.
     """
     if not _valid_category(game):
         return "invalid_category"

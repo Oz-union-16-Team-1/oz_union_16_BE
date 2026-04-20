@@ -28,6 +28,7 @@ def get_games_field_clause() -> str:
 
 
 def build_games_query(*, limit: int, offset: int) -> str:
+    # 1차 필터는 IGDB where로 최대한 줄이고, 2차 상세 검증은 Python 필터에서 재확인
     where_clause = (
         "where "
         "(category = (0,8,9))"
