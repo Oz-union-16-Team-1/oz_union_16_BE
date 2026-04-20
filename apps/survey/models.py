@@ -3,12 +3,15 @@ from django.db import models
 from pgvector.django import VectorField
 
 from apps.core.models import TimeStampedModel, UUIDModel
-from apps.survey.choices import ChatbotModelChoices, SurveyRoleChoices
+from apps.survey.choices import (
+    ChatbotModelChoices,
+    SurveyRoleChoices,
+    SurveyStatusChoices,
+)
 
 
 # 챗봇 세션 모델
 class SurveyChatbotSession(UUIDModel, TimeStampedModel):
-
     using_model = models.CharField(
         max_length=50,
         choices=ChatbotModelChoices.choices,
@@ -16,6 +19,14 @@ class SurveyChatbotSession(UUIDModel, TimeStampedModel):
         null=True,
         blank=True,
         verbose_name="사용 모델",
+    )
+
+    status = models.CharField(
+        max_length=11,
+        choices=SurveyStatusChoices.choices,
+        default=SurveyStatusChoices.OPEN,
+        db_column="status",
+        verbose_name="세션 상태",
     )
 
     class Meta:
