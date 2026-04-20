@@ -6,7 +6,6 @@ from typing import Any
 
 from django.conf import settings
 
-
 ALLOWED_CATEGORIES = {0, 8, 9}  # main_game, remake, remaster
 ALLOWED_STATUS = {0}  # released
 PC_PLATFORM_ID = 6
@@ -33,7 +32,7 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
         return True
     try:
         return float(agg) >= settings.MATCH_FILTER_MIN_AGG_RATING
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
@@ -41,7 +40,7 @@ def _valid_rating(game: dict[str, Any]) -> bool:
     try:
         rating_count = int(game.get("rating_count") or 0)
         rating = float(game.get("rating") or 0)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
     return (
@@ -57,7 +56,7 @@ def _valid_release_ts(game: dict[str, Any]) -> bool:
         return False
     try:
         return int(ts) >= settings.MATCH_FILTER_MIN_RELEASE_TS
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
@@ -71,7 +70,7 @@ def _valid_category(game: dict[str, Any]) -> bool:
     category = game.get("category")
     try:
         return int(category) in ALLOWED_CATEGORIES
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
@@ -79,7 +78,7 @@ def _valid_status(game: dict[str, Any]) -> bool:
     status = game.get("status")
     try:
         return int(status) in ALLOWED_STATUS
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return False
 
 
@@ -112,7 +111,9 @@ def validate_game(game: dict[str, Any]) -> str | None:
     return None
 
 
-def filter_games_with_reasons(games: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, int]]:
+def filter_games_with_reasons(
+    games: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     passed: list[dict[str, Any]] = []
     reasons = Counter()
 

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.conf import settings
-
-from apps.match.services.igdb_query import build_games_query
 
 
 class IgdbClientError(Exception):
@@ -36,6 +35,8 @@ class IgdbClient:
         self.timeout: int = settings.IGDB_REQUEST_TIMEOUT
         self.page_size: int = settings.IGDB_PAGE_SIZE
         self.max_pages: int = settings.IGDB_MAX_PAGES
+        self.max_retries: int = settings.IGDB_MAX_RETRIES
+        self.retry_delay: float = settings.IGDB_RETRY_DELAY
 
     def _request_json(
         self,
@@ -46,18 +47,31 @@ class IgdbClient:
         body: bytes | None = None,
     ) -> Any:
         req = Request(url=url, data=body, headers=headers or {}, method=method)
-        try:
-            with urlopen(req, timeout=self.timeout) as res:
-                raw = res.read()
-        except HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise IgdbRequestError(f"IGDB HTTP {exc.code}: {detail}") from exc
-        except URLError as exc:
-            raise IgdbRequestError(f"IGDB 연결 오류: {exc.reason}") from exc
+        last_error: Exception | None = None
 
-        if not raw:
-            return {}
-        return json.loads(raw.decode("utf-8"))
+        for attempt in range(self.max_retries + 1):
+            try:
+                with urlopen(req, timeout=self.timeout) as res:
+                    raw = res.read()
+                if not raw:
+                    return {}
+                return json.loads(raw.decode("utf-8"))
+            except HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                if exc.code == 429 or 500 <= exc.code < 600:
+                    last_error = IgdbRequestError(f"IGDB HTTP {exc.code}: {detail}")
+                    if attempt < self.max_retries:
+                        time.sleep(self.retry_delay * (attempt + 1))
+                        continue
+                raise IgdbRequestError(f"IGDB HTTP {exc.code}: {detail}") from exc
+            except URLError as exc:
+                last_error = IgdbRequestError(f"IGDB 연결 오류: {exc.reason}")
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_delay * (attempt + 1))
+                    continue
+                raise IgdbRequestError(f"IGDB 연결 오류: {exc.reason}") from exc
+
+        raise last_error if last_error else IgdbRequestError("IGDB 요청 실패")
 
     def get_access_token(self) -> str:
         if not self.client_id or not self.client_secret:
@@ -83,7 +97,9 @@ class IgdbClient:
             raise IgdbAuthError("IGDB access_token 발급에 실패했습니다.")
         return token
 
-    def fetch_games_page(self, *, access_token: str, query: str) -> list[dict[str, Any]]:
+    def fetch_games_page(
+        self, *, access_token: str, query: str
+    ) -> list[dict[str, Any]]:
         body = query.encode("utf-8")
         payload = self._request_json(
             url=self.games_url,
