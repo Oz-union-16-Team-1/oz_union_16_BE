@@ -27,3 +27,17 @@ API_GENRE_NAME_MAP: dict[int, str] = {
 # 중복 없는 대표 게임 배정을 위한 고정 우선순위
 # 음악 -> 액션 -> 스포츠 -> 두뇌 -> 전략 -> 슈팅 -> RPG -> 어드벤처
 GENRE_PRIORITY: list[int] = [8, 1, 5, 6, 4, 7, 3, 2]
+
+# 장르 이미지 배치 필터 정책
+MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES: tuple[int, ...] = (0, 8, 9)
+MATCH_GENRE_IMAGE_REQUIRED_STATUS: int = 0
+MATCH_GENRE_IMAGE_REQUIRED_PLATFORM: int = 6  # PC
+MATCH_GENRE_IMAGE_MIN_RATING_COUNT: int = 50
+MATCH_GENRE_IMAGE_MIN_RATING: float = 70.0
+
+# 조회/완화 범위
+MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS: int = 10
+MATCH_GENRE_IMAGE_MONTHLY_START_DAYS: int = 30
+MATCH_GENRE_IMAGE_MONTHLY_END_MONTH: int = 12   # 30일 ~ 12개월
+MATCH_GENRE_IMAGE_YEARLY_START: int = 2          # 2년 ~ 10년
+MATCH_GENRE_IMAGE_YEARLY_END: int = 10
