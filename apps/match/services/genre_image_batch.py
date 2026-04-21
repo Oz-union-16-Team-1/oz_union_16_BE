@@ -14,8 +14,12 @@ from apps.match.constants import (
     MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS,
     MATCH_GENRE_IMAGE_MIN_RATING,
     MATCH_GENRE_IMAGE_MIN_RATING_COUNT,
+    MATCH_GENRE_IMAGE_MONTHLY_END_MONTH,
+    MATCH_GENRE_IMAGE_MONTHLY_START_DAYS,
     MATCH_GENRE_IMAGE_REQUIRED_PLATFORM,
     MATCH_GENRE_IMAGE_REQUIRED_STATUS,
+    MATCH_GENRE_IMAGE_YEARLY_END,
+    MATCH_GENRE_IMAGE_YEARLY_START,
 )
 from apps.match.services.genre_image_assignment import (
     GenreImageCandidate,
@@ -38,11 +42,13 @@ class MatchGenreImageBatchService:
             socket_timeout=settings.MATCH_GENRE_IMAGE_BATCH_TIMEOUT,
         )
         self.cache_key = settings.MATCH_GENRE_IMAGE_CACHE_KEY
+        self._release_ts_by_genre_game: dict[int, dict[int, int]] = {}
 
     def _fetch_candidates_by_genre(self) -> dict[int, list[GenreImageCandidate]]:
         # 현재 시점 기준 최대 조회 범위(10년) 하한 타임스탬프
+        self._release_ts_by_genre_game.clear()
         lookback_ts = int(time.time()) - (
-                MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS * 365 * 24 * 60 * 60
+            MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS * 365 * 24 * 60 * 60
         )
         out: dict[int, list[GenreImageCandidate]] = {}
 
@@ -99,6 +105,9 @@ class MatchGenreImageBatchService:
                 if not image_url:
                     continue
 
+                self._release_ts_by_genre_game.setdefault(api_genre_id, {})[
+                    game_id
+                ] = release_date
                 seen_game_ids.add(game_id)
                 candidates.append(
                     GenreImageCandidate(
@@ -119,11 +128,54 @@ class MatchGenreImageBatchService:
 
     def run(self) -> dict[str, Any]:
         candidates_by_genre = self._fetch_candidates_by_genre()
-        image_map = assign_genre_images(candidates_by_genre=candidates_by_genre)
+        now_ts = int(time.time())
 
-        self._save_map(image_map)
+        # 30일~12개월 + 2년~10년
+        cutoff_days = [
+            MATCH_GENRE_IMAGE_MONTHLY_START_DAYS * i
+            for i in range(1, MATCH_GENRE_IMAGE_MONTHLY_END_MONTH + 1)
+        ] + [
+            365 * y
+            for y in range(MATCH_GENRE_IMAGE_YEARLY_START, MATCH_GENRE_IMAGE_YEARLY_END + 1)
+        ]
 
-        return {
-            "cache_key": self.cache_key,
-            "updated_count": len(image_map),
-        }
+        for days in cutoff_days:
+            cutoff_ts = now_ts - (days * 24 * 60 * 60)
+
+            filtered: dict[int, list[GenreImageCandidate]] = {}
+            for api_genre_id, candidates in candidates_by_genre.items():
+                release_map = self._release_ts_by_genre_game.get(api_genre_id, {})
+                filtered[api_genre_id] = [
+                    c for c in candidates if release_map.get(c.game_id, 0) >= cutoff_ts
+                ]
+
+            try:
+                image_map = assign_genre_images(candidates_by_genre=filtered)
+            except RuntimeError:
+                continue
+
+            self._save_map(image_map)
+            return {
+                "cache_key": self.cache_key,
+                "updated_count": len(image_map),
+                "cutoff_days": days,
+                "fallback": "none",
+            }
+
+        # fallback: 이전 캐시 유지
+        raw = self.redis.get(self.cache_key)
+        if raw:
+            try:
+                prev = json.loads(raw)
+                if isinstance(prev, dict) and prev:
+                    self._save_map(prev)
+                    return {
+                        "cache_key": self.cache_key,
+                        "updated_count": len(prev),
+                        "cutoff_days": None,
+                        "fallback": "previous_cache",
+                    }
+            except json.JSONDecodeError:
+                pass
+
+        raise RuntimeError("장르 이미지 배치 실패: 유효 후보 및 이전 캐시가 없습니다.")
