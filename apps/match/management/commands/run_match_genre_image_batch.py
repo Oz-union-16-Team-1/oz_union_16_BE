@@ -6,7 +6,7 @@ from apps.match.services.genre_image_batch import MatchGenreImageBatchService
 
 
 class Command(BaseCommand):
-    help = "장르 대표 이미지 월간 배치를 실행합니다."
+    help = "장르 대표 이미지 일간 배치를 실행합니다."
 
     def handle(self, *args, **options):
         result = MatchGenreImageBatchService().run()
