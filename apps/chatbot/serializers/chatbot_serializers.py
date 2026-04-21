@@ -7,7 +7,7 @@ class ChatbotMessageRequestSerializer(serializers.Serializer):
         allow_blank=False,
         trim_whitespace=True,
     )
-    session_id = serializers.IntegerField(required=False, min_value=1)
+    session_id = serializers.UUIDField(required=False)
 
     def validate_message(self, value: str) -> str:
         value = value.strip()
@@ -19,8 +19,8 @@ class ChatbotMessageRequestSerializer(serializers.Serializer):
 
 
 class ChatbotMessageResponseSerializer(serializers.Serializer):
-    session_id = serializers.IntegerField(min_value=1)
+    session_id = serializers.UUIDField()
 
 
 class ChatbotStreamQuerySerializer(serializers.Serializer):
-    session_id = serializers.IntegerField(required=True, min_value=1)
+    session_id = serializers.UUIDField(required=True)
