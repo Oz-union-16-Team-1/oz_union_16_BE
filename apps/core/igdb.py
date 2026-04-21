@@ -27,7 +27,8 @@ GENRE_VISUAL_NOVEL = 14
 
 class IGDB:
     def __init__(self):
-        self.url = "https://api.igdb.com/v4/games"
+        self.url = settings.IGDB_BASE_URL
+        self.timeout = settings.IGDB_TIMEOUT_SEC
         self.headers = {
             "Client-ID": settings.IGDB_ID,
             "Authorization": f"Bearer {settings.IGDB_ACCESS_TOKEN}",
@@ -54,6 +55,27 @@ class IGDB:
             GENRE_MUSIC: [7],
             GENRE_VISUAL_NOVEL: [32],
         }
+
+    def query_games_raw(self, query):
+        try:
+            response = requests.post(
+                self.url,
+                headers=self.headers,
+                data=query,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"IGDB API 통신 에러: {e}")
+            return None
+
+    def query_games(self, *, fields, where, sort=None, limit=500, offset=0):
+        query = f"fields {fields}; where {where}; "
+        if sort:
+            query += f"sort {sort}; "
+        query += f"limit {limit}; offset {offset};"
+        return self.query_games_raw(query)
 
     def _apply_freshness_weight(self, games):
         now = int(time.time())
