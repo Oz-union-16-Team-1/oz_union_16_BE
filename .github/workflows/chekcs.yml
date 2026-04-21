@@ -95,6 +95,8 @@ jobs:
           uv run python manage.py migrate
 
       - name: Check each app has test & Run coverage
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
         run: |
           ran_tests=false
           apps=$(find apps -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
