@@ -216,9 +216,11 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-# IGDB API Settings (하단에 추가)
+# IGDB API Settings
 IGDB_ID = os.getenv("IGDB_CLIENT_ID")
 IGDB_ACCESS_TOKEN = os.getenv("IGDB_ACCESS_TOKEN")
+IGDB_BASE_URL = os.getenv("IGDB_BASE_URL", "https://api.igdb.com/v4/games")
+IGDB_TIMEOUT_SEC = int(os.getenv("IGDB_TIMEOUT_SEC", "10"))
 
 CACHES = {
     "default": {
