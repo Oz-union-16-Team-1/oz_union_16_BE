@@ -7,7 +7,10 @@ from django.conf import settings
 from redis import Redis
 
 from apps.match.constants import API_TO_IGDB_GENRE_MAP
-from apps.match.services.genre_image_assignment import GenreImageCandidate, assign_genre_images
+from apps.match.services.genre_image_assignment import (
+    GenreImageCandidate,
+    assign_genre_images,
+)
 
 
 class MatchGenreImageBatchService:
