@@ -40,20 +40,23 @@ class IGDB:
         )
         # 서비스용 장르 ID와 IGDB 내부 ID 매핑
         self.genre_mapping = {
-            GENRE_ACTION: [25, 4],
-            GENRE_ADVENTURE: [31, 2],
-            GENRE_RPG: [12],
-            GENRE_SHOOTER: [5],
-            GENRE_STRATEGY: [15, 11, 36],
-            GENRE_SIMULATION: [13],
-            GENRE_SPORTS: [14],
-            GENRE_RACING: [10],
-            GENRE_PUZZLE: [9, 26, 30],
-            GENRE_PLATFORM: [8],
-            GENRE_FIGHTING: [4],
-            GENRE_CARD_BOARD: [35, 16],
-            GENRE_MUSIC: [7],
-            GENRE_VISUAL_NOVEL: [32],
+            GENRE_ACTION: [25, 33],  # Hack and slash/Beat 'em up, Arcade
+            GENRE_ADVENTURE: [31, 2],  # Adventure, Point-and-click
+            GENRE_RPG: [12],  # Role-playing (RPG)
+            GENRE_SHOOTER: [5],  # Shooter
+            GENRE_STRATEGY: [15, 11, 16, 24, 36],  # Strategy, RTS, TBS, Tactical, MOBA
+            GENRE_SIMULATION: [13],  # Simulator
+            GENRE_SPORTS: [14],  # Sport
+            GENRE_RACING: [10],  # Racing
+            GENRE_PUZZLE: [9, 26, 30],  # Puzzle, Quiz/Trivia, Pinball
+            GENRE_PLATFORM: [8],  # Platform
+            GENRE_FIGHTING: [4],  # Fighting
+            GENRE_CARD_BOARD: [35],  # Card & Board Game
+            GENRE_MUSIC: [7],  # Music
+            GENRE_VISUAL_NOVEL: [34],  # Visual Novel
+        }
+        self.genre_theme_mapping = {
+            GENRE_ACTION: [1],  # Action (theme)
         }
 
     def query_games_raw(self, query):
@@ -135,11 +138,25 @@ class IGDB:
         where_clause = f"platforms = (6) & first_release_date >= {start_date} & total_rating != null & total_rating_count > 30"
 
         if genre_id:
-            target_ids = self.genre_mapping.get(int(genre_id))
-            if not target_ids:
+            gid = int(genre_id)
+            target_genre_ids = self.genre_mapping.get(gid, [])
+            target_theme_ids = self.genre_theme_mapping.get(gid, [])
+
+            if not target_genre_ids and not target_theme_ids:
                 return "BAD_REQUEST"
-            ids_str = ",".join(map(str, target_ids))
-            where_clause += f" & genres = ({ids_str})"
+
+            filter_parts = []
+
+            if target_genre_ids:
+                ids_str = ",".join(map(str, target_genre_ids))
+                filter_parts.append(f"genres = ({ids_str})")
+
+            # 액션 장르는 theme(Action)도 함께 허용
+            if target_theme_ids:
+                theme_str = ",".join(map(str, target_theme_ids))
+                filter_parts.append(f"themes = ({theme_str})")
+
+            where_clause += f" & ({' | '.join(filter_parts)})"
 
         # 중복 제거
         query = (
