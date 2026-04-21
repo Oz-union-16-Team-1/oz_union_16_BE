@@ -1,14 +1,10 @@
-import time
-
 import json
+import time
 from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
 import apps.match.services.genre_image_batch as batch_module
-from apps.match.services.genre_image_assignment import GenreImageCandidate
-from apps.match.services.genre_image_batch import MatchGenreImageBatchService
-
 from apps.match.constants import (
     MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES,
     MATCH_GENRE_IMAGE_MIN_RATING,
@@ -16,6 +12,9 @@ from apps.match.constants import (
     MATCH_GENRE_IMAGE_REQUIRED_PLATFORM,
     MATCH_GENRE_IMAGE_REQUIRED_STATUS,
 )
+from apps.match.services.genre_image_assignment import GenreImageCandidate
+from apps.match.services.genre_image_batch import MatchGenreImageBatchService
+
 
 class FakeRedis:
     def __init__(self):
@@ -78,7 +77,9 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
     @patch.object(batch_module, "assign_genre_images")
     def test_run_relaxes_cutoff_until_candidate_matches(self, mock_assign):
         now_ts = 1_700_000_000
-        release_ts = now_ts - (40 * 24 * 60 * 60)  # 30일 컷오프는 실패, 60일 컷오프는 통과
+        release_ts = now_ts - (
+            40 * 24 * 60 * 60
+        )  # 30일 컷오프는 실패, 60일 컷오프는 통과
 
         candidate = GenreImageCandidate(
             game_id=200,
@@ -103,9 +104,14 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
 
         mock_assign.side_effect = assign_side_effect
 
-        with patch.object(
-            self.service, "_fetch_candidates_by_genre", return_value={1: [candidate]}
-        ), patch.object(batch_module.time, "time", return_value=now_ts):
+        with (
+            patch.object(
+                self.service,
+                "_fetch_candidates_by_genre",
+                return_value={1: [candidate]},
+            ),
+            patch.object(batch_module.time, "time", return_value=now_ts),
+        ):
             result = self.service.run()
 
         self.assertEqual(result["fallback"], "none")
@@ -125,7 +131,9 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
         }
         self.service.redis.set(self.service.cache_key, json.dumps(previous_map))
 
-        with patch.object(self.service, "_fetch_candidates_by_genre", return_value={1: []}):
+        with patch.object(
+            self.service, "_fetch_candidates_by_genre", return_value={1: []}
+        ):
             result = self.service.run()
 
         self.assertEqual(result["fallback"], "previous_cache")

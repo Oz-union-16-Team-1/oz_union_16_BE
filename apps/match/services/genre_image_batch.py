@@ -94,7 +94,10 @@ class MatchGenreImageBatchService:
 
                 if game_id <= 0 or game_id in seen_game_ids:
                     continue
-                if category is not None and category not in MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES:
+                if (
+                    category is not None
+                    and category not in MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES
+                ):
                     continue
                 if status is not None and status != MATCH_GENRE_IMAGE_REQUIRED_STATUS:
                     continue
@@ -142,7 +145,9 @@ class MatchGenreImageBatchService:
             for i in range(1, MATCH_GENRE_IMAGE_MONTHLY_END_MONTH + 1)
         ] + [
             365 * y
-            for y in range(MATCH_GENRE_IMAGE_YEARLY_START, MATCH_GENRE_IMAGE_YEARLY_END + 1)
+            for y in range(
+                MATCH_GENRE_IMAGE_YEARLY_START, MATCH_GENRE_IMAGE_YEARLY_END + 1
+            )
         ]
 
         for days in cutoff_days:
