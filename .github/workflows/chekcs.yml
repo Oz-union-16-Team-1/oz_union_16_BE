@@ -97,6 +97,8 @@ jobs:
       - name: Check each app has test & Run coverage
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DB_HOST: localhost
+          DB_PORT: 5432
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: pgti1234
           POSTGRES_DB: oz_combined_PGTI
