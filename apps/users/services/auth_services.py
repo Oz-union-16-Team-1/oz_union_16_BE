@@ -86,7 +86,10 @@ class AuthService:
             user = User.objects.get(pk=user_id)
             new_refresh = RefreshToken.for_user(user)
 
-        except TokenError, User.DoesNotExist:
+        except TokenError:
+            raise ValidationError("로그인 세션이 만료되었습니다.")
+
+        except User.DoesNotExist:
             raise ValidationError("로그인 세션이 만료되었습니다.")
 
         return {
