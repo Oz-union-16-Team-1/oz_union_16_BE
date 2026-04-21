@@ -20,6 +20,15 @@ class SurveyChatbotSession(TimeStampedModel):
         editable=False,
         db_column="survey_chatbot_sessions_id",
     )
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        db_column="user_id",
+        related_name="survey_chatbot_session",
+        verbose_name="사용자",
+        null=True,
+        blank=True,
+    )
     using_model = models.CharField(
         max_length=50,
         choices=ChatbotModelChoices.choices,
