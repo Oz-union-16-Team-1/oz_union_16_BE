@@ -9,7 +9,7 @@ from redis import Redis
 
 from apps.core import igdb_client
 from apps.match.constants import (
-    API_TO_IGDB_GENRE_MAP,
+    API_TO_IGDB_IMAGE_GENRE_MAP,
     MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES,
     MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS,
     MATCH_GENRE_IMAGE_MIN_RATING,
@@ -52,20 +52,19 @@ class MatchGenreImageBatchService:
         )
         out: dict[int, list[GenreImageCandidate]] = {}
 
-        for api_genre_id, igdb_genre_ids in API_TO_IGDB_GENRE_MAP.items():
-            genre_str = ",".join(map(str, igdb_genre_ids))
+        for api_genre_id, igdb_genre_ids in API_TO_IGDB_IMAGE_GENRE_MAP.items():
+            genre_clause = " | ".join([f"genres = ({gid})" for gid in igdb_genre_ids])
             where = (
-                f"genres = ({genre_str})"
+                f"({genre_clause})"
                 f" & first_release_date >= {lookback_ts}"
                 f" & total_rating != null"
                 f" & total_rating_count >= {MATCH_GENRE_IMAGE_MIN_RATING_COUNT}"
                 f" & cover != null"
-                f" & status = {MATCH_GENRE_IMAGE_REQUIRED_STATUS}"
                 f" & platforms = ({MATCH_GENRE_IMAGE_REQUIRED_PLATFORM})"
             )
 
             rows = igdb_client.query_games(
-                fields="id,category,status,platforms,total_rating,total_rating_count,first_release_date,cover.url",
+                fields="id,category,status,platforms,total_rating,total_rating_count,rating,rating_count,first_release_date,cover.url",
                 where=where,
                 sort="total_rating desc",
                 limit=500,
@@ -79,9 +78,13 @@ class MatchGenreImageBatchService:
                 try:
                     game_id = int(row.get("id") or 0)
                     raw_category = row.get("category")
-                    category = int(raw_category) if raw_category is not None else -1
-                    rating = float(row.get("total_rating") or 0.0)
-                    rating_count = int(row.get("total_rating_count") or 0)
+                    category = int(raw_category) if raw_category is not None else None
+                    raw_status = row.get("status")
+                    status = int(raw_status) if raw_status is not None else None
+                    rating = float(row.get("total_rating") or row.get("rating") or 0.0)
+                    rating_count = int(
+                        row.get("total_rating_count") or row.get("rating_count") or 0
+                    )
                     release_date = int(row.get("first_release_date") or 0)
                     cover_url = (row.get("cover") or {}).get("url")
                 except TypeError:
@@ -91,7 +94,9 @@ class MatchGenreImageBatchService:
 
                 if game_id <= 0 or game_id in seen_game_ids:
                     continue
-                if category not in MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES:
+                if category is not None and category not in MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES:
+                    continue
+                if status is not None and status != MATCH_GENRE_IMAGE_REQUIRED_STATUS:
                     continue
                 if rating < MATCH_GENRE_IMAGE_MIN_RATING:
                     continue

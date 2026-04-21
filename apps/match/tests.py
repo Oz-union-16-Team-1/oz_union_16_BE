@@ -11,7 +11,6 @@ from apps.match.services.genre_image_batch import MatchGenreImageBatchService
 
 from apps.match.constants import (
     MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES,
-    MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS,
     MATCH_GENRE_IMAGE_MIN_RATING,
     MATCH_GENRE_IMAGE_MIN_RATING_COUNT,
     MATCH_GENRE_IMAGE_REQUIRED_PLATFORM,
@@ -36,7 +35,7 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
         self.service.redis = FakeRedis()
         self.service.cache_key = "match:genre:image_map:v1"
 
-    @patch.object(batch_module, "API_TO_IGDB_GENRE_MAP", {1: [1]})
+    @patch.object(batch_module, "API_TO_IGDB_IMAGE_GENRE_MAP", {1: [4]})
     @patch.object(batch_module.igdb_client, "query_games")
     def test_fetch_candidates_filters_and_deduplicates(self, mock_query_games):
         release_ts = int(time.time())
@@ -46,16 +45,19 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
             "category": MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES[0],
             "status": MATCH_GENRE_IMAGE_REQUIRED_STATUS,
             "platforms": [MATCH_GENRE_IMAGE_REQUIRED_PLATFORM],
-            "total_rating": MATCH_GENRE_IMAGE_MIN_RATING + 20.0,
-            "total_rating_count": MATCH_GENRE_IMAGE_MIN_RATING_COUNT + 100,
+            "rating": MATCH_GENRE_IMAGE_MIN_RATING + 20.0,
+            "rating_count": MATCH_GENRE_IMAGE_MIN_RATING_COUNT + 100,
             "first_release_date": release_ts,
             "cover": {"url": "//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg"},
         }
-        duplicate_same_id = {**valid, "total_rating": MATCH_GENRE_IMAGE_MIN_RATING}
+        duplicate_same_id = {
+            **valid,
+            "rating": MATCH_GENRE_IMAGE_MIN_RATING,
+        }
         invalid_low_rating = {
             **valid,
             "id": 101,
-            "total_rating": MATCH_GENRE_IMAGE_MIN_RATING - 1.0,
+            "rating": MATCH_GENRE_IMAGE_MIN_RATING - 1.0,
         }
 
         mock_query_games.return_value = [valid, duplicate_same_id, invalid_low_rating]
