@@ -44,8 +44,10 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "rest_framework",
     "corsheaders",
+    "drf_spectacular",
 ]
 
 CUSTOM_APPS: list[str] = [
@@ -130,16 +132,72 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=180),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
-    "ROTATE_REFRESH_TOKENS": False,
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
+
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "PGTI Backend API",
+    "DESCRIPTION": "PGTI 웹 사이트 개발을 위한 API입니다.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SWAGGER_UI_SETTINGS": {
+        "dom_id": "#swagger-ui",
+        "layout": "BaseLayout",
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+        "filter": True,
+    },
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SECURITY": [
+        {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    ],
+}
+
+# ---------------------------------------------------------------------------
+# CORS 공통 설정
+# ---------------------------------------------------------------------------
+
+CORS_ALLOW_CREDENTIALS = True
+
+# 허용할 HTTP 메서드
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+# 허용할 요청 헤더
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "authorization",
+    "content-type",
+    "origin",
+    "x-csrftoken",
+    "x-requested-with",
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -157,3 +215,15 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+# IGDB API Settings
+IGDB_ID = os.getenv("IGDB_CLIENT_ID")
+IGDB_ACCESS_TOKEN = os.getenv("IGDB_ACCESS_TOKEN")
+IGDB_BASE_URL = os.getenv("IGDB_BASE_URL", "https://api.igdb.com/v4/games")
+IGDB_TIMEOUT_SEC = int(os.getenv("IGDB_TIMEOUT_SEC", "10"))
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    }
+}

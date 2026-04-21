@@ -1,5 +1,5 @@
 from rest_framework import status
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, NotAuthenticated
 from rest_framework.views import exception_handler
 
 
@@ -7,19 +7,45 @@ class ConflictException(APIException):
     status_code = status.HTTP_409_CONFLICT
     default_detail = "이미 존재하는 데이터입니다."
 
+    def __init__(self, field: str, detail: str):
+        self.detail = {field: [detail]}
+
+
+def _flatten(value) -> str | dict:
+    """
+    ErrorDetail 리스트 또는 중첩 dict를 평탄화합니다.
+    - list  → 첫 번째 항목을 str로 변환
+    - dict  → 각 필드값을 재귀적으로 평탄화
+    - 그 외 → str 변환
+    """
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    if isinstance(value, dict):
+        return {k: _flatten(v) for k, v in value.items()}
+    return str(value)
+
+
+# 예외 타입별 커스텀 메시지
+CUSTOM_MESSAGES = {
+    NotAuthenticated: "인증 정보가 유효하지 않거나 만료되었습니다.",
+}
+
 
 def custom_exception_handler(exc, context):
+    # 예외 타입에 커스텀 메시지가 있으면 메시지를 교체한 뒤 처리
+    if type(exc) in CUSTOM_MESSAGES:
+        exc.detail = CUSTOM_MESSAGES[type(exc)]
+
     response = exception_handler(exc, context)
 
     if response is not None:
-        error_data = {}
+        data = response.data
 
-        if "detail" in response.data:
-            error_data["error_detail"] = str(response.data["detail"])
-
+        if isinstance(data, dict) and "detail" in data:
+            # 401 / 403 등 단일 메시지
+            response.data = {"error_detail": _flatten(data["detail"])}
         else:
-            error_data["error_detail"] = response.data
-
-        response.data = error_data
+            # 400 ValidationError / 409 ConflictException 등 필드 에러
+            response.data = {"error_detail": _flatten(data)}
 
     return response
