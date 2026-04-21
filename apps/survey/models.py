@@ -1,8 +1,10 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 from pgvector.django import VectorField
 
-from apps.core.models import TimeStampedModel, UUIDModel
+from apps.core.models import TimeStampedModel
 from apps.survey.choices import (
     ChatbotModelChoices,
     SurveyRoleChoices,
@@ -11,7 +13,13 @@ from apps.survey.choices import (
 
 
 # 챗봇 세션 모델
-class SurveyChatbotSession(UUIDModel, TimeStampedModel):
+class SurveyChatbotSession(TimeStampedModel):
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        db_column="survey_chatbot_sessions_id",
+    )
     using_model = models.CharField(
         max_length=50,
         choices=ChatbotModelChoices.choices,
@@ -27,6 +35,12 @@ class SurveyChatbotSession(UUIDModel, TimeStampedModel):
         default=SurveyStatusChoices.OPEN,
         db_column="status",
         verbose_name="세션 상태",
+    )
+    target_question_count = models.PositiveSmallIntegerField(
+        db_column="target_question_count",
+        null=True,
+        blank=True,
+        verbose_name="목표 질문 수",
     )
 
     class Meta:
@@ -62,6 +76,12 @@ class SurveyChatbotMessage(TimeStampedModel):
         db_table = "survey_chatbot_messages"
         verbose_name = "챗봇 메시지"
         ordering = ["sequence"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session", "sequence"],
+                name="uq_survey_chatbot_messages_session_sequence",
+            )
+        ]
 
 
 # 설문 결과 모델
@@ -78,7 +98,7 @@ class SurveyResults(TimeStampedModel):
         db_column="user_id",
         related_name="survey_results",
     )
-    chatbot_session = models.ForeignKey(
+    chatbot_session = models.OneToOneField(
         "SurveyChatbotSession",
         on_delete=models.CASCADE,
         db_column="survey_chatbot_sessions_id",
@@ -97,7 +117,9 @@ class SurveyGameVector(TimeStampedModel):
     survey_game_vector_id = models.BigAutoField(
         primary_key=True, db_column="survey_game_vector_id"
     )
-    embedding = VectorField(dimensions=1536, db_column="embedding", null=True)
+    embedding = VectorField(
+        dimensions=1536, db_column="embedding", null=True, blank=True
+    )
 
     class Meta:
         db_table = "survey_game_vector"
@@ -117,7 +139,7 @@ class SurveyRecommendGameList(TimeStampedModel):
     description = models.TextField(db_column="description", null=True)
     cover_url = models.URLField(db_column="cover_url", null=True)
 
-    survey_game_vector = models.ForeignKey(
+    survey_game_vector = models.OneToOneField(
         SurveyGameVector,
         on_delete=models.CASCADE,
         db_column="survey_game_vector_id",
