@@ -16,7 +16,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("chatbot/", include("apps.chatbot.urls")),
     path("games/", include("apps.games.urls")),
-    path("match/", include("apps.match.urls")),
+    path("api/v1/match/", include("apps.match.urls")),
     path("survey/", include("apps.survey.urls")),
     path("api/v1/accounts/", include("apps.users.urls")),
 ]
