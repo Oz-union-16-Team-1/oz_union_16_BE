@@ -107,7 +107,10 @@ class LogoutView(APIView):
         description="쿠키의 Refresh Token을 무효화하고 로그아웃합니다.",
         responses={
             200: OpenApiResponse(description="detail: 로그아웃 되었습니다."),
-            400: OpenApiResponse(
+            401: OpenApiResponse(
+                description="error_detail: 자격 인증 데이터가 제공되지 않았습니다."
+            ),
+            403: OpenApiResponse(
                 description="error_detail: 인증 정보가 유효하지 않거나 만료되었습니다."
             ),
         },
@@ -135,8 +138,11 @@ class TokenRefreshView(APIView):
             400: OpenApiResponse(
                 description="error_detail: { refresh_token: [이 필드는 필수 항목입니다.] }"
             ),
+            401: OpenApiResponse(
+                description="error_detail: 자격 인증 데이터가 제공되지 않았습니다."
+            ),
             403: OpenApiResponse(
-                description="error_detail: 로그인 세션이 만료되었습니다."
+                description="error_detail: 인증 정보가 유효하지 않거나 만료되었습니다."
             ),
         },
         tags=["accounts"],

@@ -298,7 +298,7 @@ class LogoutTest(TestCase):
         self.assertEqual(refresh_cookie["max-age"], 0)
 
     def test_logout_blacklisted_token_fail(self) -> None:
-        """이미 블랙리스트에 등록된 토큰으로 로그아웃 시 400"""
+        """이미 블랙리스트에 등록된 토큰으로 로그아웃 시 403"""
         self.client.force_authenticate(user=self.user)
         refresh = RefreshToken.for_user(self.user)
         refresh.blacklist()
@@ -308,36 +308,36 @@ class LogoutTest(TestCase):
 
         # service에서 str ValidationError("인증 정보가 유효하지 않거나 만료되었습니다.") raise
         # → custom_exception_handler → {"error_detail": str}
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.data["error_detail"],
             "인증 정보가 유효하지 않거나 만료되었습니다.",
         )
 
     def test_logout_invalid_token_fail(self) -> None:
-        """유효하지 않은 토큰 쿠키로 로그아웃 시 400"""
+        """유효하지 않은 토큰 쿠키로 로그아웃 시 403"""
         self.client.force_authenticate(user=self.user)
         self.client.cookies["refresh_token"] = "this-is-not-a-valid-token"
 
         response = self.client.post(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.data["error_detail"],
             "인증 정보가 유효하지 않거나 만료되었습니다.",
         )
 
     def test_logout_no_cookie_fail(self) -> None:
-        """refresh_token 쿠키 없이 로그아웃 요청 시 400"""
+        """refresh_token 쿠키 없이 로그아웃 요청 시 401"""
         self.client.force_authenticate(user=self.user)
 
         response = self.client.post(self.url)
 
         # service에서 str ValidationError("로그인 세션이 만료되었습니다.") raise
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(
             response.data["error_detail"],
-            "로그인 세션이 만료되었습니다.",
+            "자격 인증 데이터가 제공되지 않았습니다.",
         )
 
     # --- 401: 비로그인 ---
@@ -395,47 +395,47 @@ class TokenRefreshTest(TestCase):
         response = self.client.post(self.url)
 
         # service에서 str ValidationError("로그인 세션이 만료되었습니다.") raise
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.data["error_detail"],
-            "로그인 세션이 만료되었습니다.",
+            "인증 정보가 유효하지 않거나 만료되었습니다.",
         )
 
     # --- 400: 쿠키 없음 / 유효하지 않은 토큰 ---
 
     def test_token_refresh_no_cookie_fail(self) -> None:
-        """쿠키 없이 재발급 요청 시 400"""
+        """쿠키 없이 재발급 요청 시 401"""
         response = self.client.post(self.url)
 
-        # service에서 str ValidationError("로그인 세션이 만료되었습니다.") raise
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # service에서 str AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.") raise
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(
             response.data["error_detail"],
-            "로그인 세션이 만료되었습니다.",
+            "자격 인증 데이터가 제공되지 않았습니다.",
         )
 
     def test_token_refresh_invalid_token_fail(self) -> None:
-        """위조된 토큰으로 재발급 시 400"""
+        """위조된 토큰으로 재발급 시 403"""
         self.client.cookies["refresh_token"] = "totally-fake-token"
 
         response = self.client.post(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.data["error_detail"],
-            "로그인 세션이 만료되었습니다.",
+            "인증 정보가 유효하지 않거나 만료되었습니다.",
         )
 
     def test_token_refresh_blacklisted_token_fail(self) -> None:
-        """이미 블랙리스트에 등록된 토큰으로 재발급 시 400"""
+        """이미 블랙리스트에 등록된 토큰으로 재발급 시 403"""
         refresh = RefreshToken.for_user(self.user)
         refresh.blacklist()
         self.client.cookies["refresh_token"] = str(refresh)
 
         response = self.client.post(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(
             response.data["error_detail"],
-            "로그인 세션이 만료되었습니다.",
+            "인증 정보가 유효하지 않거나 만료되었습니다.",
         )

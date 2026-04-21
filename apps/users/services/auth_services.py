@@ -64,18 +64,18 @@ class AuthService:
     @staticmethod
     def logout(refresh_token: str | None) -> None:
         if not refresh_token:
-            raise ValidationError("로그인 세션이 만료되었습니다.")
+            raise AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.")
 
         try:
             token = RefreshToken(cast(Token, refresh_token))
             token.blacklist()
         except TokenError:
-            raise ValidationError("인증 정보가 유효하지 않거나 만료되었습니다.")
+            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
 
     @staticmethod
     def refresh(refresh_token: str | None) -> dict:
         if not refresh_token:
-            raise ValidationError("로그인 세션이 만료되었습니다.")
+            raise AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.")
 
         try:
             old_token = RefreshToken(cast(Token, refresh_token))
@@ -87,10 +87,10 @@ class AuthService:
             new_refresh = RefreshToken.for_user(user)
 
         except TokenError:
-            raise ValidationError("로그인 세션이 만료되었습니다.")
+            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
 
         except User.DoesNotExist:
-            raise ValidationError("로그인 세션이 만료되었습니다.")
+            raise AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.")
 
         return {
             "access_token": str(new_refresh.access_token),
