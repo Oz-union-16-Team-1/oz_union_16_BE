@@ -10,6 +10,22 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+
+    services:
+      db: # 서비스 이름을 db로 설정하거나, 아래 env에서 localhost로 지정합니다
+        image: pgvector/pgvector:pg14
+        env:
+          POSTGRES_DB: oz_union # 프로젝트의 실제 DB 이름으로 변경
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_password
+        ports:
+          - 5432: 5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4 # v3 -> v4 업데이트 권장
@@ -97,6 +113,11 @@ jobs:
       - name: Check each app has test & Run coverage
         env:
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: oz_union
+          DB_USER: postgres
+          DB_PASSWORD: postgres_password
         run: |
           ran_tests=false
           apps=$(find apps -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
