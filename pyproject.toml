@@ -15,6 +15,7 @@ dependencies = [
     "mypy>=1.20.0",
     "pgvector>=0.4.2",
     "psycopg2-binary>=2.9.11",
+    "requests>=2.33.1",
 ]
 
 [tool.isort]
@@ -30,3 +31,8 @@ ensure_newline_before_comments = true
 python_version = "3.14"
 ignore_missing_imports = true
 exclude = "(^|/)migrations/"
+
+[dependency-groups]
+dev = [
+    "types-requests>=2.33.0.20260408",
+]
