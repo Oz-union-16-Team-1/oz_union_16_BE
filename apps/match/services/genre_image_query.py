@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from django.conf import settings
 from redis import Redis
@@ -22,12 +23,28 @@ class MatchGenreImageQueryService:
         )
         self.cache_key = settings.MATCH_GENRE_IMAGE_CACHE_KEY
 
-    def get_genre_image(self, genre_id: int) -> dict:
+    @staticmethod
+    def _parse_image_map(raw: object) -> dict[str, Any]:
+        if isinstance(raw, (bytes, bytearray)):
+            raw = raw.decode("utf-8", errors="ignore")
+
+        if not isinstance(raw, str) or not raw:
+            return {}
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+
+        return parsed if isinstance(parsed, dict) else {}
+
+    def get_genre_image(self, genre_id: int) -> dict[str, Any]:
         try:
             raw = self.redis.get(self.cache_key)
-            image_map = json.loads(raw) if raw else {}
         except Exception as exc:
             raise MatchGenreImageCacheUnavailable() from exc
+
+        image_map = self._parse_image_map(raw)
 
         item = image_map.get(str(genre_id))
         if not isinstance(item, dict) or not item.get("image_url"):
