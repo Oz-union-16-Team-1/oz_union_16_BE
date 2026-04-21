@@ -43,12 +43,16 @@ class MatchGenreImageAPITest(TestCase):
     @patch("apps.match.views.genre_image.MatchGenreImageQueryService.get_genre_image")
     # 유효한 genre_id라도 캐시에 해당 장르 이미지가 없으면 404를 반환
     def test_get_genre_image_not_found_returns_404(self, mock_get_genre_image):
-        mock_get_genre_image.side_effect = NotFound("해당 장르의 이미지를 찾을 수 없습니다.")
+        mock_get_genre_image.side_effect = NotFound(
+            "해당 장르의 이미지를 찾을 수 없습니다."
+        )
 
         response = self.client.get(self.url, {"genre_id": 1})
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data["error_detail"], "해당 장르의 이미지를 찾을 수 없습니다.")
+        self.assertEqual(
+            response.data["error_detail"], "해당 장르의 이미지를 찾을 수 없습니다."
+        )
 
     @patch("apps.match.views.genre_image.MatchGenreImageQueryService.get_genre_image")
     # 캐시 조회 과정에서 장애가 발생하면 503을 반환
@@ -58,4 +62,6 @@ class MatchGenreImageAPITest(TestCase):
         response = self.client.get(self.url, {"genre_id": 1})
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
-        self.assertEqual(response.data["error_detail"], "이미지 캐시 서비스가 일시적으로 불가합니다.")
+        self.assertEqual(
+            response.data["error_detail"], "이미지 캐시 서비스가 일시적으로 불가합니다."
+        )

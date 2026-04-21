@@ -20,21 +20,27 @@ class MatchGenreImageAPIView(APIView):
         tags=["match"],
         summary="매칭 장르별 이미지 전달 API",
         description=(
-                "🖼️ 장르 선택 화면에 사용할 대표 이미지를 반환합니다. "
-                "대표 이미지는 장르별 인기 게임을 기준으로 주기적으로 최신화되므로, "
-                "응답 이미지가 변경될 수 있습니다. "
-                "⚠️ genre_id는 1~8 범위의 정수만 허용됩니다. "
-                "장르 매핑: "
-                "(1) 액션/격투, (2) 어드벤처/플랫폼, (3) RPG/스토리, (4) 전략/시뮬, "
-                "(5) 스포츠/레이싱, (6) 두뇌/전략, (7) 슈팅, (8) 음악/리듬"
+            "🖼️ 장르 선택 화면에 사용할 대표 이미지를 반환합니다. "
+            "대표 이미지는 장르별 인기 게임을 기준으로 주기적으로 최신화되므로, "
+            "응답 이미지가 변경될 수 있습니다. "
+            "⚠️ genre_id는 1~8 범위의 정수만 허용됩니다. "
+            "장르 매핑: "
+            "(1) 액션/격투, (2) 어드벤처/플랫폼, (3) RPG/스토리, (4) 전략/시뮬, "
+            "(5) 스포츠/레이싱, (6) 두뇌/전략, (7) 슈팅, (8) 음악/리듬"
         ),
         auth=[],
         parameters=[MatchGenreImageQuerySerializer],
         responses={
             200: MatchGenreImageResponseSerializer,
-            400: OpenApiResponse(description="error_detail: 유효하지 않은 genre_id 입니다."),
-            404: OpenApiResponse(description="error_detail: 해당 장르의 이미지를 찾을 수 없습니다."),
-            503: OpenApiResponse(description="error_detail: 이미지 캐시 서비스가 일시적으로 불가합니다."),
+            400: OpenApiResponse(
+                description="error_detail: 유효하지 않은 genre_id 입니다."
+            ),
+            404: OpenApiResponse(
+                description="error_detail: 해당 장르의 이미지를 찾을 수 없습니다."
+            ),
+            503: OpenApiResponse(
+                description="error_detail: 이미지 캐시 서비스가 일시적으로 불가합니다."
+            ),
         },
     )
     def get(self, request):
