@@ -78,7 +78,8 @@ class MatchGenreImageBatchService:
             for row in rows or []:
                 try:
                     game_id = int(row.get("id") or 0)
-                    category = int(row.get("category") or -1)
+                    raw_category = row.get("category")
+                    category = int(raw_category) if raw_category is not None else -1
                     rating = float(row.get("total_rating") or 0.0)
                     rating_count = int(row.get("total_rating_count") or 0)
                     release_date = int(row.get("first_release_date") or 0)
@@ -164,7 +165,7 @@ class MatchGenreImageBatchService:
 
         # fallback: 이전 캐시 유지
         raw = self.redis.get(self.cache_key)
-        if raw:
+        if isinstance(raw, (str, bytes, bytearray)):
             try:
                 prev = json.loads(raw)
                 if isinstance(prev, dict) and prev:
