@@ -95,6 +95,13 @@ jobs:
           uv run python manage.py migrate
 
       - name: Check each app has test & Run coverage
+        env:
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          DB_HOST: localhost
+          DB_PORT: 5432
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: pgti1234
+          POSTGRES_DB: oz_combined_PGTI
         run: |
           ran_tests=false
           apps=$(find apps -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
