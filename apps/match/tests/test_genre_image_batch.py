@@ -14,18 +14,7 @@ from apps.match.constants import (
 )
 from apps.match.services.genre_image_assignment import GenreImageCandidate
 from apps.match.services.genre_image_batch import MatchGenreImageBatchService
-
-
-class FakeRedis:
-    def __init__(self):
-        self.store: dict[str, str] = {}
-
-    def set(self, key, value):
-        self.store[key] = value
-        return True
-
-    def get(self, key):
-        return self.store.get(key)
+from apps.match.tests.helpers import FakeRedis
 
 
 class MatchGenreImageBatchServiceTest(SimpleTestCase):
@@ -34,52 +23,82 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
         self.service.redis = FakeRedis()
         self.service.cache_key = "match:genre:image_map:v1"
 
-    @patch.object(batch_module, "API_TO_IGDB_IMAGE_GENRE_MAP", {1: [4]})
-    @patch.object(batch_module.igdb_client, "query_games")
-    def test_fetch_candidates_filters_and_deduplicates(self, mock_query_games):
-        release_ts = int(time.time())
-
-        valid = {
-            "id": 100,
+    def _valid_game(self, *, game_id: int, release_ts: int, cover_url: str):
+        return {
+            "id": game_id,
             "category": MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES[0],
             "status": MATCH_GENRE_IMAGE_REQUIRED_STATUS,
             "platforms": [MATCH_GENRE_IMAGE_REQUIRED_PLATFORM],
             "rating": MATCH_GENRE_IMAGE_MIN_RATING + 20.0,
             "rating_count": MATCH_GENRE_IMAGE_MIN_RATING_COUNT + 100,
             "first_release_date": release_ts,
-            "cover": {"url": "//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg"},
+            "cover": {"url": cover_url},
         }
-        duplicate_same_id = {
-            **valid,
-            "rating": MATCH_GENRE_IMAGE_MIN_RATING,
-        }
+
+    @patch.object(batch_module, "API_TO_IGDB_IMAGE_GENRE_MAP", {1: [4]})
+    @patch.object(batch_module.igdb_client, "query_games")
+    # 필터 조건을 통과한 게임만 후보로 남김
+    def test_fetch_candidates_filters_valid_rows(self, mock_query_games):
+        release_ts = int(time.time())
+        valid = self._valid_game(
+            game_id=100,
+            release_ts=release_ts,
+            cover_url="//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg",
+        )
         invalid_low_rating = {
             **valid,
             "id": 101,
             "rating": MATCH_GENRE_IMAGE_MIN_RATING - 1.0,
         }
 
-        mock_query_games.return_value = [valid, duplicate_same_id, invalid_low_rating]
-
+        mock_query_games.return_value = [valid, invalid_low_rating]
         result = self.service._fetch_candidates_by_genre()
-
-        self.assertTrue(mock_query_games.called)
-        self.assertGreaterEqual(mock_query_games.call_count, 1)
 
         self.assertIn(1, result)
         self.assertEqual(len(result[1]), 1)
+        self.assertEqual(result[1][0].game_id, 100)
 
-        candidate = result[1][0]
-        self.assertEqual(candidate.game_id, 100)
-        self.assertIn("https://", candidate.image_url)
-        self.assertIn("t_1080p", candidate.image_url)
+    @patch.object(batch_module, "API_TO_IGDB_IMAGE_GENRE_MAP", {1: [4]})
+    @patch.object(batch_module.igdb_client, "query_games")
+    # 동일 game_id 중복 데이터는 1건으로 정리
+    def test_fetch_candidates_deduplicates_same_game_id(self, mock_query_games):
+        release_ts = int(time.time())
+        valid = self._valid_game(
+            game_id=100,
+            release_ts=release_ts,
+            cover_url="//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg",
+        )
+        duplicate = {**valid, "rating": MATCH_GENRE_IMAGE_MIN_RATING}
+
+        mock_query_games.return_value = [valid, duplicate]
+        result = self.service._fetch_candidates_by_genre()
+
+        self.assertEqual(len(result[1]), 1)
+        self.assertEqual(result[1][0].game_id, 100)
+
+    @patch.object(batch_module, "API_TO_IGDB_IMAGE_GENRE_MAP", {1: [4]})
+    @patch.object(batch_module.igdb_client, "query_games")
+    # cover URL은 https + t_1080p 형태로 정규화한다.
+    def test_fetch_candidates_normalizes_cover_url(self, mock_query_games):
+        release_ts = int(time.time())
+        valid = self._valid_game(
+            game_id=100,
+            release_ts=release_ts,
+            cover_url="//images.igdb.com/igdb/image/upload/t_thumb/co1.jpg",
+        )
+
+        mock_query_games.return_value = [valid]
+        result = self.service._fetch_candidates_by_genre()
+
+        image_url = result[1][0].image_url
+        self.assertIn("https://", image_url)
+        self.assertIn("t_1080p", image_url)
 
     @patch.object(batch_module, "assign_genre_images")
+    # 후보 부족 시 월 단위 컷오프 완화를 통해 다음 단계에서 배정에 성공
     def test_run_relaxes_cutoff_until_candidate_matches(self, mock_assign):
         now_ts = 1_700_000_000
-        release_ts = now_ts - (
-            40 * 24 * 60 * 60
-        )  # 30일 컷오프는 실패, 60일 컷오프는 통과
+        release_ts = now_ts - (40 * 24 * 60 * 60)  # 30일 실패, 60일 통과
 
         candidate = GenreImageCandidate(
             game_id=200,
@@ -87,7 +106,6 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
             rating=81.2,
             rating_count=90,
         )
-
         self.service._release_ts_by_genre_game = {1: {200: release_ts}}
 
         def assign_side_effect(*, candidates_by_genre):
@@ -120,6 +138,7 @@ class MatchGenreImageBatchServiceTest(SimpleTestCase):
         self.assertIn("1", saved)
 
     @patch.object(batch_module, "assign_genre_images", side_effect=RuntimeError("fail"))
+    # 모든 완화 단계 실패 시 이전 캐시를 fallback으로 재사용
     def test_run_uses_previous_cache_when_all_cutoff_steps_fail(self, _):
         previous_map = {
             "1": {

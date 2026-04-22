@@ -1,3 +1,11 @@
-from django.urls import URLPattern, URLResolver
+from django.urls import path
 
-urlpatterns: list[URLPattern | URLResolver] = []
+from apps.match.views.genre_image import MatchGenreImageAPIView
+
+urlpatterns = [
+    path(
+        "genres/image-url",
+        MatchGenreImageAPIView.as_view(),
+        name="match-genres-image-url",
+    ),
+]
