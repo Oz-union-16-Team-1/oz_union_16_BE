@@ -1,12 +1,17 @@
-# apps/match/services/batch_ingest.py
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from apps.match.services.igdb_client import IgdbClient
-from apps.match.services.igdb_query import build_games_query
+from django.conf import settings
+
+from apps.core import igdb_client
+from apps.match.services.igdb_query import (
+    IGDB_GAMES_SORT_CLAUSE,
+    build_games_where_clause,
+    get_games_field_clause,
+)
 from apps.match.services.ingest_filters import filter_games_with_reasons
 
 
@@ -27,31 +32,50 @@ class IngestStats:
 
 
 class MatchBatchIngestService:
-    def __init__(self, client: IgdbClient | None = None) -> None:
-        self.client = client or IgdbClient()
+    def __init__(
+        self,
+        page_size: int | None = None,
+        max_pages: int | None = None,
+        request_interval: float | None = None,
+    ) -> None:
+        self.page_size = page_size or settings.IGDB_PAGE_SIZE
+        self.max_pages = max_pages or settings.IGDB_MAX_PAGES
+        self.request_interval = (
+            request_interval
+            if request_interval is not None
+            else settings.IGDB_REQUEST_INTERVAL
+        )
 
     def run(self) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         # 수집/필터/집계까지만 수행 (DB 업서트/Redis 적재는 후속 PR)
-        token = self.client.get_access_token()
-
         all_rows: list[dict[str, Any]] = []
         offset = 0
 
-        for _ in range(self.client.max_pages):
-            query = build_games_query(limit=self.client.page_size, offset=offset)
-            rows = self.client.fetch_games_page(access_token=token, query=query)
+        fields_clause = get_games_field_clause()
+        where_clause = build_games_where_clause()
+
+        for _ in range(self.max_pages):
+            rows = igdb_client.query_games(
+                fields=fields_clause,
+                where=where_clause,
+                sort=IGDB_GAMES_SORT_CLAUSE,
+                limit=self.page_size,
+                offset=offset,
+            )
+
             if not rows:
+                break
+            if not isinstance(rows, list):
                 break
 
             all_rows.extend(rows)
 
-            if len(rows) < self.client.page_size:
+            if len(rows) < self.page_size:
                 break
 
-            offset += self.client.page_size
-            # IGDB 4req/s 제한 대응: 페이지 요청 간 간격두기
-            if self.client.request_interval > 0:
-                time.sleep(self.client.request_interval)
+            offset += self.page_size
+            if self.request_interval > 0:
+                time.sleep(self.request_interval)
 
         passed, reason_counts = filter_games_with_reasons(all_rows)
 
