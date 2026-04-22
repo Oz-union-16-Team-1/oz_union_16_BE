@@ -61,14 +61,20 @@ class IngestFiltersTest(SimpleTestCase):
         g["aggregated_rating"] = 10
         self.assertFalse(f._valid_aggregated_rating(g))
 
-    # [필터] rating/rating_count 변환 실패 또는 기준 미달 시 탈락해야 한다.
+    # [필터] rating/rating_count 또는 total_rating/total_rating_count 중
+    # 하나라도 기준을 만족하면 통과해야 한다.
     def test_valid_rating_cases(self):
         g = _valid_game()
         g["rating"] = "abc"
-        self.assertFalse(f._valid_rating(g))
+        g["rating_count"] = 10
+        g["total_rating"] = 80
+        g["total_rating_count"] = 100
+        self.assertTrue(f._valid_rating(g))  # total_* 경로로 통과
+
         g = _valid_game()
         g["rating_count"] = 1
-        self.assertFalse(f._valid_rating(g))
+        g["total_rating_count"] = 1
+        self.assertFalse(f._valid_rating(g))  # 둘 다 기준 미달
 
     # [필터] first_release_date가 없거나 변환 실패면 탈락해야 한다.
     def test_valid_release_ts_cases(self):
@@ -142,8 +148,9 @@ class IngestFiltersTest(SimpleTestCase):
         g["category"] = None
         self.assertTrue(f._valid_category(g))  # 둘 다 없으면 통과
 
-        # [필터] status가 None이면 IGDB 누락값으로 간주해 통과해야 함
-        def test_valid_status_none_allowed(self):
-            g = _valid_game()
-            g["status"] = None
-            self.assertTrue(f._valid_status(g))
+    # [필터] status가 None이면 IGDB 누락값으로 간주해 통과해야 함
+    def test_valid_status_none_allowed(self):
+        g = _valid_game()
+        g["status"] = None
+        self.assertTrue(f._valid_status(g))
+

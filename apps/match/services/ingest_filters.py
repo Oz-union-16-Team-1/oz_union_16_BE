@@ -74,20 +74,37 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
 
 
 def _valid_rating(game: dict[str, Any]) -> bool:
-    try:
-        rating_count = int(
-            game.get("rating_count") or game.get("total_rating_count") or 0
-        )
-        rating = float(game.get("rating") or game.get("total_rating") or 0)
-    except TypeError:
-        return False
-    except ValueError:
-        return False
+    def _to_float(value: Any) -> float | None:
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            return float(value)
+        except TypeError:
+            return None
+        except ValueError:
+            return None
 
-    return (
-        rating_count >= MATCH_INGEST_MIN_RATING_COUNT
+    rating_count = _to_int(game.get("rating_count"))
+    rating = _to_float(game.get("rating"))
+
+    total_rating_count = _to_int(game.get("total_rating_count"))
+    total_rating = _to_float(game.get("total_rating"))
+
+    direct_ok = (
+        rating_count is not None
+        and rating is not None
+        and rating_count >= MATCH_INGEST_MIN_RATING_COUNT
         and rating >= MATCH_INGEST_MIN_RATING
     )
+
+    total_ok = (
+        total_rating_count is not None
+        and total_rating is not None
+        and total_rating_count >= MATCH_INGEST_MIN_RATING_COUNT
+        and total_rating >= MATCH_INGEST_MIN_RATING
+    )
+
+    return direct_ok or total_ok
 
 
 def _valid_release_ts(game: dict[str, Any]) -> bool:

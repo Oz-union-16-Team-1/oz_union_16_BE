@@ -43,10 +43,16 @@ def get_games_field_clause() -> str:
 def build_games_where_clause() -> str:
     # IGDB where는 안정적인 숫자/배열 필드 중심으로 최소화
     # 나머지 상세 검증(category/status/videos/description/aggregated)은 ingest_filters에서 처리
+    # rating 또는 total_rating 중 하나라도 기준 충족하면 통과
     min_rating = f"{MATCH_INGEST_MIN_RATING:g}"  # "50"
+    min_count = MATCH_INGEST_MIN_RATING_COUNT
+
     return (
-        f"(rating_count >= {MATCH_INGEST_MIN_RATING_COUNT})"
-        f" & (rating >= {min_rating})"
+        "("
+        f"((rating_count >= {min_count}) & (rating >= {min_rating}))"
+        " | "
+        f"((total_rating_count >= {min_count}) & (total_rating >= {min_rating}))"
+        ")"
         f" & (first_release_date >= {MATCH_INGEST_MIN_RELEASE_TS})"
         f" & (platforms = ({MATCH_INGEST_REQUIRED_PLATFORM}))"
     )
