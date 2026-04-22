@@ -1,6 +1,6 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,7 +12,7 @@ from apps.match.services.genre_image_query import MatchGenreImageQueryService
 
 
 class MatchGenreImageAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     service_class = MatchGenreImageQueryService
 
     @extend_schema(
@@ -28,12 +28,14 @@ class MatchGenreImageAPIView(APIView):
             "(1) 액션/격투, (2) 어드벤처/플랫폼, (3) RPG/스토리, (4) 전략/시뮬, "
             "(5) 스포츠/레이싱, (6) 두뇌/전략, (7) 슈팅, (8) 음악/리듬"
         ),
-        auth=[],
         parameters=[MatchGenreImageQuerySerializer],
         responses={
             200: MatchGenreImageResponseSerializer,
             400: OpenApiResponse(
                 description="error_detail: 유효하지 않은 genre_id 입니다."
+            ),
+            401: OpenApiResponse(
+                description="error_detail: 자격 인증 데이터가 제공되지 않았습니다."
             ),
             404: OpenApiResponse(
                 description="error_detail: 해당 장르의 이미지를 찾을 수 없습니다."

@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -16,9 +17,17 @@ class MatchGenreImageAPITest(TestCase):
 
     def setUp(self) -> None:
         self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            login_id="genre_api_user",
+            password="Pass1234!",
+            name="테스터",
+            nickname="genre_tester",
+            gender="M",
+        )
+        self.client.force_authenticate(user=self.user)
 
     @patch("apps.match.views.genre_image.MatchGenreImageQueryService.get_genre_image")
-    # 비회원 접근 가능 상태에서 유효한 genre_id 요청 시 200과 이미지 정보를 반환
+    # 인증된 사용자가 유효한 genre_id 요청 시 200과 이미지 정보를 반환
     def test_get_genre_image_success(self, mock_get_genre_image):
         mock_get_genre_image.return_value = {
             "genre_id": 5,
@@ -31,6 +40,14 @@ class MatchGenreImageAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["genre_id"], 5)
         self.assertIn("image_url", response.data)
+
+    # 비회원 요청은 401을 반환
+    def test_get_genre_image_unauthorized_returns_401(self):
+        anonymous_client = APIClient()
+        response = anonymous_client.get(self.url, {"genre_id": 5})
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn("error_detail", response.data)
 
     # genre_id가 범위를 벗어나거나 정수 형식이 아니면 400을 반환
     def test_get_genre_image_invalid_genre_id_returns_400(self):
