@@ -26,4 +26,3 @@ class Command(BaseCommand):
         else:
             for reason, count in sorted(excluded_reasons.items()):
                 self.stdout.write(f"  - {reason}: {count}")
-

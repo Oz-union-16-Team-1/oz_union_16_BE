@@ -50,4 +50,3 @@ def build_games_where_clause() -> str:
         " & (videos != null)"
         " & ((summary != null) | (storyline != null))"
     )
-

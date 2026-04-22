@@ -1,7 +1,8 @@
 from django.test import SimpleTestCase
 
-from apps.match.services import ingest_filters as f
 from apps.match.constants import MATCH_INGEST_MIN_RELEASE_TS
+from apps.match.services import ingest_filters as f
+
 
 def _valid_game() -> dict:
     return {
@@ -87,13 +88,19 @@ class IngestFiltersTest(SimpleTestCase):
             ("low_aggregated_rating", {"aggregated_rating": 10}),
             ("incomplete_data", {"summary": "", "storyline": ""}),
             ("platform_not_pc", {"platforms": [48]}),
-            ("too_old_release_or_missing", {"first_release_date": MATCH_INGEST_MIN_RELEASE_TS - 1}),
+            (
+                "too_old_release_or_missing",
+                {"first_release_date": MATCH_INGEST_MIN_RELEASE_TS - 1},
+            ),
         ]
         for expected, patch in cases:
             g = _valid_game()
             g.update(patch)
             self.assertEqual(f.validate_game(g), expected)
-            self.assertEqual(f.validate_game({**_valid_game(), "first_release_date": None}), "incomplete_data")
+            self.assertEqual(
+                f.validate_game({**_valid_game(), "first_release_date": None}),
+                "incomplete_data",
+            )
 
     # [집계] filter_games_with_reasons: 통과 건수와 reason 카운트가 정확해야 한다.
     def test_filter_games_with_reasons(self):
