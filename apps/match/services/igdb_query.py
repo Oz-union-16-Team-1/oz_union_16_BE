@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from django.conf import settings
+from apps.match.constants import (
+    MATCH_INGEST_ALLOWED_CATEGORIES,
+    MATCH_INGEST_MIN_AGG_RATING,
+    MATCH_INGEST_MIN_RATING,
+    MATCH_INGEST_MIN_RATING_COUNT,
+    MATCH_INGEST_MIN_RELEASE_TS,
+    MATCH_INGEST_REQUIRED_PLATFORM,
+    MATCH_INGEST_REQUIRED_STATUS,
+)
 
 IGDB_GAME_FIELDS: tuple[str, ...] = (
     "id",
@@ -30,14 +38,16 @@ def get_games_field_clause() -> str:
 
 
 def build_games_where_clause() -> str:
+    categories = ",".join(map(str, MATCH_INGEST_ALLOWED_CATEGORIES))
     return (
-        "(category = (0,8,9))"
-        " & (status = 0)"
-        f" & (rating_count >= {settings.MATCH_FILTER_MIN_RATING_COUNT})"
-        f" & (rating >= {settings.MATCH_FILTER_MIN_RATING})"
-        f" & ((aggregated_rating = null) | (aggregated_rating >= {settings.MATCH_FILTER_MIN_AGG_RATING}))"
-        f" & (first_release_date >= {settings.MATCH_FILTER_MIN_RELEASE_TS})"
-        " & (platforms = (6))"
+        f"(category = ({categories}))"
+        f" & (status = {MATCH_INGEST_REQUIRED_STATUS})"
+        f" & (rating_count >= {MATCH_INGEST_MIN_RATING_COUNT})"
+        f" & (rating >= {MATCH_INGEST_MIN_RATING})"
+        f" & ((aggregated_rating = null) | (aggregated_rating >= {MATCH_INGEST_MIN_AGG_RATING}))"
+        f" & (first_release_date >= {MATCH_INGEST_MIN_RELEASE_TS})"
+        f" & (platforms = ({MATCH_INGEST_REQUIRED_PLATFORM}))"
         " & (videos != null)"
         " & ((summary != null) | (storyline != null))"
     )
+

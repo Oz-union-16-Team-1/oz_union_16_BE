@@ -4,11 +4,20 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from django.conf import settings
+from apps.match.constants import (
+    MATCH_INGEST_ALLOWED_CATEGORIES,
+    MATCH_INGEST_MIN_AGG_RATING,
+    MATCH_INGEST_MIN_RATING,
+    MATCH_INGEST_MIN_RATING_COUNT,
+    MATCH_INGEST_MIN_RELEASE_TS,
+    MATCH_INGEST_REQUIRED_PLATFORM,
+    MATCH_INGEST_REQUIRED_STATUS,
+)
 
-ALLOWED_CATEGORIES = {0, 8, 9}  # main_game, remake, remaster
-ALLOWED_STATUS = {0}  # released
-PC_PLATFORM_ID = 6
+
+ALLOWED_CATEGORIES = set(MATCH_INGEST_ALLOWED_CATEGORIES)
+ALLOWED_STATUS = {MATCH_INGEST_REQUIRED_STATUS}
+PC_PLATFORM_ID = MATCH_INGEST_REQUIRED_PLATFORM
 
 
 def _to_int(value: Any) -> int | None:
@@ -45,21 +54,24 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
     if agg is None:
         return True
     try:
-        return float(agg) >= settings.MATCH_FILTER_MIN_AGG_RATING
-    except TypeError, ValueError:
+        return float(agg) >= MATCH_INGEST_MIN_AGG_RATING
+    except TypeError:
         return False
-
+    except ValueError:
+        return False
 
 def _valid_rating(game: dict[str, Any]) -> bool:
     try:
         rating_count = int(game.get("rating_count") or 0)
         rating = float(game.get("rating") or 0)
-    except TypeError, ValueError:
+    except TypeError:
+        return False
+    except ValueError:
         return False
 
     return (
-        rating_count >= settings.MATCH_FILTER_MIN_RATING_COUNT
-        and rating >= settings.MATCH_FILTER_MIN_RATING
+        rating_count >= MATCH_INGEST_MIN_RATING_COUNT
+        and rating >= MATCH_INGEST_MIN_RATING
     )
 
 
@@ -69,8 +81,10 @@ def _valid_release_ts(game: dict[str, Any]) -> bool:
     if ts is None:
         return False
     try:
-        return int(ts) >= settings.MATCH_FILTER_MIN_RELEASE_TS
-    except TypeError, ValueError:
+        return int(ts) >= MATCH_INGEST_MIN_RELEASE_TS
+    except TypeError:
+        return False
+    except ValueError:
         return False
 
 
