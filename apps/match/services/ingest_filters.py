@@ -110,12 +110,26 @@ def _valid_platform(game: dict[str, Any]) -> bool:
 
 
 def _valid_category(game: dict[str, Any]) -> bool:
-    category = _to_int(game.get("category"))
-    return category is not None and category in ALLOWED_CATEGORIES
+    # game_type 우선, 없을 때만 category fallback
+    raw_game_type = game.get("game_type")
+    game_type = _to_int(raw_game_type)
+    if raw_game_type is not None:
+        return game_type is not None and game_type in ALLOWED_CATEGORIES
+
+    raw_category = game.get("category")
+    category = _to_int(raw_category)
+    if raw_category is not None:
+        return category is not None and category in ALLOWED_CATEGORIES
+
+    # 둘 다 없으면 통과(IGDB 누락 데이터 허용)
+    return True
 
 
 def _valid_status(game: dict[str, Any]) -> bool:
-    status = _to_int(game.get("status"))
+    raw_status = game.get("status")
+    if raw_status is None:
+        return True  # IGDB 누락값 허용
+    status = _to_int(raw_status)
     return status is not None and status in ALLOWED_STATUS
 
 

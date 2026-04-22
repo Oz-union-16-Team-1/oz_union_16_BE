@@ -83,7 +83,7 @@ class IngestFiltersTest(SimpleTestCase):
     def test_validate_game_reasons(self):
         cases = [
             ("invalid_category", {"category": True}),
-            ("invalid_status", {"status": None}),
+            ("invalid_status", {"status": True}),
             ("low_rating_or_count", {"rating_count": 0}),
             ("low_aggregated_rating", {"aggregated_rating": 10}),
             ("incomplete_data", {"summary": "", "storyline": ""}),
@@ -93,14 +93,16 @@ class IngestFiltersTest(SimpleTestCase):
                 {"first_release_date": MATCH_INGEST_MIN_RELEASE_TS - 1},
             ),
         ]
+
         for expected, patch in cases:
             g = _valid_game()
             g.update(patch)
             self.assertEqual(f.validate_game(g), expected)
-            self.assertEqual(
-                f.validate_game({**_valid_game(), "first_release_date": None}),
-                "incomplete_data",
-            )
+
+        self.assertEqual(
+            f.validate_game({**_valid_game(), "first_release_date": None}),
+            "incomplete_data",
+        )
 
     # [집계] filter_games_with_reasons: 통과 건수와 reason 카운트가 정확해야 한다.
     def test_filter_games_with_reasons(self):
@@ -115,3 +117,33 @@ class IngestFiltersTest(SimpleTestCase):
         self.assertEqual(len(passed), 1)
         self.assertEqual(reasons.get("invalid_status"), 1)
         self.assertEqual(reasons.get("platform_not_pc"), 1)
+
+    # [필터] category 검증: game_type 우선, 없으면 category fallback
+    def test_valid_category_game_type_priority(self):
+        g = _valid_game()
+        g["category"] = 999
+        g["game_type"] = 0
+        self.assertTrue(f._valid_category(g))  # game_type 우선 통과
+
+        g = _valid_game()
+        g["category"] = 0
+        g["game_type"] = 999
+        self.assertFalse(
+            f._valid_category(g)
+        )  # game_type 있으면 category fallback 안 함
+
+        g = _valid_game()
+        g.pop("game_type", None)
+        g["category"] = 8
+        self.assertTrue(f._valid_category(g))  # fallback 통과
+
+        g = _valid_game()
+        g["game_type"] = None
+        g["category"] = None
+        self.assertTrue(f._valid_category(g))  # 둘 다 없으면 통과
+
+        # [필터] status가 None이면 IGDB 누락값으로 간주해 통과해야 함
+        def test_valid_status_none_allowed(self):
+            g = _valid_game()
+            g["status"] = None
+            self.assertTrue(f._valid_status(g))

@@ -14,6 +14,7 @@ IGDB_GAME_FIELDS: tuple[str, ...] = (
     "id",
     "name",
     "category",
+    "game_type",
     "status",
     "rating",
     "rating_count",
