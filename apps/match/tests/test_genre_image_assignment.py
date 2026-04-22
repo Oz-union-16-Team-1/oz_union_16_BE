@@ -11,10 +11,16 @@ class MatchGenreImageAssignmentTest(SimpleTestCase):
     # 후보 정렬은 rating > rating_count > game_id 우선순위를 따른다.
     def test_sort_candidates_priority(self):
         candidates = [
-            GenreImageCandidate(game_id=1, image_url="u1", rating=90.0, rating_count=10),
+            GenreImageCandidate(
+                game_id=1, image_url="u1", rating=90.0, rating_count=10
+            ),
             GenreImageCandidate(game_id=2, image_url="u2", rating=92.0, rating_count=5),
-            GenreImageCandidate(game_id=3, image_url="u3", rating=92.0, rating_count=20),
-            GenreImageCandidate(game_id=4, image_url="u4", rating=92.0, rating_count=20),
+            GenreImageCandidate(
+                game_id=3, image_url="u3", rating=92.0, rating_count=20
+            ),
+            GenreImageCandidate(
+                game_id=4, image_url="u4", rating=92.0, rating_count=20
+            ),
         ]
 
         sorted_list = _sort_candidates(candidates)

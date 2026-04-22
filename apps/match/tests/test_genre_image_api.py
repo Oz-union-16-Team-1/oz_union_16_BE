@@ -14,16 +14,16 @@ class MatchGenreImageAPITest(TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         cls.url = reverse("match-genres-image-url")
-
-    def setUp(self) -> None:
-        self.client = APIClient()
-        self.user = get_user_model().objects.create_user(
+        cls.user = get_user_model().objects.create_user(
             login_id="genre_api_user",
             password="Pass1234!",
             name="테스터",
             nickname="genre_tester",
             gender="M",
         )
+
+    def setUp(self) -> None:
+        self.client = APIClient()
         self.client.force_authenticate(user=self.user)
 
     @patch("apps.match.views.genre_image.MatchGenreImageQueryService.get_genre_image")

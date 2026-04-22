@@ -7,17 +7,7 @@ from apps.match.services.genre_image_query import (
     MatchGenreImageCacheUnavailable,
     MatchGenreImageQueryService,
 )
-
-
-class _FakeRedis:
-    def __init__(self, value=None, raise_error=False):
-        self.value = value
-        self.raise_error = raise_error
-
-    def get(self, _key):
-        if self.raise_error:
-            raise RuntimeError("redis down")
-        return self.value
+from apps.match.tests.helpers import FakeRedis
 
 
 class MatchGenreImageQueryServiceTest(SimpleTestCase):
@@ -39,7 +29,9 @@ class MatchGenreImageQueryServiceTest(SimpleTestCase):
     # Redis 캐시에 정상 데이터가 있으면 genre_id/genre_name/image_url을 반환
     def test_get_genre_image_success(self):
         payload = json.dumps({"1": {"image_url": "https://example.com/ok.jpg"}})
-        self.service.redis = _FakeRedis(value=payload)
+        fake_redis = FakeRedis()
+        fake_redis.store[self.service.cache_key] = payload
+        self.service.redis = fake_redis
 
         result = self.service.get_genre_image(1)
 
@@ -49,14 +41,18 @@ class MatchGenreImageQueryServiceTest(SimpleTestCase):
 
     # 캐시에 장르 데이터가 없거나 image_url 누락이면 404(NotFound)를 반환
     def test_get_genre_image_not_found(self):
-        self.service.redis = _FakeRedis(value=json.dumps({"1": {"game_id": 10}}))
+        fake_redis = FakeRedis()
+        fake_redis.store[self.service.cache_key] = json.dumps({"1": {"game_id": 10}})
+        self.service.redis = fake_redis
 
         with self.assertRaises(NotFound):
             self.service.get_genre_image(1)
 
     # Redis 조회 예외 발생 시 503(MatchGenreImageCacheUnavailable)로 변환
     def test_get_genre_image_cache_unavailable(self):
-        self.service.redis = _FakeRedis(raise_error=True)
+        fake_redis = FakeRedis()
+        fake_redis.raise_error = True
+        self.service.redis = fake_redis
 
         with self.assertRaises(MatchGenreImageCacheUnavailable):
             self.service.get_genre_image(1)
