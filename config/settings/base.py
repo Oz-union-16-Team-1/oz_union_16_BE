@@ -227,3 +227,12 @@ CACHES = {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }
 }
+
+MATCH_GENRE_IMAGE_CACHE_KEY = os.getenv(
+    "MATCH_GENRE_IMAGE_CACHE_KEY",
+    "match:genre:image_map:v1",
+)
+MATCH_REDIS_URL = os.getenv("MATCH_REDIS_URL", "redis://redis:6379/0")
+MATCH_GENRE_IMAGE_BATCH_TIMEOUT = int(
+    os.getenv("MATCH_GENRE_IMAGE_BATCH_TIMEOUT", "15")
+)
