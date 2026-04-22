@@ -425,12 +425,12 @@ dependencies = [
     { name = "pgvector" },
     { name = "psycopg2-binary" },
     { name = "requests" },
+    { name = "redis" },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "types-requests" },
-    { name = "redis" },
 ]
 
 [package.metadata]
