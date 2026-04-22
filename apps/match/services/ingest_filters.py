@@ -35,11 +35,24 @@ def _to_int(value: Any) -> int | None:
 
 
 def _as_set(value: Any) -> set[int]:
-    if not value:
+    if not value or not isinstance(value, list):
         return set()
-    if isinstance(value, list):
-        return {int(v) for v in value if isinstance(v, int | float) or str(v).isdigit()}
-    return set()
+
+    out: set[int] = set()
+    for v in value:
+        if isinstance(v, bool):
+            continue
+        if isinstance(v, int):
+            out.add(v)
+            continue
+        if isinstance(v, float) and v.is_integer():
+            out.add(int(v))
+            continue
+        if isinstance(v, str):
+            text = v.strip()
+            if text.isdigit():
+                out.add(int(text))
+    return out
 
 
 def _has_description(game: dict[str, Any]) -> bool:
@@ -59,6 +72,7 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
         return False
     except ValueError:
         return False
+
 
 def _valid_rating(game: dict[str, Any]) -> bool:
     try:
