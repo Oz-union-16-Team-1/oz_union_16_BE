@@ -75,8 +75,10 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
 
 def _valid_rating(game: dict[str, Any]) -> bool:
     try:
-        rating_count = int(game.get("rating_count") or 0)
-        rating = float(game.get("rating") or 0)
+        rating_count = int(
+            game.get("rating_count") or game.get("total_rating_count") or 0
+        )
+        rating = float(game.get("rating") or game.get("total_rating") or 0)
     except TypeError:
         return False
     except ValueError:
