@@ -5,6 +5,7 @@ from apps.match.constants import (
     MATCH_INGEST_MIN_AGG_RATING,
     MATCH_INGEST_MIN_RATING,
     MATCH_INGEST_MIN_RATING_COUNT,
+    MATCH_INGEST_MIN_AGG_RATING_COUNT,
     MATCH_INGEST_MIN_RELEASE_TS,
     MATCH_INGEST_REQUIRED_PLATFORM,
     MATCH_INGEST_REQUIRED_STATUS,
@@ -21,6 +22,7 @@ IGDB_GAME_FIELDS: tuple[str, ...] = (
     "total_rating",
     "total_rating_count",
     "aggregated_rating",
+    "aggregated_rating_count",
     "first_release_date",
     "genres",
     "themes",
@@ -44,14 +46,18 @@ def build_games_where_clause() -> str:
     # IGDB where는 안정적인 숫자/배열 필드 중심으로 최소화
     # 나머지 상세 검증(category/status/videos/description/aggregated)은 ingest_filters에서 처리
     # rating 또는 total_rating 중 하나라도 기준 충족하면 통과
-    min_rating = f"{MATCH_INGEST_MIN_RATING:g}"  # "50"
-    min_count = MATCH_INGEST_MIN_RATING_COUNT
+    min_rating = f"{MATCH_INGEST_MIN_RATING:g}"      # 50
+    min_agg = f"{MATCH_INGEST_MIN_AGG_RATING:g}"     # 60
+    min_count = MATCH_INGEST_MIN_RATING_COUNT        # 20
+    min_agg_count = MATCH_INGEST_MIN_AGG_RATING_COUNT  # 3
 
     return (
         "("
         f"((rating_count >= {min_count}) & (rating >= {min_rating}))"
         " | "
         f"((total_rating_count >= {min_count}) & (total_rating >= {min_rating}))"
+        " | "
+        f"((aggregated_rating_count >= {min_agg_count}) & (aggregated_rating >= {min_agg}))"
         ")"
         f" & (first_release_date >= {MATCH_INGEST_MIN_RELEASE_TS})"
         f" & (platforms = ({MATCH_INGEST_REQUIRED_PLATFORM}))"

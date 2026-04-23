@@ -13,6 +13,7 @@ def _valid_game() -> dict:
         "rating": 75.0,
         "rating_count": 100,
         "aggregated_rating": 80.0,
+        "aggregated_rating_count": 10,
         "first_release_date": 1700000000,
         "genres": [12],
         "videos": [1],
@@ -72,9 +73,19 @@ class IngestFiltersTest(SimpleTestCase):
         self.assertTrue(f._valid_rating(g))  # total_* 경로로 통과
 
         g = _valid_game()
+        g["rating"] = None
+        g["rating_count"] = None
+        g["total_rating"] = None
+        g["total_rating_count"] = None
+        g["aggregated_rating"] = 80
+        g["aggregated_rating_count"] = 3
+        self.assertTrue(f._valid_rating(g))
+
+        g = _valid_game()
         g["rating_count"] = 1
         g["total_rating_count"] = 1
-        self.assertFalse(f._valid_rating(g))  # 둘 다 기준 미달
+        g["aggregated_rating_count"] = 0
+        self.assertFalse(f._valid_rating(g))  # 세 경로 모두 기준 미달
 
     # [필터] first_release_date가 없거나 변환 실패면 탈락해야 한다.
     def test_valid_release_ts_cases(self):
@@ -90,7 +101,7 @@ class IngestFiltersTest(SimpleTestCase):
         cases = [
             ("invalid_category", {"category": True}),
             ("invalid_status", {"status": True}),
-            ("low_rating_or_count", {"rating_count": 0}),
+            ("low_rating_or_count", {"rating_count": 0, "total_rating_count": 0, "aggregated_rating_count": 0}),
             ("low_aggregated_rating", {"aggregated_rating": 10}),
             ("incomplete_data", {"summary": "", "storyline": ""}),
             ("platform_not_pc", {"platforms": [48]}),

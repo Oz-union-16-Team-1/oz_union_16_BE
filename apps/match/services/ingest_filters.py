@@ -9,6 +9,7 @@ from apps.match.constants import (
     MATCH_INGEST_MIN_AGG_RATING,
     MATCH_INGEST_MIN_RATING,
     MATCH_INGEST_MIN_RATING_COUNT,
+    MATCH_INGEST_MIN_AGG_RATING_COUNT,
     MATCH_INGEST_MIN_RELEASE_TS,
     MATCH_INGEST_REQUIRED_PLATFORM,
     MATCH_INGEST_REQUIRED_STATUS,
@@ -90,6 +91,9 @@ def _valid_rating(game: dict[str, Any]) -> bool:
     total_rating_count = _to_int(game.get("total_rating_count"))
     total_rating = _to_float(game.get("total_rating"))
 
+    aggregated_rating_count = _to_int(game.get("aggregated_rating_count"))
+    aggregated_rating = _to_float(game.get("aggregated_rating"))
+
     direct_ok = (
         rating_count is not None
         and rating is not None
@@ -104,7 +108,14 @@ def _valid_rating(game: dict[str, Any]) -> bool:
         and total_rating >= MATCH_INGEST_MIN_RATING
     )
 
-    return direct_ok or total_ok
+    agg_ok = (
+            aggregated_rating_count is not None
+            and aggregated_rating is not None
+            and aggregated_rating_count >= MATCH_INGEST_MIN_AGG_RATING_COUNT
+            and aggregated_rating >= MATCH_INGEST_MIN_AGG_RATING
+    )
+
+    return direct_ok or total_ok or agg_ok
 
 
 def _valid_release_ts(game: dict[str, Any]) -> bool:
