@@ -118,7 +118,7 @@ class Migration(migrations.Migration):
             options={
                 "verbose_name": "챗봇 세션",
                 "verbose_name_plural": "챗봇 세션 목록",
-                "db_table": "chatbot_sessions",
+                "db_table": "survey_chatbot_sessions",
                 "ordering": ["-created_at"],
             },
         ),
