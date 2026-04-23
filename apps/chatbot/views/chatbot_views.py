@@ -35,9 +35,13 @@ class ChatbotMessageAPIView(APIView):
         responses={
             200: ChatbotMessageResponseSerializer,
             400: OpenApiResponse(description="잘못된 요청입니다."),
-            404: OpenApiResponse(description="만료되었거나 유효하지 않은 session_id 입니다."),
+            404: OpenApiResponse(
+                description="만료되었거나 유효하지 않은 session_id 입니다."
+            ),
             409: OpenApiResponse(description="이미 스트리밍이 진행 중입니다."),
-            500: OpenApiResponse(description="메시지 요청 처리 중 서버 오류가 발생했습니다."),
+            500: OpenApiResponse(
+                description="메시지 요청 처리 중 서버 오류가 발생했습니다."
+            ),
         },
         examples=[
             OpenApiExample(
@@ -128,9 +132,13 @@ class ChatbotStreamAPIView(APIView):
         responses={
             200: OpenApiResponse(description="text/event-stream"),
             400: OpenApiResponse(description="잘못된 요청입니다."),
-            404: OpenApiResponse(description="만료되었거나 유효하지 않은 session_id 입니다."),
+            404: OpenApiResponse(
+                description="만료되었거나 유효하지 않은 session_id 입니다."
+            ),
             409: OpenApiResponse(description="이미 스트리밍이 진행 중입니다."),
-            500: OpenApiResponse(description="메시지 요청 처리 중 서버 오류가 발생했습니다."),
+            500: OpenApiResponse(
+                description="메시지 요청 처리 중 서버 오류가 발생했습니다."
+            ),
         },
         tags=["chatbot"],
     )
