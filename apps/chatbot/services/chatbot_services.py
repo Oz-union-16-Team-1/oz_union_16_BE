@@ -10,7 +10,6 @@ from django.utils import timezone
 
 from apps.chatbot.models.models import ChatbotSession
 
-
 SESSION_EXPIRE_MINUTES = 30
 QUESTION_CACHE_TTL = 60 * 30
 STREAM_LOCK_TTL = 60
@@ -93,14 +92,16 @@ def build_answer(message: str) -> str:
 
 
 def chunk_text(text: str, size: int = 6) -> list[str]:
-    return [text[i:i + size] for i in range(0, len(text), size)]
+    return [text[i : i + size] for i in range(0, len(text), size)]
 
 
 def format_sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def generate_stream(session_id: UUID | str, question: str) -> Generator[str, None, None]:
+def generate_stream(
+    session_id: UUID | str, question: str
+) -> Generator[str, None, None]:
     answer = build_answer(question)
 
     yield format_sse("start", {"session_id": str(session_id)})

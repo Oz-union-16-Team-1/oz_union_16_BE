@@ -77,7 +77,9 @@ class ChatbotMessageAPIView(APIView):
                 session = get_valid_chatbot_session(session_id)
                 if session is None:
                     return JsonResponse(
-                        {"error_message": "만료되었거나 유효하지 않은 session_id 입니다."},
+                        {
+                            "error_message": "만료되었거나 유효하지 않은 session_id 입니다."
+                        },
                         status=404,
                         json_dumps_params={"ensure_ascii": False},
                     )
