@@ -68,7 +68,32 @@ class Game(models.Model):
     involved_companies = models.JSONField(
         null=True, blank=True, verbose_name="관련 기업"
     )
+    # --- 34~40: 추가 정보 및 관리 필드
+    collection = models.IntegerField(null=True, blank=True, verbose_name="게임 시리즈")
+    parent_game = models.IntegerField(
+        null=True, blank=True, verbose_name="게임 확장팩 원본"
+    )
+    cover = models.CharField(
+        max_length=50, null=True, blank=True, verbose_name="커버 이미지"
+    )
+    game_type = models.IntegerField(null=True, blank=True, verbose_name="게임 유형")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성 일시")
+    like_count = models.IntegerField(default=0, verbose_name="좋아요 수")
+    is_ban = models.BooleanField(default=False, verbose_name="블랙리스트 여부")
 
     class Meta:
         db_table = "game_list"
         verbose_name = "게임 저장 테이블"
+        indexes = [
+            models.Index(  # 1. 매칭 활성 게임 조회를 위한 복합 인덱스
+                fields=["status", "game_type", "-first_release_date", "-game_id"],
+                name="idx_game_match_active",
+            ),
+            models.Index(  # 2. 최신순 정렬 최적화
+                fields=["-first_release_date", "-game_id"], name="idx_game_release_desc"
+            ),
+            models.Index(  # 3. 평점순 정렬 최적화
+                fields=["-rating", "-rating_count", "-game_id"],
+                name="idx_game_rating_desc",
+            ),
+        ]

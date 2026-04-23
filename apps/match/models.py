@@ -32,11 +32,11 @@ class MatchGameRating(TimeStampedModel):
     class Meta:
         db_table = "match_game_ratings"
         constraints = [
-            models.UniqueConstraint(  # 유저-게임당 1건의 평점만 허용
+            models.UniqueConstraint(
                 fields=["user", "game"],
                 name="uq_mgr_user_game",
             ),
-            models.CheckConstraint(  # 별점 1~5 제한
+            models.CheckConstraint(
                 condition=Q(star_rating__gte=1) & Q(star_rating__lte=5),
                 name="ck_mgr_star_rating_range",
             ),
@@ -46,9 +46,9 @@ class MatchGameRating(TimeStampedModel):
         ]
 
 
+# 1. 게임 취향 벡터 저장
 class MatchGamePreference(TimeStampedModel):
-
-    game = models.OneToOneField(  # 게임당 1개의 벡터가 존재하므로 OneToOneField
+    game = models.OneToOneField(
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
@@ -63,7 +63,7 @@ class MatchGamePreference(TimeStampedModel):
     class Meta:
         db_table = "match_game_preference"
         indexes = [
-            HnswIndex(  # 명세서의 벡터 코사인 유사도 인덱스 구현
+            HnswIndex(
                 name="idx_mgp_vector_cosine_hnsw",
                 fields=["game_preference_vector"],
                 m=16,
@@ -73,31 +73,25 @@ class MatchGamePreference(TimeStampedModel):
         ]
 
 
-class MatchGameGenreMap(models.Model):
+# 2. 매칭 게임 장르 매핑
+class MatchGameGenreMap(TimeStampedModel):
     game = models.ForeignKey(
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
         related_name="genre_maps",
+        verbose_name="게임 ID",
     )
-
-    pgti_genre_id = models.IntegerField(
-        verbose_name="PGTI 장르 ID"
-    )  # 명세서 기준 필드명 pgti_genre_id
-    created_at = models.DateTimeField(auto_now_add=True)
+    genre_id = models.IntegerField(verbose_name="장르 ID")  # IGDB 내부 장르 ID (1~14)
 
     class Meta:
         db_table = "match_game_genre_map"
         constraints = [
-            models.UniqueConstraint(  # 게임-장르 중복 매핑 방지
-                fields=["game", "pgti_genre_id"],
+            models.UniqueConstraint(
+                fields=["game", "genre_id"],
                 name="uq_mggm_game_genre",
-            ),
-            models.CheckConstraint(  # 장르 코드 범위 1~14 제한
-                condition=Q(pgti_genre_id__gte=1) & Q(pgti_genre_id__lte=14),
-                name="ck_mggm_genre_id_range",
             ),
         ]
         indexes = [
-            models.Index(fields=["pgti_genre_id", "game"], name="idx_mggm_genre_game"),
+            models.Index(fields=["genre_id"], name="idx_mggm_genre"),
         ]

@@ -132,8 +132,6 @@ class SurveyGameVector(TimeStampedModel):
     embedding = VectorField(
         dimensions=1536, db_column="embedding", null=True, blank=True
     )
-    # game_list 모델이 아직 없어서 FK 대신 game_id만 먼저 보관합니다.
-    # 게임 모델 추가 후 ForeignKey 또는 OneToOneField로 전환합니다.
     game_list = models.BigIntegerField(db_column="game_id", verbose_name="게임 ID")
 
     class Meta:
