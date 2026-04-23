@@ -7,7 +7,8 @@ from pgvector.django import VectorField
 from apps.core.models import TimeStampedModel
 from apps.users.choices import GenderChoices, SocialProvider, StatusChoices
 
-EMBEDDING_DIM = 0  # TODO: 벡터 길이(차원 수)를 고정하는 값을 정해야 함
+SURVEY_VECTOR_DIM = 1536  # 명세서 기준: 설문조사 벡터 차원
+MATCH_VECTOR_DIM = 14  # 명세서 기준: 매칭 결과 벡터 차원
 
 
 class UserManager(BaseUserManager):
@@ -45,12 +46,12 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     password = models.CharField(max_length=128, db_column="hashed_password")
 
     name = models.CharField(max_length=30)
-    nickname = models.CharField(max_length=30)
+    nickname = models.CharField(max_length=30, blank=True, null=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     gender = models.CharField(max_length=1, choices=GenderChoices.choices)
     birthday = models.DateField(blank=True, null=True)
     status = models.CharField(
-        max_length=9, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
+        max_length=10, choices=StatusChoices.choices, default=StatusChoices.ACTIVE
     )
     profile_img_url = models.CharField(max_length=255, blank=True, null=True)
 
@@ -70,7 +71,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
 
 class SocialUser(TimeStampedModel):
-    provider = models.CharField(max_length=10, choices=SocialProvider.choices)
+    provider = models.CharField(max_length=6, choices=SocialProvider.choices)
     provider_id = models.CharField(max_length=255)
     user = models.ForeignKey(
         User,
@@ -113,10 +114,10 @@ class UserPreference(
     TimeStampedModel
 ):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
     survey_vector = VectorField(
-        dimensions=1536, null=True, blank=True, verbose_name="취향 벡터"
+        dimensions=SURVEY_VECTOR_DIM, null=True, blank=True, verbose_name="취향 벡터"
     )
     match_vector = VectorField(
-        dimensions=14, null=True, blank=True, verbose_name="매치 벡터"
+        dimensions=MATCH_VECTOR_DIM, null=True, blank=True, verbose_name="매치 벡터"
     )
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,

@@ -1,10 +1,8 @@
-import uuid
-
 from django.conf import settings
 from django.db import models
 from pgvector.django import VectorField
 
-from apps.core.models import TimeStampedModel
+from apps.core.models import TimeStampedModel, UUIDModel
 from apps.survey.choices import (
     ChatbotModelChoices,
     SurveyRoleChoices,
@@ -16,7 +14,7 @@ from apps.survey.choices import (
 class SurveyChatbotSession(TimeStampedModel):
     id = models.UUIDField(
         primary_key=True,
-        default=uuid.uuid4,
+        default=UUIDModel._meta.get_field("id").default,
         editable=False,
         db_column="survey_chatbot_sessions_id",
     )
@@ -26,8 +24,6 @@ class SurveyChatbotSession(TimeStampedModel):
         db_column="user_id",
         related_name="survey_chatbot_session",
         verbose_name="사용자",
-        null=True,
-        blank=True,
     )
     using_model = models.CharField(
         max_length=50,
@@ -101,6 +97,13 @@ class SurveyResults(TimeStampedModel):
     survey_answer = models.TextField(
         db_column="survey_answer", null=True, blank=True, verbose_name="유저 답변 요약"
     )
+    # 직접 언급한 게임명/시리즈명 등 추천 후보에서 제외할 키워드 목록
+    excluded_keywords = models.TextField(
+        db_column="excluded_keywords",
+        null=True,
+        blank=True,
+        verbose_name="추천 제외 키워드",
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -129,32 +132,10 @@ class SurveyGameVector(TimeStampedModel):
     embedding = VectorField(
         dimensions=1536, db_column="embedding", null=True, blank=True
     )
+    # game_list 모델이 아직 없어서 FK 대신 game_id만 먼저 보관합니다.
+    # 게임 모델 추가 후 ForeignKey 또는 OneToOneField로 전환합니다.
+    game_list = models.BigIntegerField(db_column="game_id", verbose_name="게임 ID")
 
     class Meta:
         db_table = "survey_game_vector"
         verbose_name = "게임 벡터"
-
-
-# 게임 리스트
-class SurveyRecommendGameList(TimeStampedModel):
-    survey_recommend_game_list_id = models.BigAutoField(
-        primary_key=True, db_column="survey_recommend_game_list_id"
-    )
-    game_id = models.IntegerField(
-        db_column="game_id", null=True, verbose_name="IGDB 게임 ID"
-    )
-    title = models.CharField(max_length=30, db_column="title", null=True)
-    genre = models.TextField(db_column="genre", null=True)
-    description = models.TextField(db_column="description", null=True)
-    cover_url = models.URLField(db_column="cover_url", null=True)
-
-    survey_game_vector = models.OneToOneField(
-        SurveyGameVector,
-        on_delete=models.CASCADE,
-        db_column="survey_game_vector_id",
-        related_name="games",
-    )
-
-    class Meta:
-        db_table = "survey_recommend_game_list"
-        verbose_name = "게임 마스터 정보"
