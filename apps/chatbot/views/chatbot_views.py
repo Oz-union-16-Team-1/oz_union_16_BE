@@ -62,7 +62,7 @@ class ChatbotMessageAPIView(APIView):
         if not serializer.is_valid():
             first_error = next(iter(serializer.errors.values()))[0]
             return JsonResponse(
-                {"error_message": first_error},
+                {"error_detail": first_error},
                 status=400,
                 json_dumps_params={"ensure_ascii": False},
             )
@@ -78,7 +78,7 @@ class ChatbotMessageAPIView(APIView):
                 if session is None:
                     return JsonResponse(
                         {
-                            "error_message": "만료되었거나 유효하지 않은 session_id 입니다."
+                            "error_detail": "만료되었거나 유효하지 않은 session_id 입니다."
                         },
                         status=404,
                         json_dumps_params={"ensure_ascii": False},
@@ -86,7 +86,7 @@ class ChatbotMessageAPIView(APIView):
 
                 if is_streaming(session.pk):
                     return JsonResponse(
-                        {"error_message": "이미 스트리밍이 진행 중입니다."},
+                        {"error_detail": "이미 스트리밍이 진행 중입니다."},
                         status=409,
                         json_dumps_params={"ensure_ascii": False},
                     )
@@ -104,7 +104,7 @@ class ChatbotMessageAPIView(APIView):
 
         except Exception:
             return JsonResponse(
-                {"error_message": "메시지 요청 처리 중 서버 오류가 발생했습니다."},
+                {"error_detail": "메시지 요청 처리 중 서버 오류가 발생했습니다."},
                 status=500,
                 json_dumps_params={"ensure_ascii": False},
             )
@@ -139,7 +139,7 @@ class ChatbotStreamAPIView(APIView):
 
         if not session_id:
             return JsonResponse(
-                {"error_message": "session_id는 필수 입력값입니다."},
+                {"error_detail": "session_id는 필수 입력값입니다."},
                 status=400,
                 json_dumps_params={"ensure_ascii": False},
             )
@@ -148,7 +148,7 @@ class ChatbotStreamAPIView(APIView):
             session = get_valid_chatbot_session(session_id)
             if session is None:
                 return JsonResponse(
-                    {"error_message": "스트리밍 대상 세션을 찾을 수 없습니다."},
+                    {"error_detail": "스트리밍 대상 세션을 찾을 수 없습니다."},
                     status=404,
                     json_dumps_params={"ensure_ascii": False},
                 )
@@ -156,14 +156,14 @@ class ChatbotStreamAPIView(APIView):
             question = get_question_from_cache(session_id)
             if not question:
                 return JsonResponse(
-                    {"error_message": "스트리밍 대상 질문이 없습니다."},
+                    {"error_detail": "스트리밍 대상 질문이 없습니다."},
                     status=404,
                     json_dumps_params={"ensure_ascii": False},
                 )
 
             if not acquire_stream_lock(session_id):
                 return JsonResponse(
-                    {"error_message": "이미 스트리밍이 진행 중입니다."},
+                    {"error_detail": "이미 스트리밍이 진행 중입니다."},
                     status=409,
                     json_dumps_params={"ensure_ascii": False},
                 )
@@ -186,7 +186,7 @@ class ChatbotStreamAPIView(APIView):
         except Exception:
             release_stream_lock(session_id)
             return JsonResponse(
-                {"error_message": "스트리밍 처리 중 서버 오류가 발생했습니다."},
+                {"error_detail": "스트리밍 처리 중 서버 오류가 발생했습니다."},
                 status=500,
                 json_dumps_params={"ensure_ascii": False},
             )

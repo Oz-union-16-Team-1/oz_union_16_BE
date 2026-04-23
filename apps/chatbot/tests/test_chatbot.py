@@ -33,7 +33,7 @@ class ChatbotAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("error_message", response.json())
+        self.assertIn("error_detail", response.json())
 
     def test_message_create_fail_with_invalid_session_id(self) -> None:
         response = self.client.post(
@@ -47,7 +47,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
-            response.json()["error_message"],
+            response.json()["error_detail"],
             "만료되었거나 유효하지 않은 session_id 입니다.",
         )
 
@@ -98,7 +98,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
-            response.json()["error_message"],
+            response.json()["error_detail"],
             "session_id는 필수 입력값입니다.",
         )
 
@@ -110,7 +110,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
-            response.json()["error_message"],
+            response.json()["error_detail"],
             "스트리밍 대상 세션을 찾을 수 없습니다.",
         )
 
@@ -126,7 +126,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
-            response.json()["error_message"],
+            response.json()["error_detail"],
             "스트리밍 대상 질문이 없습니다.",
         )
 
@@ -143,6 +143,6 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
-            response.json()["error_message"],
+            response.json()["error_detail"],
             "스트리밍 대상 세션을 찾을 수 없습니다.",
         )
