@@ -1,11 +1,16 @@
 from django.http import JsonResponse, StreamingHttpResponse
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
 from apps.chatbot.serializers.chatbot_serializers import (
     ChatbotMessageRequestSerializer,
     ChatbotMessageResponseSerializer,
-    ChatbotStreamQuerySerializer,
 )
 from apps.chatbot.services.chatbot_services import (
     acquire_stream_lock,
@@ -23,18 +28,43 @@ from apps.chatbot.services.chatbot_services import (
 class ChatbotMessageAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="chatbot message",
+        description="챗봇 메시지를 전송하고 session_id를 반환합니다.",
+        request=ChatbotMessageRequestSerializer,
+        responses={
+            200: ChatbotMessageResponseSerializer,
+            400: OpenApiResponse(description="잘못된 요청"),
+            404: OpenApiResponse(description="유효하지 않은 session_id"),
+            409: OpenApiResponse(description="이미 스트리밍 진행 중"),
+            500: OpenApiResponse(description="서버 오류"),
+        },
+        examples=[
+            OpenApiExample(
+                "신규 세션 메시지 예시",
+                value={"message": "환불은 어떻게 해요?"},
+                request_only=True,
+            ),
+            OpenApiExample(
+                "기존 세션 메시지 예시",
+                value={
+                    "message": "환불은 어떻게 해요?",
+                    "session_id": "1ae7032f-1051-441c-ae9d-07b7eb6d2b7d",
+                },
+                request_only=True,
+            ),
+        ],
+        tags=["chatbot"],
+    )
     def post(self, request, *args, **kwargs):
         serializer = ChatbotMessageRequestSerializer(data=request.data)
 
         if not serializer.is_valid():
+            first_error = next(iter(serializer.errors.values()))[0]
             return JsonResponse(
-                {
-                    "detail": serializer.errors.get(
-                        "message",
-                        ["요청 값이 올바르지 않습니다."],
-                    )[0]
-                },
+                {"error_message": first_error},
                 status=400,
+                json_dumps_params={"ensure_ascii": False},
             )
 
         message = serializer.validated_data["message"]
@@ -47,14 +77,16 @@ class ChatbotMessageAPIView(APIView):
                 session = get_valid_chatbot_session(session_id)
                 if session is None:
                     return JsonResponse(
-                        {"detail": "만료되었거나 유효하지 않은 session_id 입니다."},
+                        {"error_message": "만료되었거나 유효하지 않은 session_id 입니다."},
                         status=404,
+                        json_dumps_params={"ensure_ascii": False},
                     )
 
                 if is_streaming(session.pk):
                     return JsonResponse(
-                        {"detail": "이미 스트리밍이 진행 중입니다."},
+                        {"error_message": "이미 스트리밍이 진행 중입니다."},
                         status=409,
+                        json_dumps_params={"ensure_ascii": False},
                     )
 
             save_question_to_cache(session.pk, message)
@@ -62,48 +94,76 @@ class ChatbotMessageAPIView(APIView):
             response_serializer = ChatbotMessageResponseSerializer(
                 {"session_id": session.pk}
             )
-            return JsonResponse(response_serializer.data, status=200)
-
-        except Exception as e:
             return JsonResponse(
-                {"detail": str(e)},
+                response_serializer.data,
+                status=200,
+                json_dumps_params={"ensure_ascii": False},
+            )
+
+        except Exception:
+            return JsonResponse(
+                {"error_message": "메시지 요청 처리 중 서버 오류가 발생했습니다."},
                 status=500,
+                json_dumps_params={"ensure_ascii": False},
             )
 
 
 class ChatbotStreamAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        summary="chatbot stream",
+        description="session_id로 챗봇 응답을 SSE 스트리밍으로 반환합니다.",
+        parameters=[
+            OpenApiParameter(
+                name="session_id",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="챗봇 세션 UUID",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(description="text/event-stream"),
+            400: OpenApiResponse(description="잘못된 요청"),
+            404: OpenApiResponse(description="세션 또는 질문 없음"),
+            409: OpenApiResponse(description="이미 스트리밍 진행 중"),
+            500: OpenApiResponse(description="서버 오류"),
+        },
+        tags=["chatbot"],
+    )
     def get(self, request, *args, **kwargs):
-        serializer = ChatbotStreamQuerySerializer(data=request.query_params)
+        session_id = request.query_params.get("session_id")
 
-        if not serializer.is_valid():
+        if not session_id:
             return JsonResponse(
-                {"detail": "잘못된 session_id 입니다."},
+                {"error_message": "session_id는 필수 입력값입니다."},
                 status=400,
+                json_dumps_params={"ensure_ascii": False},
             )
-
-        session_id = serializer.validated_data["session_id"]
 
         try:
             session = get_valid_chatbot_session(session_id)
             if session is None:
                 return JsonResponse(
-                    {"detail": "스트리밍 대상 세션을 찾을 수 없습니다."},
+                    {"error_message": "스트리밍 대상 세션을 찾을 수 없습니다."},
                     status=404,
+                    json_dumps_params={"ensure_ascii": False},
                 )
 
             question = get_question_from_cache(session_id)
             if not question:
                 return JsonResponse(
-                    {"detail": "스트리밍 대상 질문이 없습니다."},
+                    {"error_message": "스트리밍 대상 질문이 없습니다."},
                     status=404,
+                    json_dumps_params={"ensure_ascii": False},
                 )
 
             if not acquire_stream_lock(session_id):
                 return JsonResponse(
-                    {"detail": "이미 스트리밍이 진행 중입니다."},
+                    {"error_message": "이미 스트리밍이 진행 중입니다."},
                     status=409,
+                    json_dumps_params={"ensure_ascii": False},
                 )
 
             def stream_response():
@@ -121,9 +181,10 @@ class ChatbotStreamAPIView(APIView):
             response["X-Accel-Buffering"] = "no"
             return response
 
-        except Exception as e:
+        except Exception:
             release_stream_lock(session_id)
             return JsonResponse(
-                {"detail": str(e)},
+                {"error_message": "스트리밍 처리 중 서버 오류가 발생했습니다."},
                 status=500,
+                json_dumps_params={"ensure_ascii": False},
             )

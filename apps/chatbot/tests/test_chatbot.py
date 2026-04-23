@@ -33,7 +33,7 @@ class ChatbotAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("detail", response.json())
+        self.assertIn("error_message", response.json())
 
     def test_message_create_fail_with_invalid_session_id(self) -> None:
         response = self.client.post(
@@ -47,7 +47,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
-            response.json()["detail"],
+            response.json()["error_message"],
             "만료되었거나 유효하지 않은 session_id 입니다.",
         )
 
@@ -97,7 +97,10 @@ class ChatbotAPITest(TestCase):
         response = self.client.get(self.stream_url)
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"], "잘못된 session_id 입니다.")
+        self.assertEqual(
+            response.json()["error_message"],
+            "session_id는 필수 입력값입니다.",
+        )
 
     def test_stream_fail_when_session_not_found(self) -> None:
         response = self.client.get(
@@ -106,7 +109,10 @@ class ChatbotAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "스트리밍 대상 세션을 찾을 수 없습니다.")
+        self.assertEqual(
+            response.json()["error_message"],
+            "스트리밍 대상 세션을 찾을 수 없습니다.",
+        )
 
     def test_stream_fail_when_question_not_in_cache(self) -> None:
         session = ChatbotSession.objects.create(
@@ -119,7 +125,10 @@ class ChatbotAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "스트리밍 대상 질문이 없습니다.")
+        self.assertEqual(
+            response.json()["error_message"],
+            "스트리밍 대상 질문이 없습니다.",
+        )
 
     def test_stream_fail_when_session_expired(self) -> None:
         expired_session = ChatbotSession.objects.create(
@@ -133,4 +142,7 @@ class ChatbotAPITest(TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
-        self.assertEqual(response.json()["detail"], "스트리밍 대상 세션을 찾을 수 없습니다.")
+        self.assertEqual(
+            response.json()["error_message"],
+            "스트리밍 대상 세션을 찾을 수 없습니다.",
+        )
