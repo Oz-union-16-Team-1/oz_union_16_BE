@@ -1,3 +1,5 @@
+from typing import Any
+
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -65,7 +67,7 @@ KAKAO_USER_INFO = {
 }
 
 
-def fake_kakao_user_info_response(user_info: dict = None) -> MagicMock:
+def fake_kakao_user_info_response(user_info: dict[str, Any] | None = None) -> MagicMock:
     mock = MagicMock()
     mock.ok = True
     mock.json.return_value = user_info or KAKAO_USER_INFO
@@ -171,7 +173,7 @@ NAVER_USER_INFO = {
 }
 
 
-def fake_naver_user_info_response(user_info: dict = None) -> MagicMock:
+def fake_naver_user_info_response(user_info: dict[str, Any] | None = None) -> MagicMock:
     mock = MagicMock()
     mock.ok = True
     mock.json.return_value = {
@@ -284,7 +286,7 @@ GOOGLE_USER_INFO = {
 }
 
 
-def fake_google_user_info_response(user_info: dict = None) -> MagicMock:
+def fake_google_user_info_response(user_info: dict[str, Any] | None = None) -> MagicMock:
     mock = MagicMock()
     mock.ok = True
     mock.json.return_value = user_info or GOOGLE_USER_INFO

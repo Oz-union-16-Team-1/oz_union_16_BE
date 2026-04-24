@@ -1,7 +1,9 @@
+from typing import Any
+
 class FakeRedis:
-    def __init__(self):
-        self.store: dict[str, str] = {}
-        self.raise_error = False
+    def __init__(self) -> None:
+        self.store: dict[str, Any] = {}
+        self.raise_error: bool = False
 
     def set(self, key, value):
         if self.raise_error:
