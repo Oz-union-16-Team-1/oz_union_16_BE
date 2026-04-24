@@ -224,6 +224,18 @@ IGDB_ACCESS_TOKEN = os.getenv("IGDB_ACCESS_TOKEN")
 IGDB_BASE_URL = os.getenv("IGDB_BASE_URL", "https://api.igdb.com/v4/games")
 IGDB_TIMEOUT_SEC = int(os.getenv("IGDB_TIMEOUT_SEC", "10"))
 
+# Survey chatbot LLM settings
+SURVEY_CHATBOT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SURVEY_CHATBOT_GEMINI_MODEL = os.getenv(
+    "SURVEY_CHATBOT_GEMINI_MODEL",
+    "gemini-2.5-flash",
+)
+SURVEY_CHATBOT_GEMINI_BASE_URL = os.getenv(
+    "SURVEY_CHATBOT_GEMINI_BASE_URL",
+    "https://generativelanguage.googleapis.com",
+)
+SURVEY_CHATBOT_GEMINI_TIMEOUT = int(os.getenv("SURVEY_CHATBOT_GEMINI_TIMEOUT", "10"))
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
