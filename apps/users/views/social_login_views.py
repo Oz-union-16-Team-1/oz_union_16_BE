@@ -32,9 +32,8 @@ def _set_refresh_cookie_and_redirect(refresh_token: str) -> redirect:
         "key": REFRESH_COOKIE_KEY,
         "value": refresh_token,
         "httponly": True,
-        "secure": not settings.DEBUG,
-        "samesite": "Lax" if settings.DEBUG else "None",
-        "domain": "oz-pgti.duckdns.org",
+        "secure": True,
+        "samesite": "None",
         "path": "/",
     }
     if REFRESH_TOKEN_LIFETIME:
