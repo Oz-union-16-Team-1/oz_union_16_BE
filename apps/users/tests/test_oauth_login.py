@@ -1,6 +1,5 @@
-from typing import Any
-
 import uuid
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
@@ -286,7 +285,9 @@ GOOGLE_USER_INFO = {
 }
 
 
-def fake_google_user_info_response(user_info: dict[str, Any] | None = None) -> MagicMock:
+def fake_google_user_info_response(
+    user_info: dict[str, Any] | None = None,
+) -> MagicMock:
     mock = MagicMock()
     mock.ok = True
     mock.json.return_value = user_info or GOOGLE_USER_INFO

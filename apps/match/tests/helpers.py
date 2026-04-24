@@ -1,5 +1,6 @@
 from typing import Any
 
+
 class FakeRedis:
     def __init__(self) -> None:
         self.store: dict[str, Any] = {}
