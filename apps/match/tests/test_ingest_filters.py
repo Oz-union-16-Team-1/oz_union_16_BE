@@ -101,7 +101,14 @@ class IngestFiltersTest(SimpleTestCase):
         cases = [
             ("invalid_category", {"category": True}),
             ("invalid_status", {"status": True}),
-            ("low_rating_or_count", {"rating_count": 0, "total_rating_count": 0, "aggregated_rating_count": 0}),
+            (
+                "low_rating_or_count",
+                {
+                    "rating_count": 0,
+                    "total_rating_count": 0,
+                    "aggregated_rating_count": 0,
+                },
+            ),
             ("low_aggregated_rating", {"aggregated_rating": 10}),
             ("incomplete_data", {"summary": "", "storyline": ""}),
             ("platform_not_pc", {"platforms": [48]}),
@@ -164,4 +171,3 @@ class IngestFiltersTest(SimpleTestCase):
         g = _valid_game()
         g["status"] = None
         self.assertTrue(f._valid_status(g))
-

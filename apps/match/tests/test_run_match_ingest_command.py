@@ -7,7 +7,10 @@ from django.test import SimpleTestCase
 
 class RunMatchIngestCommandTest(SimpleTestCase):
     """커맨드 주요 출력 라인을 검증한다."""
-    @patch("apps.match.management.commands.run_match_ingest.MatchCandidateFilterBatchService.run")
+
+    @patch(
+        "apps.match.management.commands.run_match_ingest.MatchCandidateFilterBatchService.run"
+    )
     def test_command_output(self, mock_run):
         mock_run.return_value = (
             [{"id": 1}],

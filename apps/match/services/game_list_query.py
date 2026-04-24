@@ -37,11 +37,11 @@ def _to_unix_timestamp(value: datetime | None) -> int | None:
     return int(value.timestamp())
 
 
-def fetch_ingest_rows_from_game_list(page_size: int, max_pages: int) -> list[dict[str, Any]]:
+def fetch_ingest_rows_from_game_list(
+    page_size: int, max_pages: int
+) -> list[dict[str, Any]]:
     queryset = (
-        Game.objects.filter(is_ban=False)
-        .order_by("game_id")
-        .values(*INGEST_DB_FIELDS)
+        Game.objects.filter(is_ban=False).order_by("game_id").values(*INGEST_DB_FIELDS)
     )
 
     rows: list[dict[str, Any]] = []
@@ -55,7 +55,9 @@ def fetch_ingest_rows_from_game_list(page_size: int, max_pages: int) -> list[dic
         for item in chunk:
             row = dict(item)
             row["id"] = row.pop("game_id")
-            row["first_release_date"] = _to_unix_timestamp(row.get("first_release_date"))
+            row["first_release_date"] = _to_unix_timestamp(
+                row.get("first_release_date")
+            )
             row["platforms"] = [MATCH_INGEST_REQUIRED_PLATFORM]
             rows.append(row)
 

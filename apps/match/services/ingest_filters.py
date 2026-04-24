@@ -7,9 +7,9 @@ from typing import Any
 from apps.match.constants import (
     MATCH_INGEST_ALLOWED_CATEGORIES,
     MATCH_INGEST_MIN_AGG_RATING,
+    MATCH_INGEST_MIN_AGG_RATING_COUNT,
     MATCH_INGEST_MIN_RATING,
     MATCH_INGEST_MIN_RATING_COUNT,
-    MATCH_INGEST_MIN_AGG_RATING_COUNT,
     MATCH_INGEST_MIN_RELEASE_TS,
     MATCH_INGEST_REQUIRED_PLATFORM,
     MATCH_INGEST_REQUIRED_STATUS,
@@ -39,7 +39,7 @@ def _to_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -108,10 +108,10 @@ def _valid_rating(game: dict[str, Any]) -> bool:
     )
 
     agg_ok = (
-            aggregated_rating_count is not None
-            and aggregated_rating is not None
-            and aggregated_rating_count >= MATCH_INGEST_MIN_AGG_RATING_COUNT
-            and aggregated_rating >= MATCH_INGEST_MIN_AGG_RATING
+        aggregated_rating_count is not None
+        and aggregated_rating is not None
+        and aggregated_rating_count >= MATCH_INGEST_MIN_AGG_RATING_COUNT
+        and aggregated_rating >= MATCH_INGEST_MIN_AGG_RATING
     )
 
     return direct_ok or total_ok or agg_ok
