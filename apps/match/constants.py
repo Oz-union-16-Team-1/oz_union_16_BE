@@ -54,6 +54,16 @@ MATCH_GENRE_IMAGE_MONTHLY_END_MONTH: int = 12  # 30일 ~ 12개월
 MATCH_GENRE_IMAGE_YEARLY_START: int = 2  # 2년 ~ 10년
 MATCH_GENRE_IMAGE_YEARLY_END: int = 10
 
+# 매칭 수집(ingest) 필터 정책
+MATCH_INGEST_ALLOWED_CATEGORIES: tuple[int, ...] = (0, 8, 9)  # main/remake/remaster
+MATCH_INGEST_REQUIRED_STATUS: int = 0  # released
+MATCH_INGEST_REQUIRED_PLATFORM: int = 6  # PC
+MATCH_INGEST_MIN_RATING_COUNT: int = 20
+MATCH_INGEST_MIN_RATING: float = 50.0
+MATCH_INGEST_MIN_AGG_RATING: float = 60.0
+MATCH_INGEST_MIN_AGG_RATING_COUNT: int = 3
+MATCH_INGEST_MIN_RELEASE_TS: int = 946684800  # 2000-01-01 UTC
+
 # =========================
 # MATCH 벡터 매핑 상수 (14D)
 # =========================

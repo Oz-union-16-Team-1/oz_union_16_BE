@@ -39,8 +39,10 @@ def _to_float(value: Any) -> float | None:
         return None
     try:
         return float(value)
-    except TypeError, ValueError:
-        return None
+    except TypeError:
+        return False
+    except ValueError:
+        return False
 
 
 def _as_set(value: Any) -> set[int]:
