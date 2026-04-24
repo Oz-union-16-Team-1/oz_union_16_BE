@@ -30,7 +30,6 @@ class MatchGameRating(TimeStampedModel):
         related_name="match_ratings",
     )
 
-
     class Meta:
         db_table = "match_game_ratings"
         constraints = [
@@ -92,9 +91,7 @@ class MatchGameGenreMap(TimeStampedModel):
         to_field="game_id",
         related_name="genre_maps",
     )
-    igdb_genre_id = models.PositiveSmallIntegerField(
-        db_column="igdb_genre_id"
-    )
+    igdb_genre_id = models.PositiveSmallIntegerField(db_column="igdb_genre_id")
 
     class Meta:
         db_table = "match_game_genre_map"
