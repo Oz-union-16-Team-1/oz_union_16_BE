@@ -96,7 +96,7 @@ class KakaoLocalCallbackView(APIView):
     )
     def get(self, request: Request):
         code = request.query_params.get("code")
-        tokens = KakaoOAuthService().login(code)
+        tokens = KakaoOAuthService().login(code, is_local=True)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])
 
 
@@ -223,5 +223,5 @@ class GoogleLocalCallbackView(APIView):
     )
     def get(self, request: Request):
         code = request.query_params.get("code")
-        tokens = GoogleOAuthService().login(code)
+        tokens = GoogleOAuthService().login(code, is_local=True)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])

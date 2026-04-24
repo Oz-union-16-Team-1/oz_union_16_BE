@@ -24,6 +24,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://oz-union-16-fe.vercel.app",
     "https://oz-pgti.duckdns.org",
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
