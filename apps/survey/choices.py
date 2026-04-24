@@ -13,4 +13,4 @@ class SurveyRoleChoices(models.TextChoices):
 
 
 class ChatbotModelChoices(models.TextChoices):
-    GEMINI_1_5_FLASH = "GEMINI_1_5_FLASH", "Gemini 1.5 Flash"
+    GEMINI_2_5_FLASH = "GEMINI_2_5_FLASH", "Gemini 2.5 Flash"

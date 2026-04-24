@@ -2,7 +2,6 @@ from django.contrib import admin  # type: ignore
 from django.urls import include, path  # type: ignore
 from drf_spectacular.views import (
     SpectacularAPIView,
-    SpectacularRedocView,
     SpectacularSwaggerView,
 )
 
@@ -15,8 +14,9 @@ urlpatterns = [
     ),
     path("admin/", admin.site.urls),
     path("chatbot/", include("apps.chatbot.urls")),
-    path("games/", include("apps.games.urls")),
+    path("api/v1/games/", include("apps.games.urls")),
     path("api/v1/match/", include("apps.match.urls")),
-    path("survey/", include("apps.survey.urls")),
+    path("api/v1/survey/", include("apps.survey.urls")),
     path("api/v1/accounts/", include("apps.users.urls")),
+    path("api/v1/chatbot/", include("apps.chatbot.urls.urls")),
 ]

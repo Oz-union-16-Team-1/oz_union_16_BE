@@ -40,6 +40,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
 ]
 
 THIRD_PARTY_APPS = [
@@ -48,6 +49,7 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "corsheaders",
     "drf_spectacular",
+    "pgvector",
 ]
 
 CUSTOM_APPS: list[str] = [
@@ -222,6 +224,18 @@ IGDB_ACCESS_TOKEN = os.getenv("IGDB_ACCESS_TOKEN")
 IGDB_BASE_URL = os.getenv("IGDB_BASE_URL", "https://api.igdb.com/v4/games")
 IGDB_TIMEOUT_SEC = int(os.getenv("IGDB_TIMEOUT_SEC", "10"))
 
+# Survey chatbot LLM settings
+SURVEY_CHATBOT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SURVEY_CHATBOT_GEMINI_MODEL = os.getenv(
+    "SURVEY_CHATBOT_GEMINI_MODEL",
+    "gemini-2.5-flash",
+)
+SURVEY_CHATBOT_GEMINI_BASE_URL = os.getenv(
+    "SURVEY_CHATBOT_GEMINI_BASE_URL",
+    "https://generativelanguage.googleapis.com",
+)
+SURVEY_CHATBOT_GEMINI_TIMEOUT = int(os.getenv("SURVEY_CHATBOT_GEMINI_TIMEOUT", "10"))
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -239,3 +253,23 @@ MATCH_GENRE_IMAGE_QUERY_TIMEOUT = int(os.getenv("MATCH_GENRE_IMAGE_QUERY_TIMEOUT
 MATCH_GENRE_IMAGE_BATCH_TIMEOUT = int(
     os.getenv("MATCH_GENRE_IMAGE_BATCH_TIMEOUT", "15")
 )
+
+KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
+KAKAO_CLIENT_SECRET = os.getenv("KAKAO_CLIENT_SECRET")
+KAKAO_REDIRECT_URI = os.getenv("KAKAO_REDIRECT_URI")
+KAKAO_LOCAL_REDIRECT_URI = os.getenv("KAKAO_LOCAL_REDIRECT_URI")
+
+
+NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
+NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+NAVER_REDIRECT_URI = os.getenv("NAVER_REDIRECT_URI")
+NAVER_LOCAL_REDIRECT_URI = os.getenv("NAVER_LOCAL_REDIRECT_URI")
+
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI")
+GOOGLE_LOCAL_REDIRECT_URI = os.getenv("GOOGLE_LOCAL_REDIRECT_URI")
+
+FRONTEND_CALLBACK_URI = os.getenv("FRONTEND_CALLBACK_URI")
+FRONTEND_LOCAL_CALLBACK_URI = os.getenv("FRONTEND_LOCAL_CALLBACK_URI")

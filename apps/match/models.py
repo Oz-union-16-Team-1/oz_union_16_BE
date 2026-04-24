@@ -1,77 +1,111 @@
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
-from pgvector.django import VectorField
+from pgvector.django import HnswIndex, VectorField
 
 from apps.core.models import TimeStampedModel
 
+# Vector 차원 상수 정의
+MATCH_VECTOR_DIM = 14
+
 
 class MatchGameRating(TimeStampedModel):
-    match_game_rating_id = models.BigAutoField(primary_key=True)
-    star_rating = models.PositiveSmallIntegerField()  # 매칭 점수 1 ~ 5
-    effective_rating = models.DecimalField(max_digits=4, decimal_places=2)
-    rating_count = models.PositiveIntegerField(default=0)
+    match_game_rating_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
+    star_rating = models.SmallIntegerField(verbose_name="평점")  # 1 ~ 5
+    effective_rating = models.DecimalField(
+        max_digits=4, decimal_places=2, verbose_name="유효 평점"
+    )
+    rating_count = models.IntegerField(default=0, verbose_name="평가 횟수")
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,  # settings.AUTH_USER_MODEL FK로 인증 중심형 유저와 안전하게 연결
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         db_column="user_id",
-        related_name="match_game_ratings",
+        related_name="match_ratings",
     )
-    match_game_preference = models.ForeignKey(
-        "match.MatchGamePreference",
+    game = models.ForeignKey(
+        "games.Game",
         on_delete=models.CASCADE,
-        db_column="match_game_preference_id",
-        related_name="ratings",
+        db_column="game_id",
+        to_field="game_id",
+        related_name="match_ratings",
     )
 
     class Meta:
         db_table = "match_game_ratings"
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "match_game_preference"],
-                name="uq_match_game_ratings_user_preference",
+                fields=["user", "game"],
+                name="uq_mgr_user_game",
             ),
             models.CheckConstraint(
-                condition=Q(star_rating__gte=1)
-                & Q(star_rating__lte=5),  # 별점 스케일은 1 ~ 5로 고정
-                name="ck_match_game_ratings_star_rating_1_5",
+                condition=Q(star_rating__gte=1) & Q(star_rating__lte=5),
+                name="ck_mgr_star_rating_range",
             ),
+        ]
+        indexes = [
+            models.Index(fields=["game"], name="idx_mgr_game"),
         ]
 
 
+# 1. 게임 취향 벡터 저장
 class MatchGamePreference(TimeStampedModel):
-    match_game_preference_id = models.BigAutoField(primary_key=True)
-    game_id = models.IntegerField(db_index=True)
-    genre_id = models.IntegerField(db_index=True)
-    game_preference_vector = VectorField(dimensions=14)
+    match_game_preference_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
+    game_id = models.ForeignKey(
+        "games.Game",
+        on_delete=models.CASCADE,
+        db_column="game_id",
+        related_name="match_preferences",
+        verbose_name="게임 ID",
+    )
+    game_preference_vector = VectorField(
+        dimensions=MATCH_VECTOR_DIM,
+        verbose_name="게임 취향 벡터",
+    )
 
     class Meta:
         db_table = "match_game_preference"
         constraints = [
             models.UniqueConstraint(
                 fields=["game_id"],
-                name="uq_match_game_preference_game_id",
+                name="uq_mgp_game",
             ),
         ]
         indexes = [
-            models.Index(
-                fields=["genre_id"],
-                name="idx_mgp_genre_id",
+            HnswIndex(
+                name="idx_mgp_vector_cosine_hnsw",
+                fields=["game_preference_vector"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
             ),
         ]
 
 
-class MatchGameGenreMap(models.Model):
-    match_game_genre_map_id = models.BigAutoField(primary_key=True)
-    game_id = models.IntegerField(db_index=True)
-    igdb_genre_id = models.IntegerField(db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+# 2. 매칭 게임 장르 매핑
+class MatchGameGenreMap(TimeStampedModel):
+    match_game_genre_map_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
+    game_id = models.ForeignKey(
+        "games.Game",
+        on_delete=models.CASCADE,
+        db_column="game_id",
+        to_field="game_id",
+        related_name="genre_maps",
+    )
+    igdb_genre_id = models.PositiveSmallIntegerField(db_column="igdb_genre_id")
 
     class Meta:
         db_table = "match_game_genre_map"
         constraints = [
             models.UniqueConstraint(
-                fields=["game_id", "igdb_genre_id"],
-                name="uq_match_game_genre_map_game_genre",
+                fields=["game_id", "igdb_genre_id"], name="uq_mggm_game_genre"
+            ),
+            models.CheckConstraint(
+                condition=Q(igdb_genre_id__gte=1) & Q(igdb_genre_id__lte=14),
+                name="ck_mggm_genre_id_range",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["igdb_genre_id", "game_id"], name="idx_mggm_genre_game"
             ),
         ]
