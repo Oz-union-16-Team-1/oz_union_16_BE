@@ -10,6 +10,7 @@ MATCH_VECTOR_DIM = 14
 
 
 class MatchGameRating(TimeStampedModel):
+    match_game_rating_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
     star_rating = models.SmallIntegerField(verbose_name="평점")  # 1 ~ 5
     effective_rating = models.DecimalField(
         max_digits=4, decimal_places=2, verbose_name="유효 평점"
@@ -25,9 +26,10 @@ class MatchGameRating(TimeStampedModel):
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
+        to_field="game_id",
         related_name="match_ratings",
-        verbose_name="게임 ID",
     )
+
 
     class Meta:
         db_table = "match_game_ratings"
@@ -48,7 +50,8 @@ class MatchGameRating(TimeStampedModel):
 
 # 1. 게임 취향 벡터 저장
 class MatchGamePreference(TimeStampedModel):
-    game = models.ForeignKey(
+    match_game_preference_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
+    game_id = models.ForeignKey(
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
@@ -64,7 +67,7 @@ class MatchGamePreference(TimeStampedModel):
         db_table = "match_game_preference"
         constraints = [
             models.UniqueConstraint(
-                fields=["game"],
+                fields=["game_id"],
                 name="uq_mgp_game",
             ),
         ]
@@ -81,23 +84,31 @@ class MatchGamePreference(TimeStampedModel):
 
 # 2. 매칭 게임 장르 매핑
 class MatchGameGenreMap(TimeStampedModel):
-    game = models.ForeignKey(
+    match_game_genre_map_id = models.BigAutoField(primary_key=True)  # 기존 PK 유지
+    game_id = models.ForeignKey(
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
+        to_field="game_id",
         related_name="genre_maps",
-        verbose_name="게임 ID",
     )
-    genre_id = models.IntegerField(verbose_name="장르 ID")  # IGDB 내부 장르 ID (1~14)
+    igdb_genre_id = models.PositiveSmallIntegerField(
+        db_column="igdb_genre_id"
+    )
 
     class Meta:
         db_table = "match_game_genre_map"
         constraints = [
             models.UniqueConstraint(
-                fields=["game", "genre_id"],
-                name="uq_mggm_game_genre",
+                fields=["game_id", "igdb_genre_id"], name="uq_mggm_game_genre"
+            ),
+            models.CheckConstraint(
+                condition=Q(igdb_genre_id__gte=1) & Q(igdb_genre_id__lte=14),
+                name="ck_mggm_genre_id_range",
             ),
         ]
         indexes = [
-            models.Index(fields=["genre_id"], name="idx_mggm_genre"),
+            models.Index(
+                fields=["igdb_genre_id", "game_id"], name="idx_mggm_genre_game"
+            ),
         ]

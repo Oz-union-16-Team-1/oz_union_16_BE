@@ -132,7 +132,10 @@ class SurveyGameVector(TimeStampedModel):
     embedding = VectorField(
         dimensions=1536, db_column="embedding", null=True, blank=True
     )
-    game_list = models.BigIntegerField(db_column="game_id", verbose_name="게임 ID")
+    game_list = models.BigIntegerField(
+        db_column="game_id",
+        verbose_name="게임 ID",
+    )
 
     class Meta:
         db_table = "survey_game_vector"
