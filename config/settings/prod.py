@@ -8,6 +8,7 @@ ALLOWED_HOSTS = [
     "oz-pgti.duckdns.org",
     "oz-union-16-fe.vercel.app",
     "13.211.150.226",
+    "13.239.38.172",
     "localhost",
     "127.0.0.1",
 ]
@@ -26,6 +27,13 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+CSRF_COOKIE_SECURE = True
+
+SESSION_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SAMESITE = "None"
+
+SESSION_COOKIE_DOMAIN = "oz-pgti.duckdns.org"
+
+
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
