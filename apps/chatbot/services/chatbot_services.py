@@ -45,6 +45,10 @@ def get_valid_chatbot_session(session_id: UUID | str) -> ChatbotSession | None:
     if session.is_expired:
         return None
 
+    # 🔥 추가 (핵심)
+    session.expires_at = timezone.now() + timedelta(minutes=SESSION_EXPIRE_MINUTES)
+    session.save(update_fields=["expires_at"])
+
     return session
 
 
