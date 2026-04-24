@@ -1,14 +1,17 @@
 import uuid
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.users.models import User
-
+if TYPE_CHECKING:
+    UserType = Any
+else:
+    UserType = get_user_model()
 # ---------------------------------------------------------------------------
 # 공통 헬퍼
 # ---------------------------------------------------------------------------
@@ -22,7 +25,7 @@ def make_nickname() -> str:
     return f"nick_{uuid.uuid4().hex[:4]}"
 
 
-def create_user(**kwargs) -> User:
+def create_user(**kwargs) -> UserType:
     """테스트용 유저 생성 헬퍼. 기본값을 제공하고 kwargs로 덮어씁니다.
     password_check는 User 모델에 없는 필드이므로 반드시 제거합니다.
     """
@@ -37,7 +40,7 @@ def create_user(**kwargs) -> User:
     # User 모델에 존재하지 않는 필드 제거
     defaults.pop("password_check", None)
     password = defaults.pop("password")
-    user = User(**defaults)
+    user = UserType(**defaults)
     user.set_password(password)
     user.save()
     return user
@@ -50,7 +53,7 @@ def create_user(**kwargs) -> User:
 
 class SignUpTest(TestCase):
     url: str
-    user_data: Dict[str, Any]
+    user_data: dict[str, Any]
 
     @classmethod
     def setUpTestData(cls) -> None:
@@ -76,7 +79,7 @@ class SignUpTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["detail"], "회원가입이 완료되었습니다.")
         self.assertTrue(
-            User.objects.filter(login_id=self.user_data["login_id"]).exists()
+            UserType.objects.filter(login_id=self.user_data["login_id"]).exists()
         )
 
     # --- 400: 필드 누락 / 형식 오류 ---
@@ -178,7 +181,7 @@ class SignUpTest(TestCase):
 class LoginTest(TestCase):
     login_id: str
     password: str
-    user: User
+    user: UserType
     url: str
 
     @classmethod
@@ -268,7 +271,7 @@ class LoginTest(TestCase):
 
 
 class LogoutTest(TestCase):
-    user: User
+    user: UserType
     url: str
 
     @classmethod
@@ -355,7 +358,7 @@ class LogoutTest(TestCase):
 
 
 class TokenRefreshTest(TestCase):
-    user: User
+    user: UserType
     url: str
 
     @classmethod
