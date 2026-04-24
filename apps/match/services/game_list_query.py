@@ -26,7 +26,6 @@ INGEST_DB_FIELDS: tuple[str, ...] = (
     "videos",
     "summary",
     "storyline",
-    "updated_at",
 )
 
 
