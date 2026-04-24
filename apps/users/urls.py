@@ -7,9 +7,39 @@ from apps.users.views.auth_views import (
     TokenRefreshView,
 )
 
+from apps.users.views.social_login_views import (
+    KakaoLoginView,
+    NaverLoginView,
+    GoogleLoginView,
+    KakaoCallbackView,
+    NaverCallbackView,
+    GoogleCallbackView,
+)
+from apps.users.views.social_login_local_views import (
+    KakaoLocalLoginView,
+    NaverLocalLoginView,
+    GoogleLocalLoginView,
+    KakaoLocalCallbackView,
+    NaverLocalCallbackView,
+    GoogleLocalCallbackView,
+)
+
+
 urlpatterns = [
-    path("signup", SignUpView.as_view(), name="signup"),
+    path("signup", SignUpView.as_view(), name="signup"),  # Auth
     path("login", LoginView.as_view(), name="login"),
     path("logout", LogoutView.as_view(), name="logout"),
     path("token/refresh", TokenRefreshView.as_view(), name="token-refresh"),
+    path("social-login/kakao", KakaoLoginView.as_view(), name="kakao-login"),  # SocialLogin
+    path("social-login/naver", NaverLoginView.as_view(), name="naver-login"),
+    path("social-login/google", GoogleLoginView.as_view(), name="google-login"),
+    path("social-login/kakao/callback", KakaoCallbackView.as_view(), name="kakao-callback"),
+    path("social-login/naver/callback", NaverCallbackView.as_view(), name="naver-callback"),
+    path("social-login/google/callback", GoogleCallbackView.as_view(), name="google-callback"),
+    path("social-login/kakao/local", KakaoLocalLoginView.as_view(), name="kakao-local-login"),  # Local SocialLogin
+    path("social-login/naver/local", NaverLocalLoginView.as_view(), name="naver-local-login"),
+    path("social-login/google/local", GoogleLocalLoginView.as_view(), name="google-local-login"),
+    path("social-login/kakao/callback/local", KakaoLocalCallbackView.as_view(), name="kakao-local-callback"),
+    path("social-login/naver/callback/local", NaverLocalCallbackView.as_view(), name="naver-local-callback"),
+    path("social-login/google/callback/local", GoogleLocalCallbackView.as_view(), name="google-local-callback"),
 ]
