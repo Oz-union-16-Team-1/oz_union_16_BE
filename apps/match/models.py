@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.db import models
 from django.db.models import Q
 from pgvector.django import HnswIndex, VectorField
