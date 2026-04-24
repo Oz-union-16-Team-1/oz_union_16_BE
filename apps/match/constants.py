@@ -194,3 +194,20 @@ MATCH_VECTOR_MOOD_AXIS_WEIGHTS: dict[str, dict[str, dict[int, float]]] = {
 MATCH_VECTOR_POPULARITY_FIELD: str = "rating"
 MATCH_VECTOR_POPULARITY_SCALE: float = 100.0
 MATCH_VECTOR_POPULARITY_DEFAULT: float = 0.5
+
+PGTI_GENRE_MATCH_RULES: dict[int, dict[str, tuple[int, ...]]] = {
+    1: {"genres": (25, 33), "themes": (1,)},   # 액션
+    2: {"genres": (31, 2), "themes": ()},      # 어드벤처
+    3: {"genres": (12,), "themes": ()},        # RPG
+    4: {"genres": (5,), "themes": ()},         # 슈팅
+    5: {"genres": (15, 11, 16, 24, 36), "themes": ()},  # 전략
+    6: {"genres": (13,), "themes": ()},        # 시뮬레이션
+    7: {"genres": (14,), "themes": ()},        # 스포츠
+    8: {"genres": (10,), "themes": ()},        # 레이싱
+    9: {"genres": (9, 26, 30), "themes": ()},  # 퍼즐
+    10: {"genres": (8,), "themes": ()},        # 플랫폼
+    11: {"genres": (4,), "themes": ()},        # 대전격투
+    12: {"genres": (35,), "themes": ()},       # 카드/보드
+    13: {"genres": (7,), "themes": ()},        # 음악/리듬
+    14: {"genres": (34,), "themes": ()},       # 비주얼노벨
+}
