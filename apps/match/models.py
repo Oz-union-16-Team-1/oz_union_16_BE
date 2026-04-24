@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.contrib.admin.widgets import ForeignKeyRawIdWidget
 from django.db import models
 from django.db.models import Q
 from pgvector.django import HnswIndex, VectorField
@@ -48,20 +49,26 @@ class MatchGameRating(TimeStampedModel):
 
 # 1. 게임 취향 벡터 저장
 class MatchGamePreference(TimeStampedModel):
-    game = models.OneToOneField(
+    game = models.ForeignKey(
         "games.Game",
         on_delete=models.CASCADE,
         db_column="game_id",
-        related_name="match_preference",
-        primary_key=True,
+        related_name="match_preferences",
         verbose_name="게임 ID",
     )
     game_preference_vector = VectorField(
-        dimensions=MATCH_VECTOR_DIM, verbose_name="게임 취향 벡터"
+        dimensions=MATCH_VECTOR_DIM,
+        verbose_name="게임 취향 벡터",
     )
 
     class Meta:
         db_table = "match_game_preference"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["game"],
+                name="uq_mgp_game",
+            ),
+        ]
         indexes = [
             HnswIndex(
                 name="idx_mgp_vector_cosine_hnsw",
@@ -69,7 +76,7 @@ class MatchGamePreference(TimeStampedModel):
                 m=16,
                 ef_construction=64,
                 opclasses=["vector_cosine_ops"],
-            )
+            ),
         ]
 
 
