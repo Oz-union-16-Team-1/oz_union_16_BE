@@ -36,8 +36,12 @@ class KakaoOAuthService:
         }
         return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
 
-    def get_access_token(self, code: str, is_local:bool = False) -> str:
-        redirect_uri = settings.KAKAO_LOCAL_REDIRECT_URI if is_local else settings.KAKAO_REDIRECT_URI
+    def get_access_token(self, code: str, is_local: bool = False) -> str:
+        redirect_uri = (
+            settings.KAKAO_LOCAL_REDIRECT_URI
+            if is_local
+            else settings.KAKAO_REDIRECT_URI
+        )
 
         data: dict[str, str] = {
             "grant_type": "authorization_code",
@@ -92,7 +96,7 @@ class KakaoOAuthService:
         )
         return user
 
-    def login(self, code: str, is_local:bool = False) -> dict[str, str]:
+    def login(self, code: str, is_local: bool = False) -> dict[str, str]:
         """code → 유저 조회/생성 → JWT 발급까지 처리"""
         access_token = self.get_access_token(code, is_local=is_local)
         user_info = self.get_user_info(access_token)
@@ -220,8 +224,12 @@ class GoogleOAuthService:
         }
         return f"{self.AUTH_URL}?{urllib.parse.urlencode(params)}"
 
-    def get_access_token(self, code: str, is_local:bool = False) -> str:
-        redirect_uri = settings.GOOGLE_LOCAL_REDIRECT_URI if is_local else settings.GOOGLE_REDIRECT_URI
+    def get_access_token(self, code: str, is_local: bool = False) -> str:
+        redirect_uri = (
+            settings.GOOGLE_LOCAL_REDIRECT_URI
+            if is_local
+            else settings.GOOGLE_REDIRECT_URI
+        )
         data = {
             "grant_type": "authorization_code",
             "client_id": settings.GOOGLE_CLIENT_ID,
