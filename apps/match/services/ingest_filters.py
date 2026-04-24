@@ -34,6 +34,15 @@ def _to_int(value: Any) -> int | None:
     return None
 
 
+def _to_float(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _as_set(value: Any) -> set[int]:
     if not value or not isinstance(value, list):
         return set()
@@ -75,16 +84,6 @@ def _valid_aggregated_rating(game: dict[str, Any]) -> bool:
 
 
 def _valid_rating(game: dict[str, Any]) -> bool:
-    def _to_float(value: Any) -> float | None:
-        if value is None or isinstance(value, bool):
-            return None
-        try:
-            return float(value)
-        except TypeError:
-            return None
-        except ValueError:
-            return None
-
     rating_count = _to_int(game.get("rating_count"))
     rating = _to_float(game.get("rating"))
 

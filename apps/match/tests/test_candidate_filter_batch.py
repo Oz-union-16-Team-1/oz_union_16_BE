@@ -6,7 +6,7 @@ from apps.match.services.candidate_filter_batch import MatchCandidateFilterBatch
 
 
 class CandidateFilterBatchTest(SimpleTestCase):
-    # DB 조회 결과를 필터링하고 통계를 집계하는지 확인.
+    """DB 조회 결과를 필터링하고 통계를 집계하는지 확인."""
     @patch("apps.match.services.candidate_filter_batch.filter_games_with_reasons")
     @patch("apps.match.services.candidate_filter_batch.fetch_ingest_rows_from_game_list")
     def test_run_collects_and_counts(self, mock_fetch_rows, mock_filter):
