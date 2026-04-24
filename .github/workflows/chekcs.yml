@@ -85,6 +85,7 @@ jobs:
         run: |
           mkdir envs
           echo "${{ secrets.DJANGO_ENVS }}" >> envs/.local.env
+          echo "${{ secrets.DJANGO_ENVS }}" >> $GITHUB_ENV
 
       - name: Run Django Migration
         env:
