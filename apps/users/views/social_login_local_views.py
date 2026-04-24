@@ -11,7 +11,7 @@ from apps.users.services.social_login_services import (
     NaverOAuthService,
 )
 
-FRONTEND_LOCAL_CALLBACK_URI = getattr(settings, "FRONTEND_LOCAL_CALLBACK_URI")
+FRONTEND_LOCAL_CALLBACK_URI = getattr(settings, "FRONTEND_LOCAL_CALLBACK_URI", "http://localhost:5173/auth/callback?social_login=success")
 
 REFRESH_TOKEN_LIFETIME = getattr(settings, "SIMPLE_JWT", {}).get("REFRESH_TOKEN_LIFETIME")
 REFRESH_COOKIE_KEY = "refresh_token"

@@ -11,14 +11,14 @@ from apps.users.services.social_login_services import (
     NaverOAuthService,
 )
 
-FRONTEND_PROD_CALLBACK_URI = getattr(settings, "FRONTEND_CALLBACK_URI")
+FRONTEND_CALLBACK_URI = getattr(settings, "FRONTEND_CALLBACK_URI", "https://oz-union-16-fe.vercel.app/auth/callback?social_login=success")
 
 REFRESH_TOKEN_LIFETIME = getattr(settings, "SIMPLE_JWT", {}).get("REFRESH_TOKEN_LIFETIME")
 REFRESH_COOKIE_KEY = "refresh_token"
 
 def _set_refresh_cookie_and_redirect(refresh_token:str) -> redirect:
     """JWT 발급 → HttpOnly 쿠키 설정 → 프론트 콜백 페이지로 redirect"""
-    uri = FRONTEND_PROD_CALLBACK_URI
+    uri = FRONTEND_CALLBACK_URI
 
     response = redirect(uri)
     cookie_kwargs = {

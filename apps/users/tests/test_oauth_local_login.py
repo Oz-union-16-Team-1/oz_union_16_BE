@@ -94,8 +94,8 @@ class KakaoCallbackViewTest(TestCase):
         self.client = APIClient()
         self.url = reverse("kakao-local-callback")
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_new_user_success(self, mock_post, mock_get) -> None:
         """신규 유저 - 유저/SocialUser 생성 후 프론트로 redirect, refresh_token 쿠키 설정 확인"""
         mock_post.return_value = fake_token_response()
@@ -110,8 +110,8 @@ class KakaoCallbackViewTest(TestCase):
         # DB에 유저와 SocialUser가 생성됐는지 확인
         self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.KAKAO, provider_id="123456789").exists())
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_existing_social_user_success(self, mock_post, mock_get) -> None:
         """기존 소셜 유저 - 새 유저 생성 없이 기존 유저로 로그인"""
         existing_user = create_user()
@@ -132,7 +132,7 @@ class KakaoCallbackViewTest(TestCase):
         # 새 유저가 생성되지 않았는지 확인
         self.assertEqual(User.objects.count(), user_count_before)
 
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_token_api_fail(self, mock_post) -> None:
         """카카오 토큰 발급 API 실패 시 502"""
         mock_post.return_value = MagicMock(ok=False)
@@ -141,8 +141,8 @@ class KakaoCallbackViewTest(TestCase):
 
         self.assertEqual(response.status_code, 502)
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_user_info_api_fail(self, mock_post, mock_get) -> None:
         """카카오 유저 정보 API 실패 시 502"""
         mock_post.return_value = fake_token_response()
@@ -196,8 +196,8 @@ class NaverCallbackViewTest(TestCase):
         self.client = APIClient()
         self.url = reverse("naver-local-callback")
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_new_user_success(self, mock_post, mock_get) -> None:
         """신규 유저 - 유저/SocialUser 생성 후 프론트로 redirect, refresh_token 쿠키 설정 확인"""
         mock_post.return_value = fake_token_response()
@@ -210,8 +210,8 @@ class NaverCallbackViewTest(TestCase):
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
         self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.NAVER, provider_id="naver_id_001").exists())
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_existing_social_user_success(self, mock_post, mock_get) -> None:
         """기존 소셜 유저 - 새 유저 생성 없이 기존 유저로 로그인"""
         existing_user = create_user()
@@ -231,7 +231,7 @@ class NaverCallbackViewTest(TestCase):
         self.assertIn("refresh_token", response.cookies)
         self.assertEqual(User.objects.count(), user_count_before)
 
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_token_api_fail(self, mock_post) -> None:
         """네이버 토큰 발급 API 실패 시 502"""
         mock_post.return_value = MagicMock(ok=False)
@@ -240,8 +240,8 @@ class NaverCallbackViewTest(TestCase):
 
         self.assertEqual(response.status_code, 502)
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_user_info_api_fail(self, mock_post, mock_get) -> None:
         """네이버 유저 정보 API 실패 시 502"""
         mock_post.return_value = fake_token_response()
@@ -293,8 +293,8 @@ class GoogleCallbackViewTest(TestCase):
         self.client = APIClient()
         self.url = reverse("google-local-callback")
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_new_user_success(self, mock_post, mock_get) -> None:
         """신규 유저 - 유저/SocialUser 생성 후 프론트로 redirect, refresh_token 쿠키 설정 확인"""
         mock_post.return_value = fake_token_response()
@@ -307,8 +307,8 @@ class GoogleCallbackViewTest(TestCase):
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
         self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.GOOGLE, provider_id="google_id_001").exists())
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_existing_social_user_success(self, mock_post, mock_get) -> None:
         """기존 소셜 유저 - 새 유저 생성 없이 기존 유저로 로그인"""
         existing_user = create_user()
@@ -328,7 +328,7 @@ class GoogleCallbackViewTest(TestCase):
         self.assertIn("refresh_token", response.cookies)
         self.assertEqual(User.objects.count(), user_count_before)
 
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_token_api_fail(self, mock_post) -> None:
         """구글 토큰 발급 API 실패 시 502"""
         mock_post.return_value = MagicMock(ok=False)
@@ -337,8 +337,8 @@ class GoogleCallbackViewTest(TestCase):
 
         self.assertEqual(response.status_code, 502)
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_callback_user_info_api_fail(self, mock_post, mock_get) -> None:
         """구글 유저 정보 API 실패 시 502"""
         mock_post.return_value = fake_token_response()
@@ -356,8 +356,8 @@ class GoogleCallbackViewTest(TestCase):
 class NicknameDeduplicationTest(TestCase):
     """소셜 로그인 신규 가입 시 닉네임 중복 처리 확인"""
 
-    @patch("apps.users.services.social_auth_services.requests.get")
-    @patch("apps.users.services.social_auth_services.requests.post")
+    @patch("apps.users.services.social_login_services.requests.get")
+    @patch("apps.users.services.social_login_services.requests.post")
     def test_duplicate_nickname_gets_suffix(self, mock_post, mock_get) -> None:
         """provider 닉네임이 이미 존재하면 suffix가 붙은 유니크 닉네임으로 생성"""
         # 카카오 닉네임과 동일한 닉네임을 가진 유저를 미리 생성

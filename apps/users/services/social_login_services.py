@@ -82,7 +82,6 @@ class KakaoOAuthService:
             name=nickname[:30],
             nickname=unique_nickname,
             gender="M",
-            password=None,
         )
         SocialUser.objects.create(
             provider=SocialProvider.KAKAO,
@@ -177,7 +176,6 @@ class NaverOAuthService:
             name=(user_info.get("name") or nickname)[:30],
             nickname=unique_nickname,
             gender="M",
-            password=None,
         )
         SocialUser.objects.create(
             provider=SocialProvider.NAVER,
@@ -229,7 +227,6 @@ class GoogleOAuthService:
         }
         res = requests.post(self.TOKEN_URL, data=data, timeout=10)
         if not res.ok:
-            print("🔴 구글 에러 응답:", res.status_code, res.json())  # 임시 추가
             raise SocialLoginException("구글 토큰 발급에 실패했습니다.")
         return cast(str, res.json()["access_token"])
 
@@ -262,7 +259,6 @@ class GoogleOAuthService:
             name=nickname[:30],
             nickname=unique_nickname,
             gender="M",
-            password=None,
         )
         SocialUser.objects.create(
             provider=SocialProvider.GOOGLE,
