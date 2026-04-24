@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
-from apps.match.services.batch_ingest import MatchBatchIngestService
+from apps.match.services.candidate_filter_batch import MatchCandidateFilterBatchService
 
 
 class Command(BaseCommand):
-    help = "매칭 IGDB 수집 배치를 실행하고 필터 통계를 출력합니다."
+    help = "game_list 기반 매칭 후보 필터 배치를 실행하고 통계를 출력합니다."
 
     def handle(self, *args, **options):
-        service = MatchBatchIngestService()
+        service = MatchCandidateFilterBatchService()
         passed, stats = service.run()
 
         self.stdout.write(self.style.SUCCESS("[MATCH][INGEST] 배치 실행 완료"))
