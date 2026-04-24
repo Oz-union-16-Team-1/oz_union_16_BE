@@ -15,7 +15,6 @@ class IGDB:
             "Client-ID": settings.IGDB_ID,
             "Authorization": f"Bearer {settings.IGDB_ACCESS_TOKEN}",
         }
-        # 장르 매핑 (기존 로직 유지)
         self.genre_mapping = {
             1: [25, 33],
             2: [31, 2],
@@ -47,11 +46,26 @@ class IGDB:
             logger.error(f"IGDB API 통신 에러: {e}")
             return None
 
+    def query_games(self, query=None, **kwargs):
+        """
+        mypy 에러 해결 및 가변 인자 처리를 위한 메서드.
+        키워드 인자(fields, where 등)가 들어오면 IGDB 쿼리 문자열로 변환합니다.
+        """
+        if query:
+            return self.query_games_raw(query)
+
+        # 키워드 인자가 들어온 경우 (fields, where, sort, limit, offset 등)
+        query_parts = []
+        for key, value in kwargs.items():
+            query_parts.append(f"{key} {value};")
+
+        final_query = " ".join(query_parts)
+        return self.query_games_raw(final_query)
+
     def get_games(self, genre_id=None, limit=20, offset=0):
         """기본 게임 목록 조회 (평점순)"""
-        where_clause = "total_rating != null & total_rating_count > 5"
+        where_clause = ""
 
-        # 필드 리스트 정의 (category 추가 및 collection 확인)
         full_fields = [
             "name",
             "slug",
@@ -59,14 +73,9 @@ class IGDB:
             "storyline",
             "first_release_date",
             "status",
-            "category",  # 추가됨
+            "category",
             "franchises",
             "version_title",
-            "remakes",
-            "remasters",
-            "expansions",
-            "dlcs",
-            "language_supports",
             "rating",
             "rating_count",
             "aggregated_rating",
@@ -92,7 +101,6 @@ class IGDB:
         ]
         fields_str = ", ".join(full_fields)
 
-        # 3. 장르 필터
         if genre_id:
             gid = int(genre_id)
             target_genre_ids = self.genre_mapping.get(gid, [])
@@ -100,7 +108,6 @@ class IGDB:
                 ids_str = ",".join(map(str, target_genre_ids))
                 where_clause += f" & genres = ({ids_str})"
 
-        # 4. 최종 쿼리
         query = (
             f"fields {fields_str}; "
             f"where {where_clause}; "
@@ -111,5 +118,5 @@ class IGDB:
 
         return self.query_games_raw(query)
 
-# 싱글톤 인스턴스 생성
+
 igdb_client = IGDB()

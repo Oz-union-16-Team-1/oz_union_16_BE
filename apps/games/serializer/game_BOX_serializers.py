@@ -24,24 +24,41 @@ class GameBoxSerializer(serializers.ModelSerializer):
 
         # 2. Cover 이미지 (이미 ID만 저장되어 있다면 바로 URL 변환)
         if ret.get("cover") and not str(ret["cover"]).startswith("http"):
-            ret["cover"] = f"https://images.igdb.com/igdb/image/upload/t_cover_big/{ret['cover']}.jpg"
+            ret["cover"] = (
+                f"https://images.igdb.com/igdb/image/upload/t_cover_big/{ret['cover']}.jpg"
+            )
 
         # 3. 스크린샷 (서비스에서 이미 ['id1', 'id2'] 형태로 저장했다면)
         if ret.get("screenshots") and isinstance(ret["screenshots"], list):
             new_screenshots = []
             for s in ret["screenshots"]:
-                if isinstance(s, str): # ID 문자열인 경우
-                    new_screenshots.append(f"https://images.igdb.com/igdb/image/upload/t_screenshot_med/{s}.jpg")
-                elif isinstance(s, dict) and "image_id" in s: # 혹시 딕셔너리인 경우
-                    new_screenshots.append(f"https://images.igdb.com/igdb/image/upload/t_screenshot_med/{s['image_id']}.jpg")
+                if isinstance(s, str):  # ID 문자열인 경우
+                    new_screenshots.append(
+                        f"https://images.igdb.com/igdb/image/upload/t_screenshot_med/{s}.jpg"
+                    )
+                elif isinstance(s, dict) and "image_id" in s:  # 혹시 딕셔너리인 경우
+                    new_screenshots.append(
+                        f"https://images.igdb.com/igdb/image/upload/t_screenshot_med/{s['image_id']}.jpg"
+                    )
             ret["screenshots"] = new_screenshots
 
         # 4. 누락된 컬럼들 기본값 및 리스트화
         list_fields = [
-            "genres", "themes", "screenshots", "videos", "game_modes",
-            "player_perspectives", "keywords", "language_supports",
-            "franchises", "remakes", "remasters", "expansions", "dlcs",
-            "multiplayer_modes", "involved_companies"
+            "genres",
+            "themes",
+            "screenshots",
+            "videos",
+            "game_modes",
+            "player_perspectives",
+            "keywords",
+            "language_supports",
+            "franchises",
+            "remakes",
+            "remasters",
+            "expansions",
+            "dlcs",
+            "multiplayer_modes",
+            "involved_companies",
         ]
         for field in list_fields:
             if ret.get(field) is None:

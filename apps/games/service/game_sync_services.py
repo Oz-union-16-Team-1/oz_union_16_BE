@@ -1,6 +1,7 @@
+from datetime import datetime
+
 from apps.core.igdb import igdb_client
 from apps.games.models import Game
-from datetime import datetime
 
 
 class GameSyncService:
@@ -14,7 +15,7 @@ class GameSyncService:
         if raw_ts:
             try:
                 converted_date = datetime.fromtimestamp(float(raw_ts))
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 converted_date = None
 
         # 1. 단일 값 필드 가공
@@ -63,7 +64,9 @@ class GameSyncService:
         # Collection 처리 (딕셔너리로 올 경우 ID만 추출)
         collection_obj = raw_data.get("collection")
         processed["collection"] = (
-            collection_obj.get("id") if isinstance(collection_obj, dict) else collection_obj
+            collection_obj.get("id")
+            if isinstance(collection_obj, dict)
+            else collection_obj
         )
 
         # Cover 처리
@@ -107,7 +110,4 @@ class GameSyncService:
             clean_data = cls.prepare_game_data(raw_game)
 
             # DB 저장 및 업데이트
-            Game.objects.update_or_create(
-                game_id=raw_game["id"],
-                defaults=clean_data
-            )
+            Game.objects.update_or_create(game_id=raw_game["id"], defaults=clean_data)
