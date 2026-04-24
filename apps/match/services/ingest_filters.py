@@ -40,9 +40,9 @@ def _to_float(value: Any) -> float | None:
     try:
         return float(value)
     except TypeError:
-        return False
+        return None
     except ValueError:
-        return False
+        return None
 
 
 def _as_set(value: Any) -> set[int]:
