@@ -10,6 +10,7 @@ User = get_user_model()
 
 class SocialLoginException(APIException):
     """소셜 provider API 호출 실패 → 502"""
+
     status_code = 502
     default_detail = "소셜 로그인 처리 중 오류가 발생했습니다."
 
@@ -31,6 +32,7 @@ def generate_unique_nickname(base: str) -> str:
         if not User.objects.filter(nickname=candidate).exists():
             return candidate
     return uuid.uuid4().hex[:10]
+
 
 def issue_jwt(user) -> dict[str, str]:
     """유저로부터 JWT 토큰 쌍을 발급합니다."""

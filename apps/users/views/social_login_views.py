@@ -1,9 +1,9 @@
 from django.conf import settings
 from django.shortcuts import redirect
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.views import APIView
-from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 
 from apps.users.services.social_login_services import (
     GoogleOAuthService,
@@ -11,12 +11,19 @@ from apps.users.services.social_login_services import (
     NaverOAuthService,
 )
 
-FRONTEND_CALLBACK_URI = getattr(settings, "FRONTEND_CALLBACK_URI", "https://oz-union-16-fe.vercel.app/auth/callback?social_login=success")
+FRONTEND_CALLBACK_URI = getattr(
+    settings,
+    "FRONTEND_CALLBACK_URI",
+    "https://oz-union-16-fe.vercel.app/auth/callback?social_login=success",
+)
 
-REFRESH_TOKEN_LIFETIME = getattr(settings, "SIMPLE_JWT", {}).get("REFRESH_TOKEN_LIFETIME")
+REFRESH_TOKEN_LIFETIME = getattr(settings, "SIMPLE_JWT", {}).get(
+    "REFRESH_TOKEN_LIFETIME"
+)
 REFRESH_COOKIE_KEY = "refresh_token"
 
-def _set_refresh_cookie_and_redirect(refresh_token:str) -> redirect:
+
+def _set_refresh_cookie_and_redirect(refresh_token: str) -> redirect:
     """JWT 발급 → HttpOnly 쿠키 설정 → 프론트 콜백 페이지로 redirect"""
     uri = FRONTEND_CALLBACK_URI
 
@@ -39,9 +46,12 @@ def _set_refresh_cookie_and_redirect(refresh_token:str) -> redirect:
 # Kakao
 # ---------------------------------------------------------------------------
 
+
 class KakaoLoginView(APIView):
     """GET /api/v1/accounts/social-login/kakao/login"""
+
     permission_classes = [AllowAny]
+
     @extend_schema(
         tags=["accounts"],
         summary="카카오 소셜 로그인 시작",
@@ -57,7 +67,9 @@ class KakaoLoginView(APIView):
 
 class KakaoCallbackView(APIView):
     """GET /api/v1/accounts/social-login/kakao/callback"""
+
     permission_classes = [AllowAny]
+
     @extend_schema(
         tags=["accounts"],
         summary="카카오 소셜 로그인 콜백",
@@ -68,10 +80,17 @@ class KakaoCallbackView(APIView):
             "- Refresh Token을 HttpOnly Cookie로 설정 후 프론트 콜백 페이지로 redirect"
         ),
         parameters=[
-            OpenApiParameter(name="code", location=OpenApiParameter.QUERY, required=True, description="카카오 인증 코드"),
+            OpenApiParameter(
+                name="code",
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="카카오 인증 코드",
+            ),
         ],
         responses={
-            302: OpenApiResponse(description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"),
+            302: OpenApiResponse(
+                description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"
+            ),
             502: OpenApiResponse(description="카카오 API 호출 실패"),
         },
     )
@@ -80,13 +99,17 @@ class KakaoCallbackView(APIView):
         tokens = KakaoOAuthService().login(code)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])
 
+
 # ---------------------------------------------------------------------------
 # Naver
 # ---------------------------------------------------------------------------
 
+
 class NaverLoginView(APIView):
     """GET /api/v1/accounts/social-login/naver/login"""
+
     permission_classes = [AllowAny]
+
     @extend_schema(
         tags=["accounts"],
         summary="네이버 소셜 로그인 시작",
@@ -103,7 +126,9 @@ class NaverLoginView(APIView):
 
 class NaverCallbackView(APIView):
     """GET /api/v1/accounts/social-login/naver/callback"""
+
     permission_classes = [AllowAny]
+
     @extend_schema(
         tags=["accounts"],
         summary="네이버 소셜 로그인 콜백",
@@ -114,11 +139,23 @@ class NaverCallbackView(APIView):
             "- Refresh Token을 HttpOnly Cookie로 설정 후 프론트 콜백 페이지로 redirect"
         ),
         parameters=[
-            OpenApiParameter(name="code", location=OpenApiParameter.QUERY, required=True, description="네이버 인증 코드"),
-            OpenApiParameter(name="state", location=OpenApiParameter.QUERY, required=True, description="CSRF 방어용 state 값"),
+            OpenApiParameter(
+                name="code",
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="네이버 인증 코드",
+            ),
+            OpenApiParameter(
+                name="state",
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="CSRF 방어용 state 값",
+            ),
         ],
         responses={
-            302: OpenApiResponse(description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"),
+            302: OpenApiResponse(
+                description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"
+            ),
             502: OpenApiResponse(description="네이버 API 호출 실패"),
         },
     )
@@ -128,16 +165,20 @@ class NaverCallbackView(APIView):
         tokens = NaverOAuthService().login(code, state)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])
 
+
 # ---------------------------------------------------------------------------
 # Google
 # ---------------------------------------------------------------------------
+
 
 class GoogleLoginView(APIView):
     """
     GET /api/v1/accounts/social-login/google
     서비스에서 조합한 URL로 302 redirect
     """
+
     permission_classes = [AllowAny]
+
     @extend_schema(
         tags=["accounts"],
         summary="구글 소셜 로그인 시작",
@@ -153,22 +194,30 @@ class GoogleLoginView(APIView):
 
 class GoogleCallbackView(APIView):
     """GET /api/v1/accounts/social-login/google/callback"""
+
     permission_classes = [AllowAny]
 
     @extend_schema(
         tags=["accounts"],
         summary="구글 소셜 로그인 콜백",
         description=(
-                "구글 인증 후 전달받은 code를 처리합니다.\n\n"
-                "- 신규 유저: User + SocialUser 자동 생성\n"
-                "- 기존 유저: 기존 계정으로 로그인\n"
-                "- Refresh Token을 HttpOnly Cookie로 설정 후 프론트 콜백 페이지로 redirect"
+            "구글 인증 후 전달받은 code를 처리합니다.\n\n"
+            "- 신규 유저: User + SocialUser 자동 생성\n"
+            "- 기존 유저: 기존 계정으로 로그인\n"
+            "- Refresh Token을 HttpOnly Cookie로 설정 후 프론트 콜백 페이지로 redirect"
         ),
         parameters=[
-            OpenApiParameter(name="code", location=OpenApiParameter.QUERY, required=True, description="구글 인증 코드"),
+            OpenApiParameter(
+                name="code",
+                location=OpenApiParameter.QUERY,
+                required=True,
+                description="구글 인증 코드",
+            ),
         ],
         responses={
-            302: OpenApiResponse(description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"),
+            302: OpenApiResponse(
+                description="프론트 콜백 페이지로 redirect (refresh_token 쿠키 설정)"
+            ),
             502: OpenApiResponse(description="구글 API 호출 실패"),
         },
     )

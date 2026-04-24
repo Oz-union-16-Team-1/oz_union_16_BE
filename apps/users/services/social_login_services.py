@@ -6,13 +6,12 @@ from django.conf import settings
 
 from apps.users.choices import SocialProvider
 from apps.users.models import SocialUser
-
 from apps.users.services.social_login_core import *
-
 
 # ---------------------------------------------------------------------------
 # Provider 클라이언트
 # ---------------------------------------------------------------------------
+
 
 class KakaoOAuthService:
     AUTH_URL = "https://kauth.kakao.com/oauth/authorize"
@@ -68,8 +67,9 @@ class KakaoOAuthService:
         nickname = profile.get("nickname") or f"kakao_{kakao_id[:4]}"
 
         social_user = (
-            SocialUser.objects
-            .filter(provider=SocialProvider.KAKAO, provider_id=kakao_id)
+            SocialUser.objects.filter(
+                provider=SocialProvider.KAKAO, provider_id=kakao_id
+            )
             .select_related("user")
             .first()
         )
@@ -111,7 +111,7 @@ class NaverOAuthService:
         state = uuid.uuid4().hex
         params = {
             "client_id": settings.NAVER_CLIENT_ID,
-        "redirect_uri": settings.NAVER_REDIRECT_URI,
+            "redirect_uri": settings.NAVER_REDIRECT_URI,
             "response_type": "code",
             "state": state,
         }
@@ -162,8 +162,9 @@ class NaverOAuthService:
         nickname = user_info.get("nickname") or f"naver_{naver_id[:4]}"
 
         social_user = (
-            SocialUser.objects
-            .filter(provider=SocialProvider.NAVER, provider_id=naver_id)
+            SocialUser.objects.filter(
+                provider=SocialProvider.NAVER, provider_id=naver_id
+            )
             .select_related("user")
             .first()
         )
@@ -245,8 +246,9 @@ class GoogleOAuthService:
         nickname = user_info.get("name") or f"google_{google_id[:4]}"
 
         social_user = (
-            SocialUser.objects
-            .filter(provider=SocialProvider.GOOGLE, provider_id=google_id)
+            SocialUser.objects.filter(
+                provider=SocialProvider.GOOGLE, provider_id=google_id
+            )
             .select_related("user")
             .first()
         )

@@ -6,13 +6,13 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.users.models import SocialUser, User
 from apps.users.choices import SocialProvider
-
+from apps.users.models import SocialUser, User
 
 # ---------------------------------------------------------------------------
 # 공통 헬퍼
 # ---------------------------------------------------------------------------
+
 
 def make_login_id() -> str:
     return f"user_{uuid.uuid4().hex[:8]}"
@@ -108,7 +108,11 @@ class KakaoCallbackViewTest(TestCase):
         self.assertIn("refresh_token", response.cookies)
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
         # DB에 유저와 SocialUser가 생성됐는지 확인
-        self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.KAKAO, provider_id="123456789").exists())
+        self.assertTrue(
+            SocialUser.objects.filter(
+                provider=SocialProvider.KAKAO, provider_id="123456789"
+            ).exists()
+        )
 
     @patch("apps.users.services.social_login_services.requests.get")
     @patch("apps.users.services.social_login_services.requests.post")
@@ -170,7 +174,11 @@ NAVER_USER_INFO = {
 def fake_naver_user_info_response(user_info: dict = None) -> MagicMock:
     mock = MagicMock()
     mock.ok = True
-    mock.json.return_value = {"resultcode": "00", "message": "success", "response": user_info or NAVER_USER_INFO}
+    mock.json.return_value = {
+        "resultcode": "00",
+        "message": "success",
+        "response": user_info or NAVER_USER_INFO,
+    }
     return mock
 
 
@@ -203,12 +211,18 @@ class NaverCallbackViewTest(TestCase):
         mock_post.return_value = fake_token_response()
         mock_get.return_value = fake_naver_user_info_response()
 
-        response = self.client.get(self.url, {"code": "test_code", "state": "test_state"})
+        response = self.client.get(
+            self.url, {"code": "test_code", "state": "test_state"}
+        )
 
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn("refresh_token", response.cookies)
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
-        self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.NAVER, provider_id="naver_id_001").exists())
+        self.assertTrue(
+            SocialUser.objects.filter(
+                provider=SocialProvider.NAVER, provider_id="naver_id_001"
+            ).exists()
+        )
 
     @patch("apps.users.services.social_login_services.requests.get")
     @patch("apps.users.services.social_login_services.requests.post")
@@ -225,7 +239,9 @@ class NaverCallbackViewTest(TestCase):
         mock_post.return_value = fake_token_response()
         mock_get.return_value = fake_naver_user_info_response()
 
-        response = self.client.get(self.url, {"code": "test_code", "state": "test_state"})
+        response = self.client.get(
+            self.url, {"code": "test_code", "state": "test_state"}
+        )
 
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn("refresh_token", response.cookies)
@@ -236,7 +252,9 @@ class NaverCallbackViewTest(TestCase):
         """네이버 토큰 발급 API 실패 시 502"""
         mock_post.return_value = MagicMock(ok=False)
 
-        response = self.client.get(self.url, {"code": "invalid_code", "state": "test_state"})
+        response = self.client.get(
+            self.url, {"code": "invalid_code", "state": "test_state"}
+        )
 
         self.assertEqual(response.status_code, 502)
 
@@ -247,7 +265,9 @@ class NaverCallbackViewTest(TestCase):
         mock_post.return_value = fake_token_response()
         mock_get.return_value = MagicMock(ok=False)
 
-        response = self.client.get(self.url, {"code": "test_code", "state": "test_state"})
+        response = self.client.get(
+            self.url, {"code": "test_code", "state": "test_state"}
+        )
 
         self.assertEqual(response.status_code, 502)
 
@@ -305,7 +325,11 @@ class GoogleCallbackViewTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn("refresh_token", response.cookies)
         self.assertTrue(response.cookies["refresh_token"]["httponly"])
-        self.assertTrue(SocialUser.objects.filter(provider=SocialProvider.GOOGLE, provider_id="google_id_001").exists())
+        self.assertTrue(
+            SocialUser.objects.filter(
+                provider=SocialProvider.GOOGLE, provider_id="google_id_001"
+            ).exists()
+        )
 
     @patch("apps.users.services.social_login_services.requests.get")
     @patch("apps.users.services.social_login_services.requests.post")
@@ -353,6 +377,7 @@ class GoogleCallbackViewTest(TestCase):
 # 닉네임 중복 처리
 # ---------------------------------------------------------------------------
 
+
 class NicknameDeduplicationTest(TestCase):
     """소셜 로그인 신규 가입 시 닉네임 중복 처리 확인"""
 
@@ -371,5 +396,7 @@ class NicknameDeduplicationTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         # 새로 생성된 유저의 닉네임이 "카카오유저"가 아닌 suffix 포함 닉네임인지 확인
-        new_social_user = SocialUser.objects.get(provider=SocialProvider.KAKAO, provider_id="123456789")
+        new_social_user = SocialUser.objects.get(
+            provider=SocialProvider.KAKAO, provider_id="123456789"
+        )
         self.assertNotEqual(new_social_user.user.nickname, "카카오유저")
