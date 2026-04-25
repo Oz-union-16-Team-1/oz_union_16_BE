@@ -64,6 +64,11 @@ MATCH_INGEST_MIN_AGG_RATING: float = 60.0
 MATCH_INGEST_MIN_AGG_RATING_COUNT: int = 3
 MATCH_INGEST_MIN_RELEASE_TS: int = 946684800  # 2000-01-01 UTC
 
+# 매칭 후보 선별 상수
+MATCH_CANDIDATE_POOL_SIZE: int = 50
+MATCH_CANDIDATE_MAX_COUNT: int = 5
+
+
 # =========================
 # MATCH 벡터 매핑 상수 (14D)
 # =========================
@@ -206,18 +211,18 @@ MATCH_VECTOR_POPULARITY_SCALE: float = 100.0
 MATCH_VECTOR_POPULARITY_DEFAULT: float = 0.5
 
 PGTI_GENRE_MATCH_RULES: dict[int, dict[str, tuple[int, ...]]] = {
-    1: {"genres": (25, 33), "themes": (1,)},   # 액션
-    2: {"genres": (31, 2), "themes": ()},      # 어드벤처
-    3: {"genres": (12,), "themes": ()},        # RPG
-    4: {"genres": (5,), "themes": ()},         # 슈팅
+    1: {"genres": (25, 33), "themes": (1,)},  # 액션
+    2: {"genres": (31, 2), "themes": ()},  # 어드벤처
+    3: {"genres": (12,), "themes": ()},  # RPG
+    4: {"genres": (5,), "themes": ()},  # 슈팅
     5: {"genres": (15, 11, 16, 24, 36), "themes": ()},  # 전략
-    6: {"genres": (13,), "themes": ()},        # 시뮬레이션
-    7: {"genres": (14,), "themes": ()},        # 스포츠
-    8: {"genres": (10,), "themes": ()},        # 레이싱
+    6: {"genres": (13,), "themes": ()},  # 시뮬레이션
+    7: {"genres": (14,), "themes": ()},  # 스포츠
+    8: {"genres": (10,), "themes": ()},  # 레이싱
     9: {"genres": (9, 26, 30), "themes": ()},  # 퍼즐
-    10: {"genres": (8,), "themes": ()},        # 플랫폼
-    11: {"genres": (4,), "themes": ()},        # 대전격투
-    12: {"genres": (35,), "themes": ()},       # 카드/보드
-    13: {"genres": (7,), "themes": ()},        # 음악/리듬
-    14: {"genres": (34,), "themes": ()},       # 비주얼노벨
+    10: {"genres": (8,), "themes": ()},  # 플랫폼
+    11: {"genres": (4,), "themes": ()},  # 대전격투
+    12: {"genres": (35,), "themes": ()},  # 카드/보드
+    13: {"genres": (7,), "themes": ()},  # 음악/리듬
+    14: {"genres": (34,), "themes": ()},  # 비주얼노벨
 }
