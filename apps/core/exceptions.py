@@ -6,7 +6,6 @@ from rest_framework.views import exception_handler
 
 class ErrorResponseSerializer(serializers.Serializer):
     error_detail = serializers.CharField()
-    status_code = serializers.IntegerField()
 
 
 class ConflictException(APIException):
