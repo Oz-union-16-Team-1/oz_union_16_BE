@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 
-from apps.core.exceptions import ConflictException
+from apps.core.exceptions import AuthenticationFailedException, ConflictException
 
 User = get_user_model()
 
@@ -33,3 +33,7 @@ class UserInfoService:
             "profile_img_url": user.profile_img_url,
             "detail": "회원 정보가 수정되었습니다.",
         }
+
+    @staticmethod
+    def delete_user(user: AbstractBaseUser) -> None:
+        user.delete()

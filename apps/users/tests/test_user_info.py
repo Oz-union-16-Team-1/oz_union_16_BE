@@ -16,6 +16,7 @@ class MyInfoTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         # 테스트용 유저 생성
+        cls.password = "testpassword123"
         cls.user_data = {
             "login_id": "testuser123",
             "password": "testpassword123",
@@ -143,3 +144,19 @@ class MyInfoTest(TestCase):
         self.assertIn(
             "중복된 닉네임이 존재합니다.", response.data["error_detail"]["nickname"]
         )
+
+    def test_delete_user_success(self):
+        """올바른 비밀번호 입력 시 회원 탈퇴 성공 (204 반환)"""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.delete(self.url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        self.assertFalse(UserType.objects.filter(id=self.user.id).exists())
+
+    def test_delete_user_unauthenticated_fail(self):
+        """인증되지 않은 사용자가 탈퇴 시도 시 실패 (401 반환)"""
+        response = self.client.delete(self.url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
