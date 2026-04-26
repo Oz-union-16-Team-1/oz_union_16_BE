@@ -27,7 +27,7 @@ def _flatten(value) -> str | dict:
 
 # 예외 타입별 커스텀 메시지
 CUSTOM_MESSAGES = {
-    NotAuthenticated: "인증 정보가 유효하지 않거나 만료되었습니다.",
+    NotAuthenticated: "자격 인증 데이터가 제공되지 않았습니다.",
 }
 
 

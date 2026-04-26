@@ -22,6 +22,7 @@ from apps.users.views.social_login_views import (
     NaverCallbackView,
     NaverLoginView,
 )
+from apps.users.views.user_info_views import UserInfoView
 
 urlpatterns = [
     path("signup", SignUpView.as_view(), name="signup"),  # Auth
@@ -78,4 +79,5 @@ urlpatterns = [
         GoogleLocalCallbackView.as_view(),
         name="google-local-callback",
     ),
+    path("me", UserInfoView.as_view(), name="user-info"),
 ]
