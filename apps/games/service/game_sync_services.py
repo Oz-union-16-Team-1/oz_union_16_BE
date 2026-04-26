@@ -102,12 +102,18 @@ class GameSyncService:
             Game.objects.update_or_create(game_id=raw_game["id"], defaults=clean_data)
 
     @classmethod
-    def sync_all_games(cls, *, page_size=500, max_pages=200, pc_only=False):
-        """페이지네이션으로 여러 페이지를 순회해 적재"""
+    def sync_all_games(cls, *, page_size=500, max_pages=0, pc_only=False):
+        """
+        max_pages=0 이면 응답이 빌 때까지 전체 수집
+        """
         scanned = 0
         upserted = 0
+        page = 0
 
-        for page in range(max_pages):
+        while True:
+            if max_pages > 0 and page >= max_pages:
+                break
+
             offset = page * page_size
             raw_games = igdb_client.get_games(
                 limit=page_size,
@@ -130,5 +136,7 @@ class GameSyncService:
 
             if len(raw_games) < page_size:
                 break
+
+            page += 1
 
         return {"scanned": scanned, "upserted": upserted}

@@ -8,7 +8,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--page-size", type=int, default=500)
-        parser.add_argument("--max-pages", type=int, default=200)
+        parser.add_argument("--max-pages", type=int, default=0)
         parser.add_argument("--pc-only", action="store_true")
 
     def handle(self, *args, **options):
