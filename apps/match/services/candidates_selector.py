@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import random
+from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import date
 from typing import Iterable
@@ -124,14 +125,11 @@ class MatchCandidatesSelectorService:
             return []
         if isinstance(raw, (str, bytes, bytearray)):
             return []
-
-        try:
-            iterator = iter(raw)
-        except TypeError:
+        if not isinstance(raw, IterableABC):
             return []
 
         normalized: list[float] = []
-        for value in iterator:
+        for value in raw:
             try:
                 normalized.append(float(value))
             except TypeError:

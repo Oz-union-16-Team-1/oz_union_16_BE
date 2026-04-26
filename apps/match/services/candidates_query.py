@@ -121,8 +121,12 @@ class MatchCandidatesQueryService:
     def _normalize_rating(self, rating: object) -> float:
         if rating is None:
             return 0.0
+        if isinstance(rating, bool):
+            return 0.0
+
+        rating_value: Any = rating
         try:
-            return round(float(rating), 1)
+            return round(float(rating_value), 1)
         except TypeError:
             return 0.0
         except ValueError:
