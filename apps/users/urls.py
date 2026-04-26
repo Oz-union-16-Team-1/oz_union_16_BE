@@ -6,6 +6,7 @@ from apps.users.views.auth_views import (
     SignUpView,
     TokenRefreshView,
 )
+from apps.users.views.check_duplication_views import CheckIdView, CheckNickNameView
 from apps.users.views.social_login_local_views import (
     GoogleLocalCallbackView,
     GoogleLocalLoginView,
@@ -79,5 +80,7 @@ urlpatterns = [
         GoogleLocalCallbackView.as_view(),
         name="google-local-callback",
     ),
+    path("check-nickname", CheckNickNameView.as_view(), name="check-nickname"),
+    path("check-id", CheckIdView.as_view(), name="check-id"),
     path("me", UserInfoView.as_view(), name="user-info"),
 ]

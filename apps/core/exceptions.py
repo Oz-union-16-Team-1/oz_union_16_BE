@@ -1,6 +1,12 @@
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.exceptions import APIException, NotAuthenticated
+from rest_framework.serializers import Serializer
 from rest_framework.views import exception_handler
+
+
+class ErrorResponseSerializer(serializers.Serializer):
+    error_detail = serializers.CharField()
+    status_code = serializers.IntegerField()
 
 
 class ConflictException(APIException):
