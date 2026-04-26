@@ -62,7 +62,7 @@ class IGDB:
         final_query = " ".join(query_parts)
         return self.query_games_raw(final_query)
 
-    def get_games(self, genre_id=None, limit=20, offset=0):
+    def get_games(self, genre_id=None, limit=500, offset=0):
         """기본 게임 목록 조회 (평점순)"""
         where_conditions = []
 
