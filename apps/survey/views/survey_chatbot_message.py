@@ -41,15 +41,6 @@ class SurveyChatbotMessageAPIView(GenericAPIView):
                     )
                 ],
             ),
-            404: OpenApiResponse(
-                response=SurveyChatbotMessageErrorResponseSerializer,
-                examples=[
-                    OpenApiExample(
-                        "SessionNotFound",
-                        value={"error_detail": "설문 챗봇 세션을 찾을 수 없습니다."},
-                    )
-                ],
-            ),
             409: OpenApiResponse(
                 response=SurveyChatbotMessageErrorResponseSerializer,
                 examples=[
