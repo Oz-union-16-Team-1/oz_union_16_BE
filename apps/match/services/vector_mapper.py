@@ -5,7 +5,6 @@ from typing import Any
 
 from apps.games.models import Game
 from apps.match.constants import (
-    PGTI_GENRE_MATCH_RULES,
     MATCH_VECTOR_DEFAULTS,
     MATCH_VECTOR_DIM,
     MATCH_VECTOR_GENRE_AXIS_WEIGHTS,
@@ -15,6 +14,7 @@ from apps.match.constants import (
     MATCH_VECTOR_POPULARITY_FIELD,
     MATCH_VECTOR_POPULARITY_SCALE,
     MATCH_VECTOR_TAG_FIELDS,
+    PGTI_GENRE_MATCH_RULES,
 )
 
 

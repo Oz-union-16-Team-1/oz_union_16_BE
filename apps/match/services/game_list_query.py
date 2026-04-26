@@ -48,9 +48,7 @@ def fetch_ingest_rows_from_game_list(
     max_pages: int,
 ) -> list[dict[str, Any]]:
     queryset = (
-        Game.objects.filter(is_ban=False)
-        .order_by("game_id")
-        .values(*INGEST_DB_FIELDS)
+        Game.objects.filter(is_ban=False).order_by("game_id").values(*INGEST_DB_FIELDS)
     )
 
     rows: list[dict[str, Any]] = []
