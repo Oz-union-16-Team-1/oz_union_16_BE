@@ -1,0 +1,127 @@
+from __future__ import annotations
+
+from collections import defaultdict
+from typing import Any
+
+from rest_framework import status
+from rest_framework.exceptions import APIException
+
+from apps.games.models import Game
+from apps.match.constants import IGDB_GENRE_NAME_MAP
+from apps.match.models import MatchGameGenreMap
+from apps.match.services.candidates_selector import MatchCandidatesSelectorService
+from apps.users.models import UserLikeBookmark
+
+
+class MatchCandidatesDataUnavailable(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "외부 게임 데이터 서비스가 일시적으로 불가합니다."
+
+
+class MatchCandidatesQueryService:
+    selector_class = MatchCandidatesSelectorService
+
+    def get_candidates(
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        retry_no: int = 0,
+    ) -> dict[str, Any]:
+        try:
+            selected_ids = self.selector_class().select_game_ids(
+                user_id=user_id,
+                api_genre_id=genre_id,
+                retry_no=retry_no,
+            )
+            if not selected_ids:
+                return {"genre_id": genre_id, "count": 0, "results": []}
+
+            game_rows = list(
+                Game.objects.filter(game_id__in=selected_ids, is_ban=False).values(
+                    "game_id",
+                    "name",
+                    "videos",
+                    "summary",
+                    "storyline",
+                    "rating",
+                )
+            )
+            if not game_rows:
+                return {"genre_id": genre_id, "count": 0, "results": []}
+
+            game_map = {int(row["game_id"]): row for row in game_rows}
+            ordered_ids = [gid for gid in selected_ids if gid in game_map]
+            if not ordered_ids:
+                return {"genre_id": genre_id, "count": 0, "results": []}
+
+            liked_ids = set(
+                UserLikeBookmark.objects.filter(
+                    user_id=user_id,
+                    game_id__in=ordered_ids,
+                ).values_list("game_id", flat=True)
+            )
+
+            genre_rows = MatchGameGenreMap.objects.filter(
+                game_id_id__in=ordered_ids
+            ).values_list("game_id_id", "igdb_genre_id")
+
+            genres_by_game: dict[int, list[str]] = defaultdict(list)
+            for game_id, igdb_genre_id in genre_rows:
+                game_id_int = int(game_id)
+                genre_name = IGDB_GENRE_NAME_MAP.get(int(igdb_genre_id))
+                if genre_name and genre_name not in genres_by_game[game_id_int]:
+                    genres_by_game[game_id_int].append(genre_name)
+
+            results: list[dict[str, Any]] = []
+            for game_id in ordered_ids:
+                row = game_map[game_id]
+                rating = row.get("rating")
+
+                results.append(
+                    {
+                        "game_id": game_id,
+                        "name": str(row.get("name") or ""),
+                        "trailer_url": self._to_trailer_url(row.get("videos")),
+                        "is_liked": game_id in liked_ids,
+                        "description": self._to_description(
+                            row.get("summary"),
+                            row.get("storyline"),
+                        ),
+                        "genres": genres_by_game.get(game_id, []),
+                        "rating": float(rating) if rating is not None else 0.0,
+                    }
+                )
+
+            return {
+                "genre_id": genre_id,
+                "count": len(results),
+                "results": results,
+            }
+        except APIException:
+            raise
+        except Exception as exc:
+            raise MatchCandidatesDataUnavailable() from exc
+
+    def _to_description(self, summary: object, storyline: object) -> str:
+        summary_text = str(summary or "").strip()
+        if summary_text:
+            return summary_text
+        return str(storyline or "").strip()
+
+    def _to_trailer_url(self, videos: object) -> str:
+        if not isinstance(videos, list) or not videos:
+            return ""
+
+        first = videos[0]
+        if isinstance(first, dict):
+            first = first.get("video_id") or first.get("id") or ""
+
+        video_id = str(first or "").strip()
+        if not video_id:
+            return ""
+
+        if video_id.startswith("http://") or video_id.startswith("https://"):
+            return video_id
+
+        return f"https://www.youtube.com/watch?v={video_id}"
