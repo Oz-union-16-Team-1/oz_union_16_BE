@@ -19,3 +19,20 @@ class UserInfoSerializer(serializers.ModelSerializer):
             "created_at",
         )
         read_only_fields = fields
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("nickname", "profile_img_url")
+
+
+class UserUpdateResponseSerializer(serializers.Serializer):
+    nickname = serializers.CharField()
+    profile_img_url = serializers.CharField()
+    detail = serializers.CharField(default="회원 정보가 수정되었습니다.")
+
+
+class DeleteUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
