@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime,timezone
 
 from apps.core.igdb import igdb_client
 from apps.games.models import Game
@@ -9,13 +9,15 @@ class GameSyncService:
     def prepare_game_data(raw_data):
         """IGDB 원본 데이터를 DB 모델 규격에 맞게 전처리합니다."""
 
-        # 날짜 데이터 처리 (Unix Timestamp -> datetime)
+        # 날짜 데이터 처리 (Unix Timestamp -> aware datetime UTC)
         raw_ts = raw_data.get("first_release_date")
         converted_date = None
         if raw_ts:
             try:
-                converted_date = datetime.fromtimestamp(float(raw_ts))
-            except ValueError, TypeError:
+                converted_date = datetime.fromtimestamp(float(raw_ts), tz=timezone.utc)
+            except TypeError:
+                converted_date = None
+            except ValueError:
                 converted_date = None
 
         # 1. 단일 값 필드 가공
