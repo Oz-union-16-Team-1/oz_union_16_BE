@@ -235,6 +235,11 @@ SURVEY_CHATBOT_GEMINI_BASE_URL = os.getenv(
     "https://generativelanguage.googleapis.com",
 )
 SURVEY_CHATBOT_GEMINI_TIMEOUT = int(os.getenv("SURVEY_CHATBOT_GEMINI_TIMEOUT", "10"))
+SURVEY_EMBEDDING_MODEL = os.getenv(
+    "SURVEY_EMBEDDING_MODEL",
+    "gemini-embedding-001",
+)
+SURVEY_EMBEDDING_TIMEOUT = int(os.getenv("SURVEY_EMBEDDING_TIMEOUT", "10"))
 
 CACHES = {
     "default": {

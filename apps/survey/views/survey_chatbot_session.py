@@ -17,6 +17,7 @@ class SurveyChatbotSessionCreateAPIView(GenericAPIView):
     serializer_class = SurveyChatbotSessionCreateRequestSerializer
 
     @extend_schema(
+        tags=["survey"],
         summary="설문 챗봇 세션 시작",
         description="유저별 설문 챗봇 세션을 생성하거나 기존 세션을 반환하고 첫 질문을 제공합니다.",
         request=SurveyChatbotSessionCreateRequestSerializer,
