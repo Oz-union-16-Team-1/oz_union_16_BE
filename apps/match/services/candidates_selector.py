@@ -99,11 +99,18 @@ class MatchCandidatesSelectorService:
         return out
 
     def _normalize_vector(self, raw: object) -> list[float]:
-        if not isinstance(raw, (list, tuple)):
+        if raw is None:
+            return []
+        if isinstance(raw, (str, bytes, bytearray)):
+            return []
+
+        try:
+            iterator = iter(raw)  # numpy.ndarray 포함 iterable 처리
+        except TypeError:
             return []
 
         normalized: list[float] = []
-        for value in raw:
+        for value in iterator:
             try:
                 normalized.append(float(value))
             except TypeError:

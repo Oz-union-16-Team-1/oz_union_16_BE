@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -11,6 +12,8 @@ from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.match.models import MatchGameGenreMap
 from apps.match.services.candidates_selector import MatchCandidatesSelectorService
 from apps.users.models import UserLikeBookmark
+
+DESCRIPTION_MAX_CHARS = 200  # PC 카드 기준 2~3줄 목표
 
 
 class MatchCandidatesDataUnavailable(APIException):
@@ -76,7 +79,6 @@ class MatchCandidatesQueryService:
             results: list[dict[str, Any]] = []
             for game_id in ordered_ids:
                 row = game_map[game_id]
-                rating = row.get("rating")
 
                 results.append(
                     {
@@ -84,12 +86,12 @@ class MatchCandidatesQueryService:
                         "name": str(row.get("name") or ""),
                         "trailer_url": self._to_trailer_url(row.get("videos")),
                         "is_liked": game_id in liked_ids,
-                        "description": self._to_description(
+                        "description": self._normalize_description(
                             row.get("summary"),
                             row.get("storyline"),
                         ),
                         "genres": genres_by_game.get(game_id, []),
-                        "rating": float(rating) if rating is not None else 0.0,
+                        "rating": self._normalize_rating(row.get("rating")),
                     }
                 )
 
@@ -103,11 +105,28 @@ class MatchCandidatesQueryService:
         except Exception as exc:
             raise MatchCandidatesDataUnavailable() from exc
 
-    def _to_description(self, summary: object, storyline: object) -> str:
-        summary_text = str(summary or "").strip()
-        if summary_text:
-            return summary_text
-        return str(storyline or "").strip()
+    def _normalize_description(self, summary: object, storyline: object) -> str:
+        base = str(summary or "").strip() or str(storyline or "").strip()
+        text = re.sub(r"\s+", " ", base).strip()
+
+        if len(text) <= DESCRIPTION_MAX_CHARS:
+            return text
+
+        cut = text[: DESCRIPTION_MAX_CHARS + 1]
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+
+        return f"{cut.rstrip()}…"
+
+    def _normalize_rating(self, rating: object) -> float:
+        if rating is None:
+            return 0.0
+        try:
+            return round(float(rating), 1)
+        except TypeError:
+            return 0.0
+        except ValueError:
+            return 0.0
 
     def _to_trailer_url(self, videos: object) -> str:
         if not isinstance(videos, list) or not videos:
