@@ -106,8 +106,11 @@ class MatchCandidatesSelectorService:
         for value in raw:
             try:
                 normalized.append(float(value))
-            except TypeError, ValueError:
+            except TypeError:
                 return []
+            except ValueError:
+                return []
+
         return normalized
 
     def _build_pool(
@@ -183,5 +186,7 @@ class MatchCandidatesSelectorService:
     def _safe_retry_no(self, retry_no: int) -> int:
         try:
             return max(0, int(retry_no))
-        except TypeError, ValueError:
+        except TypeError:
+            return 0
+        except ValueError:
             return 0
