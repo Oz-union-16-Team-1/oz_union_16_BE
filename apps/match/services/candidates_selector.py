@@ -14,6 +14,8 @@ from apps.match.constants import (
     MATCH_CANDIDATE_POOL_SIZE,
 )
 from apps.match.models import MatchGameGenreMap, MatchGamePreference
+from apps.match.services.game_list_query import INGEST_DB_FIELDS, to_ingest_row
+from apps.match.services.ingest_filters import validate_game
 from apps.users.models import UserLikeBookmark
 
 
@@ -40,7 +42,8 @@ class MatchCandidatesSelectorService:
 
         liked_game_ids = set(
             UserLikeBookmark.objects.filter(user_id=user_id).values_list(
-                "game_id", flat=True
+                "game_id",
+                flat=True,
             )
         )
 
@@ -66,7 +69,11 @@ class MatchCandidatesSelectorService:
         if not allowed_game_ids:
             return []
 
-        candidates = self._load_vectors(allowed_game_ids)
+        filtered_game_ids = self._apply_ingest_filters(allowed_game_ids)
+        if not filtered_game_ids:
+            return []
+
+        candidates = self._load_vectors(filtered_game_ids)
         if not candidates:
             return []
 
@@ -83,6 +90,20 @@ class MatchCandidatesSelectorService:
         pool = self._build_pool(candidates, rng=rng, pool_size=pool_size)
         selected = self._maximin_select(pool=pool, limit=max_count)
         return [item.game_id for item in selected]
+
+    def _apply_ingest_filters(self, game_ids: Iterable[int]) -> list[int]:
+        rows = Game.objects.filter(
+            game_id__in=game_ids,
+            is_ban=False,
+        ).values(*INGEST_DB_FIELDS)
+
+        passed_ids: list[int] = []
+        for item in rows:
+            ingest_row = to_ingest_row(item)
+            if validate_game(ingest_row) is None:
+                passed_ids.append(int(item["game_id"]))
+
+        return sorted(set(passed_ids))
 
     def _load_vectors(self, game_ids: Iterable[int]) -> list[CandidateItem]:
         rows = (
@@ -105,7 +126,7 @@ class MatchCandidatesSelectorService:
             return []
 
         try:
-            iterator = iter(raw)  # numpy.ndarray 포함 iterable 처리
+            iterator = iter(raw)
         except TypeError:
             return []
 

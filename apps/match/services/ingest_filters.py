@@ -11,13 +11,11 @@ from apps.match.constants import (
     MATCH_INGEST_MIN_RATING,
     MATCH_INGEST_MIN_RATING_COUNT,
     MATCH_INGEST_MIN_RELEASE_TS,
-    MATCH_INGEST_REQUIRED_PLATFORM,
     MATCH_INGEST_REQUIRED_STATUS,
 )
 
 ALLOWED_CATEGORIES = set(MATCH_INGEST_ALLOWED_CATEGORIES)
 ALLOWED_STATUS = {MATCH_INGEST_REQUIRED_STATUS}
-PC_PLATFORM_ID = MATCH_INGEST_REQUIRED_PLATFORM
 
 
 def _to_int(value: Any) -> int | None:
@@ -43,27 +41,6 @@ def _to_float(value: Any) -> float | None:
         return None
     except ValueError:
         return None
-
-
-def _as_set(value: Any) -> set[int]:
-    if not value or not isinstance(value, list):
-        return set()
-
-    out: set[int] = set()
-    for v in value:
-        if isinstance(v, bool):
-            continue
-        if isinstance(v, int):
-            out.add(v)
-            continue
-        if isinstance(v, float) and v.is_integer():
-            out.add(int(v))
-            continue
-        if isinstance(v, str):
-            text = v.strip()
-            if text.isdigit():
-                out.add(int(text))
-    return out
 
 
 def _has_description(game: dict[str, Any]) -> bool:
@@ -132,12 +109,6 @@ def _valid_release_ts(game: dict[str, Any]) -> bool:
         return False
 
 
-def _valid_platform(game: dict[str, Any]) -> bool:
-    # PC(id=6) 포함이면 통과
-    platforms = _as_set(game.get("platforms"))
-    return PC_PLATFORM_ID in platforms
-
-
 def _valid_category(game: dict[str, Any]) -> bool:
     # game_type 우선, 없을 때만 category fallback
     raw_game_type = game.get("game_type")
@@ -185,8 +156,6 @@ def validate_game(game: dict[str, Any]) -> str | None:
         return "low_aggregated_rating"
     if not _valid_completeness(game):
         return "incomplete_data"
-    if not _valid_platform(game):
-        return "platform_not_pc"
     if not _valid_release_ts(game):
         return "too_old_release_or_missing"
     return None

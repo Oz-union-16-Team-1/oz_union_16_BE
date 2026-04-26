@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 from apps.games.models import Game
-from apps.match.constants import MATCH_INGEST_REQUIRED_PLATFORM
 
 INGEST_DB_FIELDS: tuple[str, ...] = (
     "game_id",
@@ -37,11 +36,21 @@ def _to_unix_timestamp(value: datetime | None) -> int | None:
     return int(value.timestamp())
 
 
+def to_ingest_row(item: dict[str, Any]) -> dict[str, Any]:
+    row = dict(item)
+    row["id"] = row.get("game_id")
+    row["first_release_date"] = _to_unix_timestamp(row.get("first_release_date"))
+    return row
+
+
 def fetch_ingest_rows_from_game_list(
-    page_size: int, max_pages: int
+    page_size: int,
+    max_pages: int,
 ) -> list[dict[str, Any]]:
     queryset = (
-        Game.objects.filter(is_ban=False).order_by("game_id").values(*INGEST_DB_FIELDS)
+        Game.objects.filter(is_ban=False)
+        .order_by("game_id")
+        .values(*INGEST_DB_FIELDS)
     )
 
     rows: list[dict[str, Any]] = []
@@ -53,13 +62,7 @@ def fetch_ingest_rows_from_game_list(
             break
 
         for item in chunk:
-            row = dict(item)
-            row["id"] = row.pop("game_id")
-            row["first_release_date"] = _to_unix_timestamp(
-                row.get("first_release_date")
-            )
-            row["platforms"] = [MATCH_INGEST_REQUIRED_PLATFORM]
-            rows.append(row)
+            rows.append(to_ingest_row(item))
 
         if len(chunk) < page_size:
             break
