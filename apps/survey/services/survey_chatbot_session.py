@@ -141,11 +141,7 @@ class SurveyChatbotSessionService:
         session: SurveyChatbotSession,
         created: bool,
     ) -> bool:
-        return (
-            created
-            or session.status == SurveyStatusChoices.CLOSED
-            or not session.messages.exists()
-        )
+        return created or not session.messages.exists()
 
     # 설문 세션을 초기 상태로 되돌리고 첫 질문 저장
     def initialize_session(self, session: SurveyChatbotSession) -> None:

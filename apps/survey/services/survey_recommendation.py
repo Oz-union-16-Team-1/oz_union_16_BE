@@ -10,9 +10,9 @@ from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound
 
 from apps.games.models import Game
+from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.survey.constants import (
     SURVEY_ALLOWED_GAME_CATEGORIES,
-    SURVEY_GENRE_NAME_MAP,
     SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR,
 )
 from apps.survey.models import SurveyChatbotSession, SurveyGameVector
@@ -243,7 +243,7 @@ class SurveyGameEmbeddingService:
             if genre_id is None:
                 continue
 
-            name = SURVEY_GENRE_NAME_MAP.get(int(genre_id))
+            name = IGDB_GENRE_NAME_MAP.get(int(genre_id))
             if name and name not in names:
                 names.append(name)
 

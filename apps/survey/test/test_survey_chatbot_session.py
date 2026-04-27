@@ -113,6 +113,43 @@ class SurveyChatbotSessionCreateAPITest(TestCase):
         self.assertEqual(SurveyChatbotSession.objects.filter(user=self.user).count(), 1)
         self.assertEqual(SurveyChatbotMessage.objects.count(), 1)
 
+    def test_create_session_without_reset_keeps_closed_session_data(self) -> None:
+        self.authenticate()
+        session = SurveyChatbotSession.objects.create(
+            user=self.user,
+            status=SurveyStatusChoices.CLOSED,
+            target_question_count=3,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.AI,
+            sequence=1,
+            message="마지막 질문입니다.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="마지막 답변입니다.",
+        )
+        SurveyResults.objects.create(
+            chatbot_session=session,
+            user=self.user,
+            survey_answer="완료된 설문 요약",
+        )
+
+        response = self.client.post(self.url, {"is_reset": False}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["session_id"], str(session.id))
+        self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
+        self.assertEqual(response.data["ai_question"], "마지막 질문입니다.")
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, SurveyStatusChoices.CLOSED)
+        self.assertEqual(session.messages.count(), 2)
+        self.assertTrue(SurveyResults.objects.filter(chatbot_session=session).exists())
+
     def test_create_session_with_reset_creates_new_session_and_clears_previous_data(
         self,
     ) -> None:
