@@ -7,6 +7,7 @@ from apps.users.views.auth_views import (
     TokenRefreshView,
 )
 from apps.users.views.check_duplication_views import CheckIdView, CheckNickNameView
+from apps.users.views.check_pwd_views import PasswordCheckView
 from apps.users.views.social_login_local_views import (
     GoogleLocalCallbackView,
     GoogleLocalLoginView,
@@ -84,5 +85,6 @@ urlpatterns = [
     path("check-nickname", CheckNickNameView.as_view(), name="check-nickname"),
     path("check-id", CheckIdView.as_view(), name="check-id"),
     path("me", UserInfoView.as_view(), name="user-info"),
+    path("me/check-password", PasswordCheckView.as_view(), name="check-password"),
     path("me/change-password", PasswordUpdateView.as_view(), name="change-password"),
 ]
