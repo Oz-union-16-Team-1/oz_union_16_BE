@@ -82,6 +82,50 @@ FALLBACK_CLARIFY_PATTERNS = (
     r"이게\s*무슨",
     r"질문\s*뜻",
 )
+SUMMARY_GENERATION_MAX_ATTEMPTS = 3
+INCOMPLETE_SUMMARY_ENDINGS = (
+    "을",
+    "를",
+    "이",
+    "가",
+    "은",
+    "는",
+    "와",
+    "과",
+    "로",
+    "으로",
+    "의",
+    "에",
+    "에서",
+    "에게",
+    "하며",
+    "하고",
+    "하는",
+)
+DIRECT_GAME_KEYWORD_PATTERNS = (
+    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:이랑|랑|하고|와|과)\s",
+    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:을|를|은|는|이|가)\s*(?:좋|재밌|즐겨|선호|해봤|했)",
+)
+DIRECT_GAME_SUFFIX_PATTERN = (
+    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:처럼|같은|같이)"
+)
+DIRECT_GAME_CONNECTORS = r"(?:이랑|랑|하고|와|과|,|/)"
+DIRECT_GAME_KEYWORD_STOPWORDS = {
+    "게임",
+    "장르",
+    "분위기",
+    "전투",
+    "탐험",
+    "성장",
+    "보스",
+    "보스 몬스터",
+    "스토리",
+    "캐릭터",
+    "스킬",
+    "사이트",
+    "영역",
+    "플레이",
+}
 
 
 class SurveyChatbotSessionClosed(APIException):
@@ -523,13 +567,21 @@ class SurveyChatbotMessageService:
         prompt = SURVEY_CHATBOT_SUMMARY_PROMPT.format(
             user_messages="\n".join(f"- {message}" for message in user_messages)
         )
-        response = self.session_service.generate_question_with_llm(prompt)
-        if not response:
-            raise SurveySummaryGenerationUnavailable()
-        survey_answer, excluded_keywords = self.parse_summary_response(response)
-        if not survey_answer:
-            raise SurveySummaryGenerationUnavailable()
-        return survey_answer, excluded_keywords
+        direct_keywords = self.extract_direct_game_keywords(user_messages)
+
+        for _ in range(SUMMARY_GENERATION_MAX_ATTEMPTS):
+            response = self.session_service.generate_question_with_llm(prompt)
+            if not response:
+                continue
+
+            survey_answer, excluded_keywords = self.parse_summary_response(response)
+            if self.is_complete_summary_answer(survey_answer):
+                merged_keywords = self.normalize_excluded_keywords(
+                    [*excluded_keywords, *direct_keywords]
+                )
+                return survey_answer or "", merged_keywords
+
+        raise SurveySummaryGenerationUnavailable()
 
     def generate_survey_embedding(self, survey_answer: str) -> list[float]:
         api_key = settings.SURVEY_CHATBOT_GEMINI_API_KEY
@@ -591,21 +643,17 @@ class SurveyChatbotMessageService:
             data = json.loads(cleaned)
         except json.JSONDecodeError:
             if '"survey_answer"' in cleaned:
-                return self.extract_survey_answer_from_broken_json(cleaned), []
+                return None, []
             return cleaned or None, []
 
         survey_answer = str(data.get("survey_answer") or "").strip() or None
         raw_keywords = data.get("excluded_keywords") or []
         if isinstance(raw_keywords, str):
-            excluded_keywords = [
-                keyword.strip()
-                for keyword in raw_keywords.split(",")
-                if keyword.strip()
-            ]
+            excluded_keywords = self.normalize_excluded_keywords(
+                raw_keywords.split(",")
+            )
         elif isinstance(raw_keywords, list):
-            excluded_keywords = [
-                str(keyword).strip() for keyword in raw_keywords if str(keyword).strip()
-            ]
+            excluded_keywords = self.normalize_excluded_keywords(raw_keywords)
         else:
             excluded_keywords = []
 
@@ -626,6 +674,78 @@ class SurveyChatbotMessageService:
             return None
 
         return extracted.replace('\\"', '"').replace("\\n", " ").strip()
+
+    def is_complete_summary_answer(self, survey_answer: str | None) -> bool:
+        if not survey_answer:
+            return False
+
+        normalized = survey_answer.strip()
+        if len(normalized) < 20:
+            return False
+        if normalized.endswith(INCOMPLETE_SUMMARY_ENDINGS):
+            return False
+        return True
+
+    def normalize_excluded_keywords(self, keywords: list[Any]) -> list[str]:
+        normalized_keywords = []
+        seen_keywords = set()
+        for keyword in keywords:
+            normalized = self.clean_direct_game_keyword(str(keyword))
+            if not normalized or normalized in seen_keywords:
+                continue
+            seen_keywords.add(normalized)
+            normalized_keywords.append(normalized)
+        return normalized_keywords
+
+    def extract_direct_game_keywords(self, user_messages: list[str]) -> list[str]:
+        suffix_keywords: list[str] = []
+        db_checked_keywords: list[str] = []
+        for message in user_messages:
+            for segment in re.split(DIRECT_GAME_CONNECTORS, message):
+                for match in re.finditer(
+                    DIRECT_GAME_SUFFIX_PATTERN,
+                    segment,
+                    flags=re.IGNORECASE,
+                ):
+                    suffix_keywords.append(match.group("keyword"))
+
+            for pattern in DIRECT_GAME_KEYWORD_PATTERNS:
+                for match in re.finditer(pattern, message, flags=re.IGNORECASE):
+                    db_checked_keywords.append(match.group("keyword"))
+
+        return self.normalize_excluded_keywords(
+            [
+                *suffix_keywords,
+                *self.filter_known_game_keywords(db_checked_keywords),
+            ]
+        )
+
+    def filter_known_game_keywords(self, keywords: list[str]) -> list[str]:
+        candidates = self.normalize_excluded_keywords(keywords)
+        if not candidates:
+            return []
+
+        from apps.games.models import Game
+
+        known_names = set(
+            Game.objects.filter(name__in=candidates).values_list("name", flat=True)
+        )
+        return [keyword for keyword in candidates if keyword in known_names]
+
+    def clean_direct_game_keyword(self, keyword: str) -> str | None:
+        cleaned = keyword.strip(" \n\t.,!?\"'“”‘’()[]{}")
+        cleaned = re.sub(r"^(저는|나는|난|제가|내가)\s+", "", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = re.sub(r"(처럼|같은|이랑|랑)$", "", cleaned).strip()
+        cleaned = re.sub(r"(을|를|은|는|이|가)$", "", cleaned).strip()
+
+        if len(cleaned) < 2:
+            return None
+        if cleaned in DIRECT_GAME_KEYWORD_STOPWORDS:
+            return None
+        if len(cleaned.split()) > 4:
+            return None
+        return cleaned
 
     def build_conversation_text(self, session: SurveyChatbotSession) -> str:
         messages = session.messages.order_by("sequence")

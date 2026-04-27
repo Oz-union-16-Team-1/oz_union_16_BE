@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.games.models import Game
 from apps.survey.choices import SurveyRoleChoices, SurveyStatusChoices
 from apps.survey.models import (
     SurveyChatbotMessage,
@@ -735,6 +736,33 @@ class SurveyChatbotMessageServiceTest(TestCase):
             with self.assertRaises(SurveySummaryGenerationUnavailable):
                 self.service.summarize_session(self.session)
 
+    def test_summarize_session_retries_when_summary_is_incomplete(self) -> None:
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="다크소울처럼 보스 패턴을 익히는 게임이 좋아요.",
+        )
+
+        with patch.object(
+            self.service.session_service,
+            "generate_question_with_llm",
+            side_effect=[
+                '{"survey_answer":"사용자는 보스 패턴을 익히는 전략적인 전투를"',
+                '{"survey_answer":"사용자는 보스 패턴을 익히는 전략적인 전투를 선호합니다.","excluded_keywords":[]}',
+            ],
+        ) as mock_generate:
+            survey_answer, excluded_keywords = self.service.summarize_session(
+                self.session
+            )
+
+        self.assertEqual(mock_generate.call_count, 2)
+        self.assertEqual(
+            survey_answer,
+            "사용자는 보스 패턴을 익히는 전략적인 전투를 선호합니다.",
+        )
+        self.assertEqual(excluded_keywords, ["다크소울"])
+
     def test_parse_summary_response_supports_code_fence_and_string_keywords(
         self,
     ) -> None:
@@ -760,17 +788,14 @@ class SurveyChatbotMessageServiceTest(TestCase):
         self.assertEqual(survey_answer, "취향 요약")
         self.assertEqual(excluded_keywords, [])
 
-    def test_parse_summary_response_extracts_survey_answer_from_truncated_json(
+    def test_parse_summary_response_rejects_truncated_json(
         self,
     ) -> None:
         survey_answer, excluded_keywords = self.service.parse_summary_response(
             '{\n  "survey_answer": "사용자는 보스 패턴을 분석하는 전략적인 전투와 천천히 성장하는 재미를 좋아합니다.'
         )
 
-        self.assertEqual(
-            survey_answer,
-            "사용자는 보스 패턴을 분석하는 전략적인 전투와 천천히 성장하는 재미를 좋아합니다.",
-        )
+        self.assertIsNone(survey_answer)
         self.assertEqual(excluded_keywords, [])
 
     def test_parse_summary_response_handles_empty_extracted_survey_answer(self) -> None:
@@ -787,6 +812,19 @@ class SurveyChatbotMessageServiceTest(TestCase):
         self.assertIsNone(
             self.service.extract_survey_answer_from_broken_json("broken response")
         )
+
+    def test_extract_direct_game_keywords_normalizes_direct_mentions(self) -> None:
+        Game.objects.create(game_id=901, name="엘든링", slug="elden-ring")
+        Game.objects.create(game_id=902, name="철권", slug="tekken")
+
+        keywords = self.service.extract_direct_game_keywords(
+            [
+                "엘든링이랑 다크소울처럼 보스전이 어려운 게임을 좋아해요.",
+                "철권을 좋아하고 스킬은 제외 키워드가 아니어야 해요.",
+            ]
+        )
+
+        self.assertEqual(keywords, ["다크소울", "엘든링", "철권"])
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")
     @patch("apps.survey.services.survey_chatbot_message.requests.post")
