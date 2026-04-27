@@ -69,7 +69,9 @@ class MatchResponsesSubmitService:
         missing_vector_ids: list[int] = []
 
         with transaction.atomic():
-            pref, _ = UserPreference.objects.select_for_update().get_or_create(user_id=user_id)
+            pref, _ = UserPreference.objects.select_for_update().get_or_create(
+                user_id=user_id
+            )
             user_vector = self._to_user_vector(pref.match_vector)
 
             for item in normalized:
@@ -133,13 +135,17 @@ class MatchResponsesSubmitService:
         match_result: list[dict[str, Any]],
     ) -> list[NormalizedResponse]:
         if not match_result:
-            raise MatchResponsesValidationError("match_result는 최소 1개 이상이어야 합니다.")
+            raise MatchResponsesValidationError(
+                "match_result는 최소 1개 이상이어야 합니다."
+            )
 
         by_game_id: dict[int, NormalizedResponse] = {}
 
         for row in match_result:
             if not isinstance(row, dict):
-                raise MatchResponsesValidationError("match_result 형식이 올바르지 않습니다.")
+                raise MatchResponsesValidationError(
+                    "match_result 형식이 올바르지 않습니다."
+                )
 
             game_id = self._parse_int_strict(row.get("game_id"), field_name="game_id")
             rating = self._parse_int_strict(row.get("rating"), field_name="rating")
@@ -204,7 +210,9 @@ class MatchResponsesSubmitService:
 
         invalid = sorted(set(submitted_game_ids) - expected_ids)
         if invalid:
-            raise MatchResponsesValidationError("후보 세트에 없는 game_id가 포함되어 있습니다.")
+            raise MatchResponsesValidationError(
+                "후보 세트에 없는 game_id가 포함되어 있습니다."
+            )
 
     def _ensure_games_exist(self, game_ids: list[int]) -> None:
         existing = set(
@@ -257,7 +265,14 @@ class MatchResponsesSubmitService:
         row.star_rating = rating
         row.effective_rating = Decimal(f"{effective:.2f}")
         row.rating_count = n + 1
-        row.save(update_fields=["star_rating", "effective_rating", "rating_count", "updated_at"])
+        row.save(
+            update_fields=[
+                "star_rating",
+                "effective_rating",
+                "rating_count",
+                "updated_at",
+            ]
+        )
         return float(row.effective_rating)
 
     def _sync_like(self, *, user_id: int, game_id: int, is_liked: bool | None) -> None:
@@ -272,7 +287,10 @@ class MatchResponsesSubmitService:
         UserLikeBookmark.objects.filter(user_id=user_id, game_id=game_id).delete()
 
     def _rating_to_weight(self, effective_rating: float) -> float:
-        x = max(float(MATCH_RESPONSE_MIN_STAR), min(float(MATCH_RESPONSE_MAX_STAR), float(effective_rating)))
+        x = max(
+            float(MATCH_RESPONSE_MIN_STAR),
+            min(float(MATCH_RESPONSE_MAX_STAR), float(effective_rating)),
+        )
         points = (
             (1.0, -1.0),
             (2.0, -0.5),
@@ -290,7 +308,9 @@ class MatchResponsesSubmitService:
 
         return 1.0
 
-    def _accumulate(self, target: list[float], source: list[float], scale: float) -> None:
+    def _accumulate(
+        self, target: list[float], source: list[float], scale: float
+    ) -> None:
         for idx in range(MATCH_VECTOR_DIM):
             target[idx] += source[idx] * scale
 
@@ -316,7 +336,7 @@ class MatchResponsesSubmitService:
         for value in raw:
             try:
                 result.append(float(value))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return [0.0] * MATCH_VECTOR_DIM
 
         if len(result) < MATCH_VECTOR_DIM:
@@ -336,7 +356,7 @@ class MatchResponsesSubmitService:
         for value in raw:
             try:
                 result.append(float(value))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 return None
 
         if len(result) < MATCH_VECTOR_DIM:

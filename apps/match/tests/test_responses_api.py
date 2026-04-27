@@ -228,10 +228,14 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
                     user_id=self.user.id,
                     genre_id=2,
                     retry_no=0,
-                    match_result=[{"game_id": self.game_no_vector.game_id, "rating": 4}],
+                    match_result=[
+                        {"game_id": self.game_no_vector.game_id, "rating": 4}
+                    ],
                 )
 
-        self.assertEqual(result["match_result"][0]["game_id"], self.game_no_vector.game_id)
+        self.assertEqual(
+            result["match_result"][0]["game_id"], self.game_no_vector.game_id
+        )
         self.assertIn("vector missing", "\n".join(logs.output))
         self.assertTrue(
             MatchGameRating.objects.filter(

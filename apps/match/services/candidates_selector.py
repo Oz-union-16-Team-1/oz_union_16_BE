@@ -28,14 +28,14 @@ class CandidateItem:
 
 class MatchCandidatesSelectorService:
     def select_game_ids(
-            self,
-            *,
-            user_id: int,
-            api_genre_id: int,
-            retry_no: int = 0,
-            today: date | None = None,
-            max_count: int = MATCH_CANDIDATE_MAX_COUNT,
-            pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
+        self,
+        *,
+        user_id: int,
+        api_genre_id: int,
+        retry_no: int = 0,
+        today: date | None = None,
+        max_count: int = MATCH_CANDIDATE_MAX_COUNT,
+        pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
     ) -> list[int]:
         target_genres = API_TO_IGDB_GENRE_MAP.get(api_genre_id, [])
         if not target_genres:
@@ -121,7 +121,9 @@ class MatchCandidatesSelectorService:
 
         return sorted(set(passed_ids))
 
-    def _load_candidates_from_game_ids(self, game_ids: Iterable[int]) -> list[CandidateItem]:
+    def _load_candidates_from_game_ids(
+        self, game_ids: Iterable[int]
+    ) -> list[CandidateItem]:
         normalized_ids = sorted(set(game_ids))
         if not normalized_ids:
             return []
