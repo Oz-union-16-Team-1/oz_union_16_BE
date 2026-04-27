@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -243,6 +244,122 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
                 game_id=self.game_no_vector.game_id,
             ).exists()
         )
+
+    def test_submit_rejects_empty_match_result(self):
+        with self.assertRaises(MatchResponsesValidationError):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                match_result=[],
+            )
+
+    def test_submit_rejects_non_dict_item(self):
+        with self.assertRaises(MatchResponsesValidationError):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                match_result=["bad-item"],
+            )
+
+    def test_submit_rejects_invalid_value_ranges(self):
+        cases = [
+            [{"game_id": 0, "rating": 3, "is_liked": False}],
+            [{"game_id": self.game1.game_id, "rating": 0, "is_liked": False}],
+            [{"game_id": self.game1.game_id, "rating": 6, "is_liked": False}],
+            [{"game_id": self.game1.game_id, "rating": 3, "is_liked": "yes"}],
+        ]
+        for payload in cases:
+            with self.subTest(payload=payload):
+                with self.assertRaises(MatchResponsesValidationError):
+                    self.service.submit(
+                        user_id=self.user.id,
+                        genre_id=2,
+                        retry_no=0,
+                        match_result=payload,
+                    )
+
+    def test_parse_int_strict_branches(self):
+        self.assertEqual(
+            self.service._parse_int_strict("12", field_name="game_id"),
+            12,
+        )
+        self.assertEqual(
+            self.service._parse_int_strict("-7", field_name="game_id"),
+            -7,
+        )
+        with self.assertRaises(MatchResponsesValidationError):
+            self.service._parse_int_strict("", field_name="game_id")
+        with self.assertRaises(MatchResponsesValidationError):
+            self.service._parse_int_strict("  ", field_name="game_id")
+        with self.assertRaises(MatchResponsesValidationError):
+            self.service._parse_int_strict("12a", field_name="game_id")
+
+    def test_upsert_rating_row_integrityerror_fallback_path(self):
+        existing = MatchGameRating.objects.create(
+            user=self.user,
+            game_id=self.game1.game_id,
+            star_rating=3,
+            effective_rating="3.00",
+            rating_count=1,
+        )
+
+        with (
+            patch(
+                "apps.match.services.responses_submit.MatchGameRating.objects.get_or_create",
+                side_effect=IntegrityError,
+            ),
+            patch(
+                "apps.match.services.responses_submit.MatchGameRating.objects.get",
+                return_value=existing,
+            ),
+        ):
+            effective = self.service._upsert_rating_row(
+                user_id=self.user.id,
+                game_id=self.game1.game_id,
+                rating=4,
+            )
+
+        self.assertAlmostEqual(effective, 3.5, places=2)
+
+    def test_to_user_vector_branches(self):
+        self.assertEqual(self.service._to_user_vector("bad"), [0.0] * 14)
+        self.assertEqual(self.service._to_user_vector(None), [0.0] * 14)
+        self.assertEqual(self.service._to_user_vector([1, "x"]), [0.0] * 14)
+
+        padded = self.service._to_user_vector([1.0, 2.0])
+        self.assertEqual(padded[:2], [1.0, 2.0])
+        self.assertEqual(len(padded), 14)
+
+    def test_to_game_vector_branches(self):
+        self.assertIsNone(self.service._to_game_vector(None))
+        self.assertIsNone(self.service._to_game_vector("bad"))
+        self.assertIsNone(self.service._to_game_vector([1, "x"]))
+
+        padded = self.service._to_game_vector([0.1, 0.2])
+        self.assertIsNotNone(padded)
+        self.assertEqual(padded[:2], [0.1, 0.2])
+        self.assertEqual(len(padded), 14)
+
+    def test_submit_rating_one_inverse_branch(self):
+        with patch(
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            return_value=[self.game1.game_id],
+        ):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                match_result=[{"game_id": self.game1.game_id, "rating": 1}],
+            )
+
+        row = MatchGameRating.objects.get(user=self.user, game_id=self.game1.game_id)
+        self.assertEqual(row.star_rating, 1)
+        self.assertEqual(row.rating_count, 1)
+
+        pref = UserPreference.objects.get(user=self.user)
+        self.assertEqual(len(pref.match_vector), 14)
 
 
 class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
