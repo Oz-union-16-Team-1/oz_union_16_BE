@@ -167,6 +167,86 @@ class SurveyChatbotSessionCreateAPITest(TestCase):
         self.assertEqual(messages[0].sequence, 1)
 
 
+class SurveyChatbotSessionResetAPITest(TestCase):
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cls.url = reverse("survey-chatbot-session-reset")
+
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.user = create_user()
+        self.question_patcher = patch(
+            "apps.survey.services.survey_chatbot_session."
+            "SurveyChatbotSessionService.generate_question_with_llm",
+            return_value=TEST_FIRST_QUESTION,
+        )
+        self.question_patcher.start()
+        self.addCleanup(self.question_patcher.stop)
+
+    def authenticate(self) -> None:
+        self.client.force_authenticate(user=self.user)
+
+    def test_authentication_required(self) -> None:
+        response = self.client.post(self.url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_reset_session_creates_fresh_session(self) -> None:
+        self.authenticate()
+        old_session = SurveyChatbotSession.objects.create(
+            user=self.user,
+            status=SurveyStatusChoices.IN_PROGRESS,
+            target_question_count=3,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=old_session,
+            role=SurveyRoleChoices.AI,
+            sequence=1,
+            message="이전 질문",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=old_session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="이전 답변",
+        )
+        SurveyResults.objects.create(
+            chatbot_session=old_session,
+            user=self.user,
+            survey_answer="이전 요약",
+        )
+
+        response = self.client.post(self.url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], SurveyStatusChoices.OPEN)
+        self.assertEqual(
+            response.data["progress"],
+            {
+                "current_step": 0,
+                "total_steps": None,
+                "completion_rate": None,
+            },
+        )
+        self.assertFalse(
+            SurveyChatbotSession.objects.filter(id=old_session.id).exists()
+        )
+
+        new_session = SurveyChatbotSession.objects.get(user=self.user)
+        self.assertEqual(str(new_session.id), str(response.data["session_id"]))
+        self.assertEqual(new_session.messages.count(), 1)
+        self.assertEqual(new_session.messages.first().message, TEST_FIRST_QUESTION)
+
+    def test_reset_session_without_existing_session_creates_new_one(self) -> None:
+        self.authenticate()
+
+        response = self.client.post(self.url, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], SurveyStatusChoices.OPEN)
+        self.assertEqual(SurveyChatbotSession.objects.filter(user=self.user).count(), 1)
+
+
 class SurveyChatbotSessionServiceTest(TestCase):
     def test_default_prompt_constant_exists(self) -> None:
         self.assertIn("첫 질문 생성 규칙", SURVEY_CHATBOT_PROMPT)
