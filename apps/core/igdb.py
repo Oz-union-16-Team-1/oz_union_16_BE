@@ -62,9 +62,9 @@ class IGDB:
         final_query = " ".join(query_parts)
         return self.query_games_raw(final_query)
 
-    def get_games(self, genre_id=None, limit=20, offset=0):
+    def get_games(self, genre_id=None, limit=500, offset=0, pc_only=False):
         """기본 게임 목록 조회 (평점순)"""
-        where_clause = ""
+        where_conditions = []
 
         full_fields = [
             "name",
@@ -106,11 +106,18 @@ class IGDB:
             target_genre_ids = self.genre_mapping.get(gid, [])
             if target_genre_ids:
                 ids_str = ",".join(map(str, target_genre_ids))
-                where_clause += f" & genres = ({ids_str})"
+                where_conditions.append(f"genres = ({ids_str})")
+
+        if pc_only:
+            where_conditions.append("platforms = (6)")
+
+        where_part = ""
+        if where_conditions:
+            where_part = f"where {' & '.join(where_conditions)}; "
 
         query = (
             f"fields {fields_str}; "
-            f"where {where_clause}; "
+            f"{where_part}"
             f"sort total_rating desc; "
             f"limit {limit}; "
             f"offset {offset};"

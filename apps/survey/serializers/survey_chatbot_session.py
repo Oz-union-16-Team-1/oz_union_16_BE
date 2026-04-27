@@ -27,6 +27,12 @@ class SurveyChatbotSessionCreateResponseSerializer(serializers.Serializer):
     recommendation_ready = serializers.BooleanField()
 
 
+class SurveyChatbotSessionResetResponseSerializer(
+    SurveyChatbotSessionCreateResponseSerializer
+):
+    """설문 챗봇 세션 초기화 응답"""
+
+
 class SurveyErrorResponseSerializer(serializers.Serializer):
     """설문 API 에러 응답"""
 

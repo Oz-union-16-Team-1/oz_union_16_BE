@@ -6,6 +6,8 @@ from apps.users.views.auth_views import (
     SignUpView,
     TokenRefreshView,
 )
+from apps.users.views.check_duplication_views import CheckIdView, CheckNickNameView
+from apps.users.views.check_pwd_views import PasswordCheckView
 from apps.users.views.social_login_local_views import (
     GoogleLocalCallbackView,
     GoogleLocalLoginView,
@@ -22,6 +24,8 @@ from apps.users.views.social_login_views import (
     NaverCallbackView,
     NaverLoginView,
 )
+from apps.users.views.user_change_pwd_views import PasswordUpdateView
+from apps.users.views.user_info_views import UserInfoView
 
 urlpatterns = [
     path("signup", SignUpView.as_view(), name="signup"),  # Auth
@@ -78,4 +82,9 @@ urlpatterns = [
         GoogleLocalCallbackView.as_view(),
         name="google-local-callback",
     ),
+    path("check-nickname", CheckNickNameView.as_view(), name="check-nickname"),
+    path("check-id", CheckIdView.as_view(), name="check-id"),
+    path("me", UserInfoView.as_view(), name="user-info"),
+    path("me/check-password", PasswordCheckView.as_view(), name="check-password"),
+    path("me/change-password", PasswordUpdateView.as_view(), name="change-password"),
 ]
