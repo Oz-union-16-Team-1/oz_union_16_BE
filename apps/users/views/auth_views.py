@@ -71,7 +71,7 @@ class LoginView(APIView):
         responses={
             200: OpenApiResponse(
                 description="로그인 성공",
-                response=serializers.Serializer,  # 실제 반환하는 {'access_token': ...} 구조
+                response=serializers.Serializer,
             ),
             400: OpenApiResponse(
                 description="error_detail: password: [이 필드는 필수 항목입니다.]"

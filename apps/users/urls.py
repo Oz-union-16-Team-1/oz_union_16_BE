@@ -23,6 +23,7 @@ from apps.users.views.social_login_views import (
     NaverCallbackView,
     NaverLoginView,
 )
+from apps.users.views.user_change_pwd_views import PasswordUpdateView
 from apps.users.views.user_info_views import UserInfoView
 
 urlpatterns = [
@@ -83,4 +84,5 @@ urlpatterns = [
     path("check-nickname", CheckNickNameView.as_view(), name="check-nickname"),
     path("check-id", CheckIdView.as_view(), name="check-id"),
     path("me", UserInfoView.as_view(), name="user-info"),
+    path("me/change-password", PasswordUpdateView.as_view(), name="change-password"),
 ]
