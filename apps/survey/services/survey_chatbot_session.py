@@ -17,6 +17,10 @@ from apps.survey.choices import (
 from apps.survey.models import SurveyChatbotMessage, SurveyChatbotSession
 from apps.survey.prompts.survey_chatbot_prompt import SURVEY_CHATBOT_PROMPT
 
+SURVEY_COMPLETION_MESSAGE = (
+    "설문이 종료되었습니다 추천 게임 보기 버튼을 클릭해서 추천된 게임을 확인해보세요!"
+)
+
 
 class SurveyQuestionGenerationUnavailable(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -117,6 +121,7 @@ class SurveyChatbotSessionService:
             status=session.status,
             ai_question=question,
             progress=self.build_progress(session),
+            recommendation_ready=session.status == SurveyStatusChoices.CLOSED,
         )
 
     # 유저당 하나의 설문 세션만 유지하도록 세션을 조회하거나 생성
@@ -166,6 +171,9 @@ class SurveyChatbotSessionService:
 
     # 현재 세션에서 유저에게 보여줄 마지막 AI 질문을 가져옴
     def get_current_question(self, session: SurveyChatbotSession) -> str:
+        if session.status == SurveyStatusChoices.CLOSED:
+            return SURVEY_COMPLETION_MESSAGE
+
         message = (
             session.messages.filter(role=SurveyRoleChoices.AI)
             .order_by("-sequence")

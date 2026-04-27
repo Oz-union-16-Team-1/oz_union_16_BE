@@ -19,6 +19,7 @@ from apps.survey.models import (
 )
 from apps.survey.prompts.survey_chatbot_prompt import SURVEY_CHATBOT_PROMPT
 from apps.survey.services.survey_chatbot_session import (
+    SURVEY_COMPLETION_MESSAGE,
     SurveyChatbotSessionService,
     SurveyQuestionGenerationUnavailable,
 )
@@ -143,12 +144,45 @@ class SurveyChatbotSessionCreateAPITest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["session_id"], str(session.id))
         self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
-        self.assertEqual(response.data["ai_question"], "마지막 질문입니다.")
+        self.assertEqual(response.data["ai_question"], SURVEY_COMPLETION_MESSAGE)
+        self.assertTrue(response.data["recommendation_ready"])
 
         session.refresh_from_db()
         self.assertEqual(session.status, SurveyStatusChoices.CLOSED)
         self.assertEqual(session.messages.count(), 2)
         self.assertTrue(SurveyResults.objects.filter(chatbot_session=session).exists())
+
+    def test_create_session_closed_session_without_ai_message_does_not_generate_question(
+        self,
+    ) -> None:
+        self.authenticate()
+        session = SurveyChatbotSession.objects.create(
+            user=self.user,
+            status=SurveyStatusChoices.CLOSED,
+            target_question_count=1,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.USER,
+            sequence=1,
+            message="완료된 답변입니다.",
+        )
+        SurveyResults.objects.create(
+            chatbot_session=session,
+            user=self.user,
+            survey_answer="완료된 설문 요약",
+        )
+
+        response = self.client.post(self.url, {"is_reset": False}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["session_id"], str(session.id))
+        self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
+        self.assertEqual(response.data["ai_question"], SURVEY_COMPLETION_MESSAGE)
+        self.assertTrue(response.data["recommendation_ready"])
+        self.assertEqual(
+            SurveyChatbotMessage.objects.filter(session=session).count(), 1
+        )
 
     def test_create_session_with_reset_creates_new_session_and_clears_previous_data(
         self,

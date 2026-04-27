@@ -32,6 +32,7 @@ from apps.survey.prompts.survey_chatbot_summary_prompt import (
     SURVEY_CHATBOT_SUMMARY_PROMPT,
 )
 from apps.survey.services.survey_chatbot_session import (
+    SURVEY_COMPLETION_MESSAGE,
     SurveyChatbotSessionService,
     SurveyQuestionGenerationUnavailable,
 )
@@ -40,9 +41,6 @@ from apps.users.models import UserPreference
 UNRELATED_COUNT_TTL = 60 * 30
 UNRELATED_LOCK_SECONDS = 60 * 5
 UNRELATED_MAX_ATTEMPTS = 3
-SURVEY_COMPLETION_MESSAGE = (
-    "설문이 종료되었습니다 추천 게임 보기 버튼을 클릭해서 추천된 게임을 확인해보세요!"
-)
 OBVIOUS_UNRELATED_PATTERNS = (
     r"프롬프트",
     r"system prompt",
