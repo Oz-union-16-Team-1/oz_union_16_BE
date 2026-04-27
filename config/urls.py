@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin  # type: ignore
 from django.urls import include, path  # type: ignore
 from drf_spectacular.views import (
@@ -20,3 +22,5 @@ urlpatterns = [
     path("api/v1/accounts/", include("apps.users.urls")),
     path("api/v1/chatbot/", include("apps.chatbot.urls.urls")),
 ]
+
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
