@@ -336,7 +336,9 @@ class MatchResponsesSubmitService:
         for value in raw:
             try:
                 result.append(float(value))
-            except TypeError, ValueError:
+            except TypeError:
+                return [0.0] * MATCH_VECTOR_DIM
+            except ValueError:
                 return [0.0] * MATCH_VECTOR_DIM
 
         if len(result) < MATCH_VECTOR_DIM:
@@ -356,7 +358,9 @@ class MatchResponsesSubmitService:
         for value in raw:
             try:
                 result.append(float(value))
-            except TypeError, ValueError:
+            except TypeError:
+                return None
+            except ValueError:
                 return None
 
         if len(result) < MATCH_VECTOR_DIM:
