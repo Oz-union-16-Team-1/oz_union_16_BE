@@ -28,14 +28,14 @@ class CandidateItem:
 
 class MatchCandidatesSelectorService:
     def select_game_ids(
-        self,
-        *,
-        user_id: int,
-        api_genre_id: int,
-        retry_no: int = 0,
-        today: date | None = None,
-        max_count: int = MATCH_CANDIDATE_MAX_COUNT,
-        pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
+            self,
+            *,
+            user_id: int,
+            api_genre_id: int,
+            retry_no: int = 0,
+            today: date | None = None,
+            max_count: int = MATCH_CANDIDATE_MAX_COUNT,
+            pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
     ) -> list[int]:
         target_genres = API_TO_IGDB_GENRE_MAP.get(api_genre_id, [])
         if not target_genres:
@@ -48,10 +48,10 @@ class MatchCandidatesSelectorService:
             )
         )
 
+        # 1) 장르 전체 후보(좋아요 포함) 먼저 확보
         candidate_game_ids = sorted(
             set(
                 MatchGameGenreMap.objects.filter(igdb_genre_id__in=target_genres)
-                .exclude(game_id_id__in=liked_game_ids)
                 .values_list("game_id_id", flat=True)
                 .distinct()
             )
@@ -59,24 +59,9 @@ class MatchCandidatesSelectorService:
         if not candidate_game_ids:
             return []
 
-        allowed_game_ids = sorted(
-            set(
-                Game.objects.filter(
-                    game_id__in=candidate_game_ids,
-                    is_ban=False,
-                ).values_list("game_id", flat=True)
-            )
-        )
-        if not allowed_game_ids:
-            return []
-
-        filtered_game_ids = self._apply_ingest_filters(allowed_game_ids)
-        if not filtered_game_ids:
-            return []
-
-        candidates = self._load_vectors(filtered_game_ids)
-        if not candidates:
-            return []
+        # 2) 1차: liked 제외 풀
+        unliked_ids = [gid for gid in candidate_game_ids if gid not in liked_game_ids]
+        unliked_candidates = self._load_candidates_from_game_ids(unliked_ids)
 
         safe_retry_no = self._safe_retry_no(retry_no)
         rng = random.Random(
@@ -88,8 +73,38 @@ class MatchCandidatesSelectorService:
             )
         )
 
-        pool = self._build_pool(candidates, rng=rng, pool_size=pool_size)
-        selected = self._maximin_select(pool=pool, limit=max_count)
+        selected: list[CandidateItem] = []
+        if unliked_candidates:
+            unliked_pool = self._build_pool(
+                unliked_candidates,
+                rng=rng,
+                pool_size=pool_size,
+            )
+            selected = self._maximin_select(pool=unliked_pool, limit=max_count)
+
+        # 3) 부족하면 liked 풀로 보충
+        if len(selected) < max_count:
+            liked_ids = [gid for gid in candidate_game_ids if gid in liked_game_ids]
+            liked_candidates = self._load_candidates_from_game_ids(liked_ids)
+
+            used_ids = {item.game_id for item in selected}
+            liked_candidates = [
+                item for item in liked_candidates if item.game_id not in used_ids
+            ]
+
+            if liked_candidates:
+                liked_pool = self._build_pool(
+                    liked_candidates,
+                    rng=rng,
+                    pool_size=pool_size,
+                )
+                selected.extend(
+                    self._maximin_select(
+                        pool=liked_pool,
+                        limit=max_count - len(selected),
+                    )
+                )
+
         return [item.game_id for item in selected]
 
     def _apply_ingest_filters(self, game_ids: Iterable[int]) -> list[int]:
@@ -105,6 +120,28 @@ class MatchCandidatesSelectorService:
                 passed_ids.append(int(item["game_id"]))
 
         return sorted(set(passed_ids))
+
+    def _load_candidates_from_game_ids(self, game_ids: Iterable[int]) -> list[CandidateItem]:
+        normalized_ids = sorted(set(game_ids))
+        if not normalized_ids:
+            return []
+
+        allowed_game_ids = sorted(
+            set(
+                Game.objects.filter(
+                    game_id__in=normalized_ids,
+                    is_ban=False,
+                ).values_list("game_id", flat=True)
+            )
+        )
+        if not allowed_game_ids:
+            return []
+
+        filtered_game_ids = self._apply_ingest_filters(allowed_game_ids)
+        if not filtered_game_ids:
+            return []
+
+        return self._load_vectors(filtered_game_ids)
 
     def _load_vectors(self, game_ids: Iterable[int]) -> list[CandidateItem]:
         rows = (
