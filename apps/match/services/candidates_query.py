@@ -83,7 +83,7 @@ class MatchCandidatesQueryService:
                 results.append(
                     {
                         "game_id": game_id,
-                        "name": str(row.get("name") or ""),
+                        "title": str(row.get("name") or ""),
                         "trailer_url": self._to_trailer_url(row.get("videos")),
                         "is_liked": game_id in liked_ids,
                         "description": self._normalize_description(
