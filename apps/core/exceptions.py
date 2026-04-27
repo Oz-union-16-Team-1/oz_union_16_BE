@@ -11,6 +11,12 @@ class ConflictException(APIException):
         self.detail = {field: [detail]}
 
 
+class AuthenticationFailedException(APIException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    default_detail = "비밀번호가 일치하지 않습니다."
+    default_code = "authentication_failed"
+
+
 def _flatten(value) -> str | dict:
     """
     ErrorDetail 리스트 또는 중첩 dict를 평탄화합니다.
@@ -27,7 +33,7 @@ def _flatten(value) -> str | dict:
 
 # 예외 타입별 커스텀 메시지
 CUSTOM_MESSAGES = {
-    NotAuthenticated: "인증 정보가 유효하지 않거나 만료되었습니다.",
+    NotAuthenticated: "자격 인증 데이터가 제공되지 않았습니다.",
 }
 
 
