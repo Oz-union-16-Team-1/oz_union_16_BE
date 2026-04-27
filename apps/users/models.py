@@ -90,25 +90,28 @@ class SocialUser(TimeStampedModel):
 
 
 class UserLikeBookmark(TimeStampedModel):
-    game_id = models.IntegerField()
+    game = models.ForeignKey(
+        "games.Game",
+        on_delete=models.CASCADE,
+        related_name="liked_by_users",
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        db_column="user_id",
         related_name="like_bookmarks",
     )
 
     class Meta:
-        db_table = (
-            "user_like_bookmarks"  # 사용자-게임 북마크는 1회만 허용 (중복 좋아요 방지)
-        )
+        db_table = "user_like_bookmarks"
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "game_id"],
-                name="uq_user_game_bookmark",
+                fields=["user", "game"],
+                name="unique_user_game_like",
             )
         ]
 
+    def __str__(self):
+        return f"{self.user} likes {self.game}"
 
 class UserPreference(
     TimeStampedModel
