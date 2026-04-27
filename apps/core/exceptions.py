@@ -15,6 +15,7 @@ class ConflictException(APIException):
     def __init__(self, field: str, detail: str):
         self.detail = {field: [detail]}
 
+
 def _flatten(value) -> str | dict:
     """
     ErrorDetail 리스트 또는 중첩 dict를 평탄화합니다.
