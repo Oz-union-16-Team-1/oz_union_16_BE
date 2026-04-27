@@ -119,7 +119,6 @@ class MatchResponsesSubmitService:
         )
 
         return {
-            "user_id": user_id,
             "match_result": [
                 {
                     "game_id": item.game_id,

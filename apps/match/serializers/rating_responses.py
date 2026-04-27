@@ -39,8 +39,7 @@ class MatchResponsesRequestSerializer(serializers.Serializer):
         },
     )
     retry_no = serializers.IntegerField(
-        required=False,
-        default=0,
+        required=True,
         min_value=0,
         error_messages={
             "invalid": "정수 형태로 입력해주세요.",
@@ -58,5 +57,4 @@ class MatchResponseResultSerializer(serializers.Serializer):
 
 
 class MatchResponsesResponseSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField(read_only=True)
     match_result = MatchResponseResultSerializer(many=True, read_only=True)

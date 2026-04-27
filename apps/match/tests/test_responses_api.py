@@ -98,7 +98,7 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
                 ],
             )
 
-        self.assertEqual(result["user_id"], self.user.id)
+        self.assertEqual(set(result.keys()), {"match_result"})
         self.assertEqual(len(result["match_result"]), 2)
 
         result_map = {row["game_id"]: row for row in result["match_result"]}
@@ -397,7 +397,6 @@ class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
             response = self.client.post(self.url, payload, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["user_id"], self.user.id)
         self.assertEqual(len(response.data["match_result"]), 2)
 
     def test_post_responses_duplicate_game_last_write_wins(self):
@@ -479,3 +478,15 @@ class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(response.data["error_detail"], "해당 게임을 찾을 수 없습니다.")
+
+    def test_post_responses_missing_retry_no_returns_400(self):
+        response = self.client.post(
+            self.url,
+            {
+                "genre_id": 2,
+                "match_result": [{"game_id": self.game1.game_id, "rating": 4}],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("retry_no", response.data["error_detail"])
