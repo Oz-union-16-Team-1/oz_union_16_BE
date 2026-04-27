@@ -113,6 +113,7 @@ class UserLikeBookmark(TimeStampedModel):
     def __str__(self):
         return f"{self.user} likes {self.game}"
 
+
 class UserPreference(
     TimeStampedModel
 ):  # 사용자 선호 벡터는 유저당 1행(OneToOne)으로 유지
