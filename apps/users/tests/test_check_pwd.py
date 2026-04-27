@@ -31,7 +31,6 @@ class MyInfoTest(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-
     def test_password_check_success(self):
         """비밀번호 확인 API 성공 테스트"""
         self.client.force_authenticate(user=self.user)
@@ -40,9 +39,10 @@ class MyInfoTest(TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-
     def test_password_check_fail(self):
         """비밀번호 확인 API 실패 테스트"""
         self.client.force_authenticate(user=self.user)
-        response = self.client.post(reverse("check-password"), data={"password": "wrong"})
+        response = self.client.post(
+            reverse("check-password"), data={"password": "wrong"}
+        )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
