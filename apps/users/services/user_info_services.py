@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 
-from apps.core.exceptions import AuthenticationFailedException, ConflictException
+from apps.core.exceptions import ConflictException
 
 User = get_user_model()
 
