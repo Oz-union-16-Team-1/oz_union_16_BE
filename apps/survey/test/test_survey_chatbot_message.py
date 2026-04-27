@@ -809,8 +809,13 @@ class SurveyChatbotMessageServiceTest(TestCase):
     def test_generate_survey_embedding_raises_on_request_error(self, mock_post) -> None:
         mock_post.side_effect = requests.RequestException
 
-        with self.assertRaises(SurveyEmbeddingGenerationUnavailable):
+        with (
+            patch("apps.survey.services.survey_chatbot_message.logging") as logging,
+            self.assertRaises(SurveyEmbeddingGenerationUnavailable),
+        ):
             self.service.generate_survey_embedding("격투 게임을 좋아합니다.")
+
+        logging.getLogger.return_value.exception.assert_called_once()
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")
     @patch("apps.survey.services.survey_chatbot_message.requests.post")
@@ -822,8 +827,13 @@ class SurveyChatbotMessageServiceTest(TestCase):
         mock_response.raise_for_status.return_value = None
         mock_response.text = "{}"
 
-        with self.assertRaises(SurveyEmbeddingGenerationUnavailable):
+        with (
+            patch("apps.survey.services.survey_chatbot_message.logging") as logging,
+            self.assertRaises(SurveyEmbeddingGenerationUnavailable),
+        ):
             self.service.generate_survey_embedding("격투 게임을 좋아합니다.")
+
+        logging.getLogger.return_value.warning.assert_called_once()
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY=None)
     def test_generate_survey_embedding_raises_without_api_key(self) -> None:

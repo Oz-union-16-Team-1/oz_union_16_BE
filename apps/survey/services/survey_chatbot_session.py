@@ -43,6 +43,29 @@ class SurveyChatbotSessionCreateResult:
 
 
 class SurveyChatbotSessionService:
+    QUESTION_ENDINGS = (
+        "요?",
+        "나요?",
+        "까요?",
+        "주세요.",
+        "주세요",
+        "말해주세요.",
+        "말해주세요",
+        "가요?",
+        "가요",
+        "인가요?",
+        "인가요",
+        "한가요?",
+        "한가요",
+    )
+    YES_NO_STYLE_ENDINGS = (
+        "좋아하시나요?",
+        "좋아하시나요",
+        "선호하시나요?",
+        "선호하시나요",
+        "즐거우신가요?",
+        "즐거우신가요",
+    )
     FIRST_QUESTION_ANGLES = (
         "최근 가장 재미있었던 게임 경험",
         "오래 몰입하게 만든 요소",
@@ -264,17 +287,7 @@ class SurveyChatbotSessionService:
         question = question.strip()
         return (
             len(question) >= 30
-            and question.endswith(
-                (
-                    "요?",
-                    "나요?",
-                    "까요?",
-                    "주세요.",
-                    "주세요",
-                    "말해주세요.",
-                    "말해주세요",
-                )
-            )
+            and question.endswith(self.QUESTION_ENDINGS)
             and (
                 any(hint in question for hint in self.OPEN_ENDED_QUESTION_HINTS)
                 or any(hint in question for hint in self.COMPARISON_QUESTION_HINTS)
@@ -292,7 +305,7 @@ class SurveyChatbotSessionService:
             hint in normalized for hint in self.COMPARISON_QUESTION_HINTS
         )
         if not is_comparison_question and normalized.endswith(
-            ("좋아하시나요?", "선호하시나요?", "즐거우신가요?")
+            self.YES_NO_STYLE_ENDINGS
         ):
             return False
 

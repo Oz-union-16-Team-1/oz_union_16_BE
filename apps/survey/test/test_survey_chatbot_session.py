@@ -249,7 +249,10 @@ class SurveyChatbotSessionResetAPITest(TestCase):
 
 class SurveyChatbotSessionServiceTest(TestCase):
     def test_default_prompt_constant_exists(self) -> None:
-        self.assertIn("첫 질문 생성 규칙", SURVEY_CHATBOT_PROMPT)
+        self.assertIn("장르나 게임 종류를 좋아하는지", SURVEY_CHATBOT_PROMPT)
+        self.assertIn(
+            "세계관, 분위기, 감정 몰입부터 바로 묻는 질문", SURVEY_CHATBOT_PROMPT
+        )
 
     def test_initialize_session_clears_existing_result(self) -> None:
         user = create_user()
@@ -473,6 +476,11 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 "오랜 시간 동안 당신을 게임에 푹 빠져들게 하고 몰입하게 만들었던 구체적인 요소를 이야기해 주세요"
             )
         )
+        self.assertTrue(
+            service.is_complete_first_question(
+                "적의 진입 경로를 예측해 막아내는 재미와 직접 먼저 제압하는 재미 중 어느 쪽이 더 큰가요"
+            )
+        )
         self.assertFalse(service.is_complete_first_question("최근 가장 인상"))
         self.assertFalse(service.is_complete_first_question(None))
 
@@ -490,6 +498,12 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 "화려하고 빠른 전투와 묵직하고 전략적인 전투 중 어느 쪽을 더 선호하시나요?"
             )
         )
+        self.assertTrue(
+            service.is_valid_survey_question(
+                "적의 진입 경로를 예측해 막아내는 재미와 직접 먼저 제압하는 재미 중 어느 쪽이 더 큰가요"
+            )
+        )
+        self.assertFalse(service.is_valid_survey_question("전투가 즐거우신가요"))
 
     def test_generate_first_question_raises_without_llm_response(self) -> None:
         service = SurveyChatbotSessionService()
