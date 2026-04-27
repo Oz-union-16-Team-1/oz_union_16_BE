@@ -30,9 +30,8 @@ class GameTop100Service:
         """
         now = timezone.now()
 
-        # 1. 기본 필터링 (중복 제거를 위해 넉넉하게 300개 정도 가져옵니다)
+        # 1. 기본 필터링
         queryset = Game.objects.filter(
-            platforms__contains=6,
             total_rating__isnull=False,
             total_rating_count__gte=50,
             first_release_date__lte=now,
@@ -40,6 +39,7 @@ class GameTop100Service:
 
         # 2. 장르 필터링 (0이 아닐 경우)
         if genre_id != 0:
+            # mypy 에러 방지를 위해 클래스명을 명시적으로 참조
             target_igdb_ids = GameTop100Service.GENRE_MAPPING.get(genre_id, [])
             if target_igdb_ids:
                 genre_filter = Q()
@@ -49,23 +49,19 @@ class GameTop100Service:
             else:
                 return []
 
-        # 3. [핵심] 동일 게임(에디션 중복) 제거 로직
+        # 3. 동일 게임(에디션 중복) 제거 로직
         unique_games = []
         seen_base_names = set()
 
         for game in queryset:
-            # 이름에서 ':', '-' 등을 기준으로 앞부분(핵심 제목)만 추출
-            # 예: "The Witcher 3: Wild Hunt - GOTY" -> "The Witcher 3"
+            # 이름에서 ':', '-' 등을 기준으로 핵심 제목 추출
             raw_name = game.name
             base_name = raw_name.split(":")[0].split("-")[0].strip().lower()
 
-            # 특수 케이스: "God of War"와 "God of War Ragnarök"은 다른 게임이므로 구분 필요
-            # 하지만 "The Witcher 3" 시리즈는 하나로 묶는 것이 깔끔합니다.
             if base_name not in seen_base_names:
                 unique_games.append(game)
                 seen_base_names.add(base_name)
 
-            # 100개가 모두 채워지면 중단
             if len(unique_games) >= 100:
                 break
 

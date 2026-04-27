@@ -58,7 +58,6 @@ class Game(models.Model):
     )
     themes = models.JSONField(null=True, blank=True, verbose_name="게임 테마")
     genres = models.JSONField(null=True, blank=True, verbose_name="게임 장르")
-    platforms = models.JSONField(null=True, blank=True, verbose_name="지원 플랫폼")
     keywords = models.JSONField(null=True, blank=True, verbose_name="게임 키워드")
     multiplayer_modes = models.JSONField(
         null=True, blank=True, verbose_name="멀티플레이 모드"
