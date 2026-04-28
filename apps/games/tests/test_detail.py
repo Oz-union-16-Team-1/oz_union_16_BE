@@ -4,6 +4,9 @@ from typing import TYPE_CHECKING, Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from apps.games.models import Game
 from apps.games.serializer.game_list_detail_serializers import GameListDetailSerializer
@@ -260,3 +263,38 @@ class GameListDetailServiceTest(TestCase):
                 game_id=self.banned_game.game_id,
                 user=self.user,
             )
+
+
+class GameListDetailViewTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.game = Game.objects.create(
+            game_id=701,
+            name="Detail View Game",
+            slug="detail-view-game",
+            like_count=7,
+        )
+
+    def setUp(self):
+        self.client = APIClient()
+
+    def test_detail_view_success(self):
+        url = reverse("game_list_detail", kwargs={"game_id": self.game.game_id})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["game_id"], self.game.game_id)
+        self.assertEqual(response.data["title"], self.game.name)
+        self.assertEqual(response.data["like_count"], 7)
+
+    def test_detail_view_not_found(self):
+        url = reverse("game_list_detail", kwargs={"game_id": 999999})
+
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(
+            response.data,
+            {"error_detail": "해당 게임을 찾을 수 없습니다."},
+        )
