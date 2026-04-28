@@ -132,3 +132,4 @@ class UserPreference(
 
     class Meta:
         db_table = "user_preferences"
+
