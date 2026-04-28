@@ -291,7 +291,7 @@ class MatchResponsesResultQueryService:
         for row in game_rows:
             game_id = int(row["game_id"])
             vec = vectors_by_game.get(game_id)
-            if not vec:
+            if vec is None:
                 continue
 
             sim = sim_by_game.get(game_id, 0.0)
@@ -611,7 +611,9 @@ class MatchResponsesResultQueryService:
         for value in raw:
             try:
                 out.append(float(value))
-            except (TypeError, ValueError):
+            except TypeError:
+                return []
+            except ValueError:
                 return []
         return out
 
@@ -681,10 +683,14 @@ class MatchResponsesResultQueryService:
     def _safe_float(self, value: object, *, default: float) -> float:
         if value is None or isinstance(value, bool):
             return default
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return default
+        if isinstance(value, (int, float, str, bytes, bytearray)):
+            try:
+                return float(value)
+            except TypeError:
+                return default
+            except ValueError:
+                return default
+        return default
 
     def _to_thumbnail_url(self, cover: object) -> str:
         if not isinstance(cover, str) or not cover.strip():
