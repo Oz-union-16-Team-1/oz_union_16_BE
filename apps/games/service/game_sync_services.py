@@ -91,17 +91,6 @@ class GameSyncService:
         return processed
 
     @classmethod
-    def sync_top_games(cls):
-        """기존 방식(상위 500개)"""
-        raw_games = igdb_client.get_games(limit=500)
-        if not raw_games:
-            return
-
-        for raw_game in raw_games:
-            clean_data = cls.prepare_game_data(raw_game)
-            Game.objects.update_or_create(game_id=raw_game["id"], defaults=clean_data)
-
-    @classmethod
     def sync_all_games(cls, *, page_size=500, max_pages=0, pc_only=False):
         """
         max_pages=0 이면 응답이 빌 때까지 전체 수집
