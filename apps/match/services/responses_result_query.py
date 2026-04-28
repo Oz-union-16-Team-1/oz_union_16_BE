@@ -258,11 +258,11 @@ class MatchResponsesResultQueryService:
 
         for game_id, raw_vector, distance in rows:
             game_id_int = int(game_id)
-            vec = self._to_vector(raw_vector)
-            if not vec:
+            parsed_vec = self._to_vector(raw_vector)
+            if not parsed_vec:
                 continue
 
-            vectors_by_game[game_id_int] = vec
+            vectors_by_game[game_id_int] = parsed_vec
             sim = 1.0 - float(distance)
             sim_by_game[game_id_int] = max(0.0, min(1.0, sim))
 
@@ -290,8 +290,8 @@ class MatchResponsesResultQueryService:
 
         for row in game_rows:
             game_id = int(row["game_id"])
-            vec = vectors_by_game.get(game_id)
-            if vec is None:
+            game_vec = vectors_by_game.get(game_id)
+            if game_vec is None:
                 continue
 
             sim = sim_by_game.get(game_id, 0.0)
@@ -300,11 +300,11 @@ class MatchResponsesResultQueryService:
 
             like_bonus = 0.0
             if liked_mean_vector:
-                like_bonus = max(0.0, self._cosine_similarity(vec, liked_mean_vector))
+                like_bonus = max(0.0, self._cosine_similarity(game_vec, liked_mean_vector))
 
             dislike_penalty = 0.0
             if disliked_mean_vector:
-                dislike_penalty = max(0.0, self._cosine_similarity(vec, disliked_mean_vector))
+                dislike_penalty = max(0.0, self._cosine_similarity(game_vec, disliked_mean_vector))
 
             final_score = self._compose_final_score(
                 sim=sim,
