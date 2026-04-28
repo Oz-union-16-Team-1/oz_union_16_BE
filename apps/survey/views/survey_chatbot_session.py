@@ -43,7 +43,7 @@ class SurveyChatbotSessionCreateAPIView(GenericAPIView):
                     OpenApiExample(
                         "QuestionGenerationFailed",
                         value={
-                            "detail": "설문 첫 질문을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
+                            "detail": "질문을 생성하지 못했습니다. 다시 시도해주세요."
                         },
                     )
                 ],

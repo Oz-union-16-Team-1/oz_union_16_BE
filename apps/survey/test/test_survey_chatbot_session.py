@@ -19,6 +19,7 @@ from apps.survey.models import (
 )
 from apps.survey.prompts.survey_chatbot_prompt import SURVEY_CHATBOT_PROMPT
 from apps.survey.services.survey_chatbot_session import (
+    SURVEY_COMPLETION_MESSAGE,
     SurveyChatbotSessionService,
     SurveyQuestionGenerationUnavailable,
 )
@@ -112,6 +113,76 @@ class SurveyChatbotSessionCreateAPITest(TestCase):
         )
         self.assertEqual(SurveyChatbotSession.objects.filter(user=self.user).count(), 1)
         self.assertEqual(SurveyChatbotMessage.objects.count(), 1)
+
+    def test_create_session_without_reset_keeps_closed_session_data(self) -> None:
+        self.authenticate()
+        session = SurveyChatbotSession.objects.create(
+            user=self.user,
+            status=SurveyStatusChoices.CLOSED,
+            target_question_count=3,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.AI,
+            sequence=1,
+            message="마지막 질문입니다.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="마지막 답변입니다.",
+        )
+        SurveyResults.objects.create(
+            chatbot_session=session,
+            user=self.user,
+            survey_answer="완료된 설문 요약",
+        )
+
+        response = self.client.post(self.url, {"is_reset": False}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["session_id"], str(session.id))
+        self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
+        self.assertEqual(response.data["ai_question"], SURVEY_COMPLETION_MESSAGE)
+        self.assertTrue(response.data["recommendation_ready"])
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, SurveyStatusChoices.CLOSED)
+        self.assertEqual(session.messages.count(), 2)
+        self.assertTrue(SurveyResults.objects.filter(chatbot_session=session).exists())
+
+    def test_create_session_closed_session_without_ai_message_does_not_generate_question(
+        self,
+    ) -> None:
+        self.authenticate()
+        session = SurveyChatbotSession.objects.create(
+            user=self.user,
+            status=SurveyStatusChoices.CLOSED,
+            target_question_count=1,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=session,
+            role=SurveyRoleChoices.USER,
+            sequence=1,
+            message="완료된 답변입니다.",
+        )
+        SurveyResults.objects.create(
+            chatbot_session=session,
+            user=self.user,
+            survey_answer="완료된 설문 요약",
+        )
+
+        response = self.client.post(self.url, {"is_reset": False}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["session_id"], str(session.id))
+        self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
+        self.assertEqual(response.data["ai_question"], SURVEY_COMPLETION_MESSAGE)
+        self.assertTrue(response.data["recommendation_ready"])
+        self.assertEqual(
+            SurveyChatbotMessage.objects.filter(session=session).count(), 1
+        )
 
     def test_create_session_with_reset_creates_new_session_and_clears_previous_data(
         self,
@@ -249,7 +320,10 @@ class SurveyChatbotSessionResetAPITest(TestCase):
 
 class SurveyChatbotSessionServiceTest(TestCase):
     def test_default_prompt_constant_exists(self) -> None:
-        self.assertIn("첫 질문 생성 규칙", SURVEY_CHATBOT_PROMPT)
+        self.assertIn("장르나 게임 종류를 좋아하는지", SURVEY_CHATBOT_PROMPT)
+        self.assertIn(
+            "세계관, 분위기, 감정 몰입부터 바로 묻는 질문", SURVEY_CHATBOT_PROMPT
+        )
 
     def test_initialize_session_clears_existing_result(self) -> None:
         user = create_user()
@@ -473,6 +547,11 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 "오랜 시간 동안 당신을 게임에 푹 빠져들게 하고 몰입하게 만들었던 구체적인 요소를 이야기해 주세요"
             )
         )
+        self.assertTrue(
+            service.is_complete_first_question(
+                "적의 진입 경로를 예측해 막아내는 재미와 직접 먼저 제압하는 재미 중 어느 쪽이 더 큰가요"
+            )
+        )
         self.assertFalse(service.is_complete_first_question("최근 가장 인상"))
         self.assertFalse(service.is_complete_first_question(None))
 
@@ -490,6 +569,12 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 "화려하고 빠른 전투와 묵직하고 전략적인 전투 중 어느 쪽을 더 선호하시나요?"
             )
         )
+        self.assertTrue(
+            service.is_valid_survey_question(
+                "적의 진입 경로를 예측해 막아내는 재미와 직접 먼저 제압하는 재미 중 어느 쪽이 더 큰가요"
+            )
+        )
+        self.assertFalse(service.is_valid_survey_question("전투가 즐거우신가요"))
 
     def test_generate_first_question_raises_without_llm_response(self) -> None:
         service = SurveyChatbotSessionService()

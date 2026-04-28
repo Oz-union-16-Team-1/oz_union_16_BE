@@ -5,6 +5,7 @@ from apps.survey.views.survey_chatbot_session import (
     SurveyChatbotSessionCreateAPIView,
     SurveyChatbotSessionResetAPIView,
 )
+from apps.survey.views.survey_recommendation import SurveyRecommendationAPIView
 
 urlpatterns = [
     path(
@@ -21,5 +22,10 @@ urlpatterns = [
         "chatbot/sessions/<uuid:session_id>/messages/",
         SurveyChatbotMessageAPIView.as_view(),
         name="survey-chatbot-message",
+    ),
+    path(
+        "chatbot/sessions/<uuid:session_id>/recommendations/",
+        SurveyRecommendationAPIView.as_view(),
+        name="survey-recommendation",
     ),
 ]
