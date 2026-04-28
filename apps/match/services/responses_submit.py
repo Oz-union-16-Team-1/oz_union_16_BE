@@ -49,13 +49,13 @@ class NormalizedResponse:
 
 class MatchResponsesSubmitService:
     def submit(
-            self,
-            *,
-            user_id: int,
-            genre_id: int,
-            retry_no: int,
-            match_result: list[dict[str, Any]],
-            candidate_date: date | None = None,
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        retry_no: int,
+        match_result: list[dict[str, Any]],
+        candidate_date: date | None = None,
     ) -> dict[str, Any]:
         normalized = self._normalize_and_dedupe(match_result)
         game_ids = [item.game_id for item in normalized]

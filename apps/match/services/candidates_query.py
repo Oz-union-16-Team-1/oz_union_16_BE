@@ -26,11 +26,11 @@ class MatchCandidatesQueryService:
     selector_class = MatchCandidatesSelectorService
 
     def get_candidates(
-            self,
-            *,
-            user_id: int,
-            genre_id: int,
-            retry_no: int | None = None,
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        retry_no: int | None = None,
     ) -> dict[str, Any]:
         try:
             effective_retry_no = self._resolve_effective_retry_no(
