@@ -1,23 +1,25 @@
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-
-from drf_spectacular.utils import extend_schema, OpenApiParameter
 
 from apps.users.serializers.user_bookmark_serializers import UserLikeBookmarkSerializer
 from apps.users.services.user_bookmark_services import UserLikeBookmarkService
 
+
 class BookmarkPagination(PageNumberPagination):
-    page_size = 10                      # 기본값
-    page_size_query_param = "page_size" # page_size 쿼리 파라미터 활성화
+    page_size = 10  # 기본값
+    page_size_query_param = "page_size"  # page_size 쿼리 파라미터 활성화
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return Response({
-            "count": self.page.paginator.count,
-            "results": data,
-        })
+        return Response(
+            {
+                "count": self.page.paginator.count,
+                "results": data,
+            }
+        )
 
     def get_paginated_response_schema(self, schema):
         return {
@@ -27,6 +29,7 @@ class BookmarkPagination(PageNumberPagination):
                 "results": schema,
             },
         }
+
 
 @extend_schema(
     tags=["accounts"],
@@ -42,7 +45,6 @@ class UserLikeBookmarkListView(ListAPIView):
     pagination_class = BookmarkPagination
     serializer_class = UserLikeBookmarkSerializer
     permission_classes = [IsAuthenticated]
-
 
     def get_queryset(self):
         return UserLikeBookmarkService.get_user_bookmarks(self.request.user)
