@@ -17,6 +17,10 @@ from apps.survey.choices import (
 from apps.survey.models import SurveyChatbotMessage, SurveyChatbotSession
 from apps.survey.prompts.survey_chatbot_prompt import SURVEY_CHATBOT_PROMPT
 
+SURVEY_COMPLETION_MESSAGE = (
+    "설문이 종료되었습니다 추천 게임 보기 버튼을 클릭해서 추천된 게임을 확인해보세요!"
+)
+
 
 class SurveyQuestionGenerationUnavailable(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -43,6 +47,29 @@ class SurveyChatbotSessionCreateResult:
 
 
 class SurveyChatbotSessionService:
+    QUESTION_ENDINGS = (
+        "요?",
+        "나요?",
+        "까요?",
+        "주세요.",
+        "주세요",
+        "말해주세요.",
+        "말해주세요",
+        "가요?",
+        "가요",
+        "인가요?",
+        "인가요",
+        "한가요?",
+        "한가요",
+    )
+    YES_NO_STYLE_ENDINGS = (
+        "좋아하시나요?",
+        "좋아하시나요",
+        "선호하시나요?",
+        "선호하시나요",
+        "즐거우신가요?",
+        "즐거우신가요",
+    )
     FIRST_QUESTION_ANGLES = (
         "최근 가장 재미있었던 게임 경험",
         "오래 몰입하게 만든 요소",
@@ -94,6 +121,7 @@ class SurveyChatbotSessionService:
             status=session.status,
             ai_question=question,
             progress=self.build_progress(session),
+            recommendation_ready=session.status == SurveyStatusChoices.CLOSED,
         )
 
     # 유저당 하나의 설문 세션만 유지하도록 세션을 조회하거나 생성
@@ -118,11 +146,7 @@ class SurveyChatbotSessionService:
         session: SurveyChatbotSession,
         created: bool,
     ) -> bool:
-        return (
-            created
-            or session.status == SurveyStatusChoices.CLOSED
-            or not session.messages.exists()
-        )
+        return created or not session.messages.exists()
 
     # 설문 세션을 초기 상태로 되돌리고 첫 질문 저장
     def initialize_session(self, session: SurveyChatbotSession) -> None:
@@ -147,6 +171,9 @@ class SurveyChatbotSessionService:
 
     # 현재 세션에서 유저에게 보여줄 마지막 AI 질문을 가져옴
     def get_current_question(self, session: SurveyChatbotSession) -> str:
+        if session.status == SurveyStatusChoices.CLOSED:
+            return SURVEY_COMPLETION_MESSAGE
+
         message = (
             session.messages.filter(role=SurveyRoleChoices.AI)
             .order_by("-sequence")
@@ -264,17 +291,7 @@ class SurveyChatbotSessionService:
         question = question.strip()
         return (
             len(question) >= 30
-            and question.endswith(
-                (
-                    "요?",
-                    "나요?",
-                    "까요?",
-                    "주세요.",
-                    "주세요",
-                    "말해주세요.",
-                    "말해주세요",
-                )
-            )
+            and question.endswith(self.QUESTION_ENDINGS)
             and (
                 any(hint in question for hint in self.OPEN_ENDED_QUESTION_HINTS)
                 or any(hint in question for hint in self.COMPARISON_QUESTION_HINTS)
@@ -292,7 +309,7 @@ class SurveyChatbotSessionService:
             hint in normalized for hint in self.COMPARISON_QUESTION_HINTS
         )
         if not is_comparison_question and normalized.endswith(
-            ("좋아하시나요?", "선호하시나요?", "즐거우신가요?")
+            self.YES_NO_STYLE_ENDINGS
         ):
             return False
 
