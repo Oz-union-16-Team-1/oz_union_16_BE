@@ -79,10 +79,16 @@ class Game(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성 일시")
     like_count = models.IntegerField(default=0, verbose_name="좋아요 수")
     is_ban = models.BooleanField(default=False, verbose_name="블랙리스트")
+    ban_reason = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="제외 사유",
+    )
 
     class Meta:
         db_table = "game_list"
         verbose_name = "게임 저장 테이블"
+        verbose_name_plural = "게임 저장 테이블"
         indexes = [
             models.Index(
                 fields=["status", "game_type", "-first_release_date", "-game_id"],
