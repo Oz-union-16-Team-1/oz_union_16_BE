@@ -144,7 +144,7 @@ class MatchCandidatesAPITest(MatchCandidatesFixtureMixin, TestCase):
         self.assertNotIn(2101, game_ids)
 
         for row in results:
-            self.assertIn("name", row)
+            self.assertIn("title", row)
             self.assertIn("trailer_url", row)
             self.assertIn("description", row)
             self.assertIn("genres", row)

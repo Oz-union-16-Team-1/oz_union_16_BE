@@ -27,7 +27,7 @@ class MatchCandidatesQuerySerializer(serializers.Serializer):
 
 class MatchCandidateResultSerializer(serializers.Serializer):
     game_id = serializers.IntegerField(read_only=True)
-    name = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
     trailer_url = serializers.CharField(read_only=True, allow_blank=True)
     is_liked = serializers.BooleanField(read_only=True)
     description = serializers.CharField(read_only=True, allow_blank=True)
