@@ -8,9 +8,9 @@ from collections import defaultdict
 from collections.abc import Iterable as IterableABC
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
-from django.db.models import DateTimeField, FloatField, IntegerField, QuerySet, Value
+from django.db.models import DateTimeField, FloatField, IntegerField, Value
 from django.db.models.functions import Coalesce
 from pgvector.django import CosineDistance
 
@@ -46,7 +46,6 @@ class MatchResponsesResultDataUnavailable(RuntimeError):
     pass
 
 
-LikedMode = Literal["exclude", "only", "any"]
 
 
 @dataclass(frozen=True)
@@ -68,12 +67,12 @@ class MatchResponsesResultQueryService:
     FALLBACK_SCAN_MULTIPLIER = 20
 
     def get_results(
-        self,
-        *,
-        user_id: int,
-        genre_id: int,
-        cursor: str | None = None,
-        page_size: int = MATCH_RESULT_DEFAULT_PAGE_SIZE,
+            self,
+            *,
+            user_id: int,
+            genre_id: int,
+            cursor: str | None = None,
+            page_size: int = MATCH_RESULT_DEFAULT_PAGE_SIZE,
     ) -> dict[str, Any]:
         try:
             size = self._normalize_page_size(page_size)
@@ -95,16 +94,21 @@ class MatchResponsesResultQueryService:
                 liked_mean = self._load_liked_mean_vector(user_id=user_id)
                 disliked_mean = self._load_disliked_mean_vector(user_id=user_id)
 
-                # 0순위: 선택 장르 + liked 제외 + sim >= 0.20 + TAU 단계 완화
-                stage0 = self._score_personalized(
+                # 핵심 최적화: 개인화 스코어링 쿼리는 1회만 수행
+                personalized_all = self._score_personalized_once(
                     user_vector=user_vector,
-                    source_ids=allowed_ids,
-                    liked_ids=liked_ids,
-                    liked_mode="exclude",
                     sim_floor=MATCH_RESULT_SIM_FLOOR,
+                    liked_ids=liked_ids,
                     liked_mean_vector=liked_mean,
                     disliked_mean_vector=disliked_mean,
                 )
+
+                # 0순위: 선택 장르 + liked 제외 + sim >= 0.20 + TAU 단계 완화
+                stage0 = [
+                    item
+                    for item in personalized_all
+                    if item.game_id in allowed_ids and not item.is_liked
+                ]
                 selected = self._merge_unique(selected, self._apply_tau_steps(stage0))
 
                 # 1순위: 선택 장르 + liked only + sim >= 0.20 + TAU 단계 완화
@@ -113,34 +117,27 @@ class MatchResponsesResultQueryService:
                     liked_cap = self._liked_cap(MATCH_RESULT_MAX_TOTAL_COUNT)
                     room_for_liked = max(0, liked_cap - self._count_liked(selected))
                     if room_for_liked > 0:
-                        stage1 = self._score_personalized(
-                            user_vector=user_vector,
-                            source_ids=allowed_ids,
-                            liked_ids=liked_ids,
-                            liked_mode="only",
-                            sim_floor=MATCH_RESULT_SIM_FLOOR,
-                            liked_mean_vector=liked_mean,
-                            disliked_mean_vector=disliked_mean,
-                        )
+                        stage1 = [
+                            item
+                            for item in personalized_all
+                            if item.game_id in allowed_ids and item.is_liked
+                        ]
                         stage1 = self._apply_tau_steps(stage1)
                         stage1 = self._take_by_popularity(stage1, room_for_liked)
                         selected = self._merge_unique(selected, stage1)
 
                 # 2순위: 전체 + liked 제외 + sim >= 0.20 + 인기순
                 if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
-                    stage2 = self._score_personalized(
-                        user_vector=user_vector,
-                        source_ids=None,
-                        liked_ids=liked_ids,
-                        liked_mode="exclude",
-                        sim_floor=MATCH_RESULT_SIM_FLOOR,
-                        liked_mean_vector=liked_mean,
-                        disliked_mean_vector=disliked_mean,
-                    )
+                    used_ids = {item.game_id for item in selected}
+                    stage2 = [
+                        item
+                        for item in personalized_all
+                        if (not item.is_liked) and item.game_id not in used_ids
+                    ]
                     stage2 = self._take_by_popularity(
                         stage2,
                         MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
-                    )
+                        )
                     selected = self._merge_unique(selected, stage2)
 
             # 3순위: 선택 장르 + sim 제거 + 인기순
@@ -233,33 +230,16 @@ class MatchResponsesResultQueryService:
         vec = self._to_vector(raw)
         return vec if vec else None
 
-    def _score_personalized(
-        self,
-        *,
-        user_vector: list[float],
-        source_ids: set[int] | None,
-        liked_ids: set[int],
-        liked_mode: LikedMode,
-        sim_floor: float,
-        liked_mean_vector: list[float] | None,
-        disliked_mean_vector: list[float] | None,
+    def _score_personalized_once(
+            self,
+            *,
+            user_vector: list[float],
+            sim_floor: float,
+            liked_ids: set[int],
+            liked_mean_vector: list[float] | None,
+            disliked_mean_vector: list[float] | None,
     ) -> list[RankedGame]:
-        qs: QuerySet[MatchGamePreference] = MatchGamePreference.objects.all()
-
-        if source_ids is not None:
-            if not source_ids:
-                return []
-            qs = qs.filter(game_id_id__in=source_ids)
-
-        if liked_mode == "exclude":
-            if liked_ids:
-                qs = qs.exclude(game_id_id__in=liked_ids)
-        elif liked_mode == "only":
-            if not liked_ids:
-                return []
-            qs = qs.filter(game_id_id__in=liked_ids)
-
-        qs = qs.annotate(
+        qs = MatchGamePreference.objects.annotate(
             distance=CosineDistance("game_preference_vector", user_vector)
         ).filter(distance__lte=(1.0 - sim_floor))
 
@@ -324,18 +304,15 @@ class MatchResponsesResultQueryService:
 
             dislike_penalty = 0.0
             if disliked_mean_vector:
-                dislike_penalty = max(
-                    0.0, self._cosine_similarity(vec, disliked_mean_vector)
-                )
+                dislike_penalty = max(0.0, self._cosine_similarity(vec, disliked_mean_vector))
 
-            final_raw = (
-                (sim * MATCH_RESULT_WEIGHT_SIM)
-                + (pop * MATCH_RESULT_WEIGHT_POP)
-                + (rec * MATCH_RESULT_WEIGHT_REC)
-                + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
-                - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+            final_score = self._compose_final_score(
+                sim=sim,
+                pop=pop,
+                rec=rec,
+                like_bonus=like_bonus,
+                dislike_penalty=dislike_penalty,
             )
-            final_score = round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
 
             ranked.append(
                 RankedGame(
@@ -444,7 +421,13 @@ class MatchResponsesResultQueryService:
             rec = self._to_rec_score(row.get("first_release_date"))
 
             final_raw = (pop * MATCH_RESULT_WEIGHT_POP) + (rec * MATCH_RESULT_WEIGHT_REC)
-            final_score = round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
+            final_score = self._compose_final_score(
+                sim=0.0,
+                pop=pop,
+                rec=rec,
+                like_bonus=0.0,
+                dislike_penalty=0.0,
+            )
 
             out.append(
                 RankedGame(
@@ -673,6 +656,27 @@ class MatchResponsesResultQueryService:
     def _normalize_rating(self, rating: object) -> float:
         value = self._safe_float(rating, default=0.0)
         return round(max(0.0, min(100.0, value)), 2)
+
+    def _compose_final_score(
+            self,
+            *,
+            sim: float,
+            pop: float,
+            rec: float,
+            like_bonus: float,
+            dislike_penalty: float,
+    ) -> float:
+        # 정규화 기준:
+        # MATCH_RESULT_SCORE_NORMALIZER(1.08) = 양의 최대 가중치 합
+        # = 0.75(sim) + 0.15(pop) + 0.10(rec) + 0.08(like_bonus)
+        final_raw = (
+                (sim * MATCH_RESULT_WEIGHT_SIM)
+                + (pop * MATCH_RESULT_WEIGHT_POP)
+                + (rec * MATCH_RESULT_WEIGHT_REC)
+                + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
+                - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+        )
+        return round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
 
     def _safe_float(self, value: object, *, default: float) -> float:
         if value is None or isinstance(value, bool):
