@@ -32,9 +32,7 @@ from apps.survey.services.survey_chatbot_session import (
 )
 from apps.users.models import User, UserPreference
 
-TEST_FIRST_QUESTION = (
-    "최근 가장 오래 몰입했던 게임에서 어떤 요소가 좋았는지 알려주세요."
-)
+TEST_FIRST_QUESTION = "최근 가장 재미있게 즐긴 게임은 어떤 종류였고, 어떤 점 때문에 계속 플레이하게 되었는지 말씀해 주세요."
 TEST_NEXT_QUESTION = (
     "게임을 할 때 스토리와 전투 중 어떤 재미를 더 중요하게 느끼는지 알려주세요."
 )
@@ -328,7 +326,7 @@ class SurveyChatbotMessageServiceTest(TestCase):
 
     def test_question_generation_prompt_constant_exists(self) -> None:
         self.assertIn(
-            "당신의 작업 유형은 {mode} 입니다.",
+            "현재 작업 유형은 {mode} 입니다.",
             SURVEY_CHATBOT_QUESTION_GENERATION_PROMPT,
         )
 
@@ -588,13 +586,13 @@ class SurveyChatbotMessageServiceTest(TestCase):
             "다크소울처럼 어둡고 보스전이 많은 게임이 좋아요.",
             prompt,
         )
-        self.assertIn("대화 이력:", prompt)
+        self.assertIn("전체 대화 이력:", prompt)
         self.assertIn(
-            "직전 답변의 감정 표현이나 문장을 그대로 풀어쓰며 되묻는 질문은 금지합니다.",
+            "이전 질문과 표현만 바꾼 유사 질문도 금지합니다.",
             prompt,
         )
         self.assertIn(
-            "전투 방식, 난이도, 성장 방식, 보상 구조, 탐험 방식, 스토리 선호, 분위기, 경쟁/협동 성향, 캐릭터 운용",
+            "선호 플레이 방식",
             prompt,
         )
 

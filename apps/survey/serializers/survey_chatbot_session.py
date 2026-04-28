@@ -36,4 +36,4 @@ class SurveyChatbotSessionResetResponseSerializer(
 class SurveyErrorResponseSerializer(serializers.Serializer):
     """설문 API 에러 응답"""
 
-    detail = serializers.CharField()
+    error_detail = serializers.CharField()
