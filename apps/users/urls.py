@@ -24,6 +24,7 @@ from apps.users.views.social_login_views import (
     NaverCallbackView,
     NaverLoginView,
 )
+from apps.users.views.user_bookmark_views import UserLikeBookmarkListView
 from apps.users.views.user_change_pwd_views import PasswordUpdateView
 from apps.users.views.user_info_views import UserInfoView
 
@@ -87,4 +88,5 @@ urlpatterns = [
     path("me", UserInfoView.as_view(), name="user-info"),
     path("me/check-password", PasswordCheckView.as_view(), name="check-password"),
     path("me/change-password", PasswordUpdateView.as_view(), name="change-password"),
+    path("me/game-like", UserLikeBookmarkListView.as_view(), name="user-bookmark-list"),
 ]
