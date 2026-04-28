@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone as django_timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.games.models import Game
-from apps.match.models import MatchGamePreference, MatchGameRating
+from apps.match.models import (
+    MatchCandidateRetryState,
+    MatchGamePreference,
+    MatchGameRating,
+)
 from apps.match.services.responses_submit import (
     MatchResponsesGameNotFoundError,
     MatchResponsesSubmitService,
@@ -156,7 +161,7 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
             self.service.submit(
                 user_id=self.user.id,
                 genre_id=2,
-                retry_no=0,
+                retry_no=1,
                 match_result=[{"game_id": self.game1.game_id, "rating": 3}],
             )
 
@@ -164,6 +169,87 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         self.assertEqual(row.star_rating, 3)
         self.assertEqual(row.rating_count, 2)
         self.assertAlmostEqual(float(row.effective_rating), 4.0, places=2)
+
+    def test_submit_retry_no_rejects_stale_value(self):
+        with patch(
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            return_value=[self.game1.game_id],
+        ):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                match_result=[{"game_id": self.game1.game_id, "rating": 5}],
+            )
+
+            with self.assertRaises(MatchResponsesValidationError):
+                self.service.submit(
+                    user_id=self.user.id,
+                    genre_id=2,
+                    retry_no=0,
+                    match_result=[{"game_id": self.game1.game_id, "rating": 4}],
+                )
+
+    def test_submit_retry_no_increments_after_success(self):
+        with patch(
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            return_value=[self.game1.game_id],
+        ):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                match_result=[{"game_id": self.game1.game_id, "rating": 5}],
+            )
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=1,
+                match_result=[{"game_id": self.game1.game_id, "rating": 4}],
+            )
+
+        state = MatchCandidateRetryState.objects.get(
+            user=self.user,
+            api_genre_id=2,
+            candidate_date=django_timezone.localdate(),
+        )
+        self.assertEqual(state.last_completed_retry_no, 1)
+
+    def test_submit_retry_no_isolated_by_candidate_date(self):
+        day1 = date(2026, 4, 27)
+        day2 = date(2026, 4, 28)
+
+        with patch(
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            return_value=[self.game1.game_id],
+        ):
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                candidate_date=day1,
+                match_result=[{"game_id": self.game1.game_id, "rating": 5}],
+            )
+            self.service.submit(
+                user_id=self.user.id,
+                genre_id=2,
+                retry_no=0,
+                candidate_date=day2,
+                match_result=[{"game_id": self.game1.game_id, "rating": 4}],
+            )
+
+        state_day1 = MatchCandidateRetryState.objects.get(
+            user=self.user,
+            api_genre_id=2,
+            candidate_date=day1,
+        )
+        state_day2 = MatchCandidateRetryState.objects.get(
+            user=self.user,
+            api_genre_id=2,
+            candidate_date=day2,
+        )
+        self.assertEqual(state_day1.last_completed_retry_no, 0)
+        self.assertEqual(state_day2.last_completed_retry_no, 0)
 
     def test_submit_rejects_non_integer_inputs_strictly(self):
         bad_payloads = [
@@ -490,3 +576,28 @@ class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("retry_no", response.data["error_detail"])
+
+    def test_post_responses_retry_no_must_increment(self):
+        payload_retry0 = {
+            "genre_id": 2,
+            "retry_no": 0,
+            "match_result": [{"game_id": self.game1.game_id, "rating": 5}],
+        }
+        payload_retry1 = {
+            "genre_id": 2,
+            "retry_no": 1,
+            "match_result": [{"game_id": self.game1.game_id, "rating": 4}],
+        }
+
+        with patch(
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            return_value=[self.game1.game_id],
+        ):
+            first = self.client.post(self.url, payload_retry0, format="json")
+            stale = self.client.post(self.url, payload_retry0, format="json")
+            next_ok = self.client.post(self.url, payload_retry1, format="json")
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(stale.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(stale.data["error_detail"], "유효하지 않은 retry_no 입니다.")
+        self.assertEqual(next_ok.status_code, status.HTTP_200_OK)

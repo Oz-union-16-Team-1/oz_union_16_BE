@@ -16,7 +16,6 @@ class MatchCandidatesQuerySerializer(serializers.Serializer):
     )
     retry_no = serializers.IntegerField(
         required=False,
-        default=0,
         min_value=0,
         error_messages={
             "invalid": "정수 형태로 입력해주세요.",
@@ -37,5 +36,6 @@ class MatchCandidateResultSerializer(serializers.Serializer):
 
 class MatchCandidatesResponseSerializer(serializers.Serializer):
     genre_id = serializers.IntegerField(read_only=True)
+    retry_no = serializers.IntegerField(read_only=True)
     count = serializers.IntegerField(read_only=True)
     results = MatchCandidateResultSerializer(many=True, read_only=True)
