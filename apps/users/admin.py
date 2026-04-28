@@ -13,10 +13,8 @@ from apps.users.models import SocialUser, User, UserLikeBookmark, UserPreference
 
 with suppress(admin.sites.NotRegistered):
     admin.site.unregister(BlacklistedToken)
-
 with suppress(admin.sites.NotRegistered):
     admin.site.unregister(OutstandingToken)
-
 
 admin.site.site_header = "PGTI 관리자"
 admin.site.site_title = "PGTI 관리자"
