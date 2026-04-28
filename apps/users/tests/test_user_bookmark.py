@@ -102,7 +102,6 @@ class UserLikeBookmarkListTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # 발로란트(cover=None)가 결과에 포함되어 있고 thumbnail_url이 null인지 확인
         game_ids = [r["game_id"] for r in response.data["results"]]
         self.assertIn(1003, game_ids)
 
@@ -119,9 +118,28 @@ class UserLikeBookmarkListTest(TestCase):
         for result in response.data["results"]:
             self.assertIsInstance(result["genres"], list)
 
+    def test_get_bookmark_list_genres_name(self):
+        """genres 필드가 장르 ID가 아닌 장르 이름으로 반환되는지 확인"""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # 엘든링: genres=[12, 31, 32] -> ["역할수행(RPG)", "어드벤처", "인디"]
+        elden_ring = next(r for r in response.data["results"] if r["game_id"] == 1001)
+        self.assertEqual(elden_ring["genres"], ["역할수행(RPG)", "어드벤처", "인디"])
+
+        # 로스트아크: genres=[4, 32] -> ["격투", "인디"]
+        lost_ark = next(r for r in response.data["results"] if r["game_id"] == 1002)
+        self.assertEqual(lost_ark["genres"], ["격투", "인디"])
+
+        # 발로란트: genres=[5] -> ["슈팅"]
+        valorant = next(r for r in response.data["results"] if r["game_id"] == 1003)
+        self.assertEqual(valorant["genres"], ["슈팅"])
+
     def test_get_bookmark_list_only_my_bookmarks(self):
         """다른 유저의 북마크는 조회되지 않는지 확인"""
-        # 다른 유저의 북마크 생성
         UserLikeBookmark.objects.create(user=self.other_user, game=self.game1)
 
         self.client.force_authenticate(user=self.user)
@@ -150,22 +168,6 @@ class UserLikeBookmarkListTest(TestCase):
         self.assertEqual(response.data["count"], 0)
         self.assertEqual(response.data["results"], [])
 
-    # --- 실패 케이스 ---
-
-    def test_get_bookmark_list_unauthenticated_fail(self):
-        """비인증 유저가 접근 시 401 반환 확인"""
-        response = self.client.get(self.url)
-
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_post_method_not_allowed_fail(self):
-        """POST 요청 시 405 반환 확인"""
-        self.client.force_authenticate(user=self.user)
-
-        response = self.client.post(self.url, data={})
-
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
     def test_get_bookmark_list_genres_empty(self):
         """genres가 없는 게임의 genres 필드가 빈 리스트로 반환되는지 확인"""
         game_no_genre = Game.objects.create(
@@ -186,3 +188,40 @@ class UserLikeBookmarkListTest(TestCase):
             r for r in response.data["results"] if r["game_id"] == 1004
         )
         self.assertEqual(no_genre_result["genres"], [])
+
+    def test_get_bookmark_list_genres_unknown_id(self):
+        """GENRE_NAME_MAP에 없는 장르 ID는 결과에서 제외되는지 확인"""
+        game_unknown_genre = Game.objects.create(
+            game_id=1005,
+            name="알수없는장르게임",
+            slug="unknown-genre-game",
+            cover=None,
+            genres=[999],  # 존재하지 않는 장르 ID
+        )
+        UserLikeBookmark.objects.create(user=self.user, game=game_unknown_genre)
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        unknown_result = next(
+            r for r in response.data["results"] if r["game_id"] == 1005
+        )
+        self.assertEqual(unknown_result["genres"], [])
+
+    # --- 실패 케이스 ---
+
+    def test_get_bookmark_list_unauthenticated_fail(self):
+        """비인증 유저가 접근 시 401 반환 확인"""
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_post_method_not_allowed_fail(self):
+        """POST 요청 시 405 반환 확인"""
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(self.url, data={})
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)

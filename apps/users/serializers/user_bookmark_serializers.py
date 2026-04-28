@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.core.num_to_genre import num_to_genre
 from apps.users.models import UserLikeBookmark
 
 
@@ -21,7 +22,5 @@ class UserLikeBookmarkSerializer(serializers.ModelSerializer):
         genres = obj.game.genres  # JSONField: [{id: 1, name: "RPG"}, ...]
         if not genres:
             return []
-        # genres JSONField 구조에 따라 조정하세요
-        if isinstance(genres[0], dict):
-            return [g.get("name", "") for g in genres]
-        return genres
+
+        return [num_to_genre(g) for g in genres if num_to_genre(g) is not None]
