@@ -46,8 +46,6 @@ class MatchResponsesResultDataUnavailable(RuntimeError):
     pass
 
 
-
-
 @dataclass(frozen=True)
 class RankedGame:
     game_id: int
@@ -67,12 +65,12 @@ class MatchResponsesResultQueryService:
     FALLBACK_SCAN_MULTIPLIER = 20
 
     def get_results(
-            self,
-            *,
-            user_id: int,
-            genre_id: int,
-            cursor: str | None = None,
-            page_size: int = MATCH_RESULT_DEFAULT_PAGE_SIZE,
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        cursor: str | None = None,
+        page_size: int = MATCH_RESULT_DEFAULT_PAGE_SIZE,
     ) -> dict[str, Any]:
         try:
             size = self._normalize_page_size(page_size)
@@ -137,7 +135,7 @@ class MatchResponsesResultQueryService:
                     stage2 = self._take_by_popularity(
                         stage2,
                         MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
-                        )
+                    )
                     selected = self._merge_unique(selected, stage2)
 
             # 3순위: 선택 장르 + sim 제거 + 인기순
@@ -231,13 +229,13 @@ class MatchResponsesResultQueryService:
         return vec if vec else None
 
     def _score_personalized_once(
-            self,
-            *,
-            user_vector: list[float],
-            sim_floor: float,
-            liked_ids: set[int],
-            liked_mean_vector: list[float] | None,
-            disliked_mean_vector: list[float] | None,
+        self,
+        *,
+        user_vector: list[float],
+        sim_floor: float,
+        liked_ids: set[int],
+        liked_mean_vector: list[float] | None,
+        disliked_mean_vector: list[float] | None,
     ) -> list[RankedGame]:
         qs = MatchGamePreference.objects.annotate(
             distance=CosineDistance("game_preference_vector", user_vector)
@@ -300,11 +298,15 @@ class MatchResponsesResultQueryService:
 
             like_bonus = 0.0
             if liked_mean_vector:
-                like_bonus = max(0.0, self._cosine_similarity(game_vec, liked_mean_vector))
+                like_bonus = max(
+                    0.0, self._cosine_similarity(game_vec, liked_mean_vector)
+                )
 
             dislike_penalty = 0.0
             if disliked_mean_vector:
-                dislike_penalty = max(0.0, self._cosine_similarity(game_vec, disliked_mean_vector))
+                dislike_penalty = max(
+                    0.0, self._cosine_similarity(game_vec, disliked_mean_vector)
+                )
 
             final_score = self._compose_final_score(
                 sim=sim,
@@ -347,12 +349,12 @@ class MatchResponsesResultQueryService:
         return [item for item in ranked if item.final_score >= min_tau]
 
     def _fallback_popular(
-            self,
-            *,
-            source_ids: set[int] | None,
-            excluded_ids: set[int],
-            limit: int,
-            liked_ids: set[int],
+        self,
+        *,
+        source_ids: set[int] | None,
+        excluded_ids: set[int],
+        limit: int,
+        liked_ids: set[int],
     ) -> list[RankedGame]:
         if limit <= 0:
             return []
@@ -420,7 +422,9 @@ class MatchResponsesResultQueryService:
             pop = self._to_pop_score(row.get("rating"))
             rec = self._to_rec_score(row.get("first_release_date"))
 
-            final_raw = (pop * MATCH_RESULT_WEIGHT_POP) + (rec * MATCH_RESULT_WEIGHT_REC)
+            final_raw = (pop * MATCH_RESULT_WEIGHT_POP) + (
+                rec * MATCH_RESULT_WEIGHT_REC
+            )
             final_score = self._compose_final_score(
                 sim=0.0,
                 pop=pop,
@@ -583,7 +587,9 @@ class MatchResponsesResultQueryService:
             out.append(item)
         return out
 
-    def _take_by_popularity(self, items: list[RankedGame], limit: int) -> list[RankedGame]:
+    def _take_by_popularity(
+        self, items: list[RankedGame], limit: int
+    ) -> list[RankedGame]:
         if limit <= 0:
             return []
         ordered = sorted(
@@ -660,23 +666,23 @@ class MatchResponsesResultQueryService:
         return round(max(0.0, min(100.0, value)), 2)
 
     def _compose_final_score(
-            self,
-            *,
-            sim: float,
-            pop: float,
-            rec: float,
-            like_bonus: float,
-            dislike_penalty: float,
+        self,
+        *,
+        sim: float,
+        pop: float,
+        rec: float,
+        like_bonus: float,
+        dislike_penalty: float,
     ) -> float:
         # 정규화 기준:
         # MATCH_RESULT_SCORE_NORMALIZER(1.08) = 양의 최대 가중치 합
         # = 0.75(sim) + 0.15(pop) + 0.10(rec) + 0.08(like_bonus)
         final_raw = (
-                (sim * MATCH_RESULT_WEIGHT_SIM)
-                + (pop * MATCH_RESULT_WEIGHT_POP)
-                + (rec * MATCH_RESULT_WEIGHT_REC)
-                + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
-                - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+            (sim * MATCH_RESULT_WEIGHT_SIM)
+            + (pop * MATCH_RESULT_WEIGHT_POP)
+            + (rec * MATCH_RESULT_WEIGHT_REC)
+            + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
+            - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
         )
         return round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
 

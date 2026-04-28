@@ -346,10 +346,16 @@ class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
         response = self.client.get(self.url, {"genre_id": 7, "page_size": 5})
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(response.data["error_detail"], "매칭 추천 결과를 찾을 수 없습니다.")
+        self.assertEqual(
+            response.data["error_detail"], "매칭 추천 결과를 찾을 수 없습니다."
+        )
 
-    @patch("apps.match.views.rating_responses_result.MatchResponsesResultQueryService.get_results")
-    def test_get_responses_result_service_unavailable_returns_503(self, mock_get_results):
+    @patch(
+        "apps.match.views.rating_responses_result.MatchResponsesResultQueryService.get_results"
+    )
+    def test_get_responses_result_service_unavailable_returns_503(
+        self, mock_get_results
+    ):
         mock_get_results.side_effect = MatchResponsesResultDataUnavailable()
 
         response = self.client.get(self.url, {"genre_id": 2, "page_size": 5})
