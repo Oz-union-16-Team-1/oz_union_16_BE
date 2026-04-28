@@ -5,29 +5,29 @@ from apps.games.models import Game
 
 
 class GameTop100Service:
-    # 기획서 및 명세서에 따른 장르 매핑
+    # 1. 누락된 상수 정의
     GENRE_MAPPING = {
-        1: [25, 33],  # 액션 (핵 앤 슬래시, 아케이드)
-        2: [31, 2],  # 어드벤처 (어드벤처, 포인트 앤 클릭)
-        3: [12],  # RPG (역할수행)
-        4: [5],  # 슈팅 (FPS/TPS)
-        5: [15, 11, 16, 24, 36],  # 전략 (전략, RTS, TBS, 전술, MOBA)
-        6: [13],  # 시뮬레이션
-        7: [14],  # 스포츠
-        8: [10],  # 레이싱
-        9: [9, 26, 30],  # 퍼즐 (퍼즐, 퀴즈, 핀볼)
-        10: [8],  # 플랫폼
-        11: [4],  # 격투
-        12: [35],  # 보드/카드 게임
-        13: [7],  # 음악
-        14: [34],  # 비주얼 노벨
+        1: [25, 33],
+        2: [31, 2],
+        3: [12],
+        4: [5],
+        5: [15, 11, 16, 24, 36],
+        6: [13],
+        7: [14],
+        8: [10],
+        9: [9, 26, 30],
+        10: [8],
+        11: [4],
+        12: [35],
+        13: [7],
+        14: [34],
     }
+    CANDIDATE_LIMIT = 500
 
     @staticmethod
-    def get_top_100_games(genre_id: int):
-        """
-        중복된 에디션을 제거하고 순수한 TOP 100 리스트를 반환합니다.
-        """
+    def get_top_100_games(
+        genre_id: int, search: str = "", fuzzy: bool = False
+    ) -> list[Game]:
         now = timezone.now()
 
         # 1. 기본 필터링
@@ -35,34 +35,50 @@ class GameTop100Service:
             total_rating__isnull=False,
             total_rating_count__gte=50,
             first_release_date__lte=now,
+            parent_game__isnull=True,
+            is_ban=False,
         ).order_by("-total_rating", "-total_rating_count")
 
-        # 2. 장르 필터링 (0이 아닐 경우)
-        if genre_id != 0:
-            # mypy 에러 방지를 위해 클래스명을 명시적으로 참조
-            target_igdb_ids = GameTop100Service.GENRE_MAPPING.get(genre_id, [])
-            if target_igdb_ids:
-                genre_filter = Q()
-                for igdb_id in target_igdb_ids:
-                    genre_filter |= Q(genres__contains=igdb_id)
-                queryset = queryset.filter(genre_filter).distinct()
+        # 2. 검색어 필터링
+        if search:
+            if fuzzy:
+                words = search.split()
+                q = Q()
+                for word in words:
+                    q |= Q(name__icontains=word)
+                queryset = queryset.filter(q)
             else:
+                queryset = queryset.filter(name__icontains=search)
+
+        # 3. 장르 필터링 (0은 전체)
+        if genre_id != 0:
+            target_igdb_ids = GameTop100Service.GENRE_MAPPING.get(genre_id, [])
+            if not target_igdb_ids:
                 return []
 
-        # 3. 동일 게임(에디션 중복) 제거 로직
-        unique_games = []
-        seen_base_names = set()
+            genre_filter = Q()
+            for igdb_id in target_igdb_ids:
+                genre_filter |= Q(genres__contains=[igdb_id])
+            queryset = queryset.filter(genre_filter).distinct()
 
-        for game in queryset:
-            # 이름에서 ':', '-' 등을 기준으로 핵심 제목 추출
-            raw_name = game.name
-            base_name = raw_name.split(":")[0].split("-")[0].strip().lower()
+        # 4. 후보군 추출
+        candidates = queryset[: GameTop100Service.CANDIDATE_LIMIT]
 
-            if base_name not in seen_base_names:
-                unique_games.append(game)
+        # 5. 중복 에디션 제거 로직 (기존 로직 유지)
+        unique_games: list[Game] = []
+        seen_collections: set[int] = set()
+        seen_base_names: set[str] = set()
+
+        for game in candidates:
+            if game.collection is not None:
+                if game.collection in seen_collections:
+                    continue
+                seen_collections.add(game.collection)
+            else:
+                base_name = game.name.split(":")[0].split("-")[0].strip().lower()
+                if base_name in seen_base_names:
+                    continue
                 seen_base_names.add(base_name)
+            unique_games.append(game)
 
-            if len(unique_games) >= 100:
-                break
-
-        return unique_games
+        return unique_games[:100]
