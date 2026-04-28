@@ -19,7 +19,11 @@ from apps.match.constants import (
     MATCH_RESPONSE_MIN_STAR,
     MATCH_VECTOR_DIM,
 )
-from apps.match.models import MatchGamePreference, MatchGameRating
+from apps.match.models import (
+    MatchCandidateRetryState,
+    MatchGamePreference,
+    MatchGameRating,
+)
 from apps.match.services.candidates_selector import MatchCandidatesSelectorService
 from apps.users.models import UserLikeBookmark, UserPreference
 
@@ -55,20 +59,31 @@ class MatchResponsesSubmitService:
     ) -> dict[str, Any]:
         normalized = self._normalize_and_dedupe(match_result)
         game_ids = [item.game_id for item in normalized]
+        base_day = candidate_date or timezone.localdate()
 
-        self._validate_submitted_games_are_candidates(
-            user_id=user_id,
-            genre_id=genre_id,
-            retry_no=retry_no,
-            candidate_date=candidate_date,
-            submitted_game_ids=game_ids,
-        )
         self._ensure_games_exist(game_ids)
-
         game_vectors = self._load_game_vectors(game_ids)
         missing_vector_ids: list[int] = []
 
         with transaction.atomic():
+            retry_state = self._lock_retry_state(
+                user_id=user_id,
+                genre_id=genre_id,
+                candidate_date=base_day,
+            )
+
+            expected_retry_no = max(0, int(retry_state.last_completed_retry_no) + 1)
+            if int(retry_no) != expected_retry_no:
+                raise MatchResponsesValidationError("유효하지 않은 retry_no 입니다.")
+
+            self._validate_submitted_games_are_candidates(
+                user_id=user_id,
+                genre_id=genre_id,
+                retry_no=retry_no,
+                candidate_date=base_day,
+                submitted_game_ids=game_ids,
+            )
+
             pref, _ = UserPreference.objects.select_for_update().get_or_create(
                 user_id=user_id
             )
@@ -103,6 +118,9 @@ class MatchResponsesSubmitService:
 
             pref.match_vector = self._soft_clip(user_vector)
             pref.save(update_fields=["match_vector", "updated_at"])
+
+            retry_state.last_completed_retry_no = int(retry_no)
+            retry_state.save(update_fields=["last_completed_retry_no", "updated_at"])
 
         if missing_vector_ids:
             logger.warning(
@@ -212,6 +230,21 @@ class MatchResponsesSubmitService:
             raise MatchResponsesValidationError(
                 "후보 세트에 없는 game_id가 포함되어 있습니다."
             )
+
+    def _lock_retry_state(
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        candidate_date: date,
+    ) -> MatchCandidateRetryState:
+        state, _ = MatchCandidateRetryState.objects.select_for_update().get_or_create(
+            user_id=user_id,
+            api_genre_id=genre_id,
+            candidate_date=candidate_date,
+            defaults={"last_completed_retry_no": -1},
+        )
+        return state
 
     def _ensure_games_exist(self, game_ids: list[int]) -> None:
         existing = set(

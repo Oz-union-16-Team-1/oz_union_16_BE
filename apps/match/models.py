@@ -109,3 +109,29 @@ class MatchGameGenreMap(TimeStampedModel):
                 fields=["igdb_genre_id", "game_id"], name="idx_mggm_genre_game"
             ),
         ]
+
+
+class MatchCandidateRetryState(TimeStampedModel):
+    match_candidate_retry_state_id = models.BigAutoField(primary_key=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        db_column="user_id",
+        related_name="match_candidate_retry_states",
+    )
+    api_genre_id = models.PositiveSmallIntegerField()
+    candidate_date = models.DateField()
+    last_completed_retry_no = models.IntegerField(default=-1)
+
+    class Meta:
+        db_table = "match_candidate_retry_state"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "api_genre_id", "candidate_date"],
+                name="uq_mcrs_user_genre_date",
+            ),
+            models.CheckConstraint(
+                condition=Q(api_genre_id__gte=1) & Q(api_genre_id__lte=8),
+                name="ck_mcrs_api_genre_range",
+            ),
+        ]

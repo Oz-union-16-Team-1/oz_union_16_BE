@@ -31,7 +31,7 @@ class SurveyChatbotSessionCreateAPIView(GenericAPIView):
                     OpenApiExample(
                         "Unauthorized",
                         value={
-                            "detail": "자격 인증데이터(authentication credentials)가 제공되지 않았습니다."
+                            "error_detail": "자격 인증데이터(authentication credentials)가 제공되지 않았습니다."
                         },
                     )
                 ],
@@ -43,7 +43,7 @@ class SurveyChatbotSessionCreateAPIView(GenericAPIView):
                     OpenApiExample(
                         "QuestionGenerationFailed",
                         value={
-                            "detail": "질문을 생성하지 못했습니다. 다시 시도해주세요."
+                            "error_detail": "질문을 생성하지 못했습니다. 다시 시도해주세요."
                         },
                     )
                 ],
@@ -83,7 +83,7 @@ class SurveyChatbotSessionResetAPIView(GenericAPIView):
                     OpenApiExample(
                         "Unauthorized",
                         value={
-                            "detail": "자격 인증데이터(authentication credentials)가 제공되지 않았습니다."
+                            "error_detail": "자격 인증데이터(authentication credentials)가 제공되지 않았습니다."
                         },
                     )
                 ],
@@ -95,7 +95,7 @@ class SurveyChatbotSessionResetAPIView(GenericAPIView):
                     OpenApiExample(
                         "QuestionGenerationFailed",
                         value={
-                            "detail": "설문 첫 질문을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
+                            "error_detail": "설문 첫 질문을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
                         },
                     )
                 ],

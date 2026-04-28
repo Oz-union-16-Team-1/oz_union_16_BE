@@ -1,5 +1,4 @@
 import logging
-import random
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,13 +68,6 @@ class SurveyChatbotSessionService:
         "선호하시나요",
         "즐거우신가요?",
         "즐거우신가요",
-    )
-    FIRST_QUESTION_ANGLES = (
-        "최근 가장 재미있었던 게임 경험",
-        "오래 몰입하게 만든 요소",
-        "선호하는 분위기와 세계관",
-        "전투, 탐험, 성장 중 가장 중요하게 느끼는 재미",
-        "좋아하는 플레이 방식과 싫어하는 요소",
     )
     OPEN_ENDED_QUESTION_HINTS = (
         "어떤",
@@ -290,7 +282,7 @@ class SurveyChatbotSessionService:
 
         question = question.strip()
         return (
-            len(question) >= 30
+            40 <= len(question) <= 120
             and question.endswith(self.QUESTION_ENDINGS)
             and (
                 any(hint in question for hint in self.OPEN_ENDED_QUESTION_HINTS)
@@ -319,11 +311,6 @@ class SurveyChatbotSessionService:
     def load_first_question_prompt(self) -> str:
         return SURVEY_CHATBOT_PROMPT.strip()
 
-    # 첫 질문이 매번 같은 방향으로 생성되지 않도록 관점 추가
+    # 첫 질문 생성 프롬프트를 그대로 사용해 프롬프트 파일의 계약을 보존
     def build_first_question_prompt(self) -> str:
-        angle = random.choice(self.FIRST_QUESTION_ANGLES)
-        return (
-            f"{self.load_first_question_prompt()}\n\n"
-            f"이번 질문은 '{angle}' 관점을 중심으로 작성하세요.\n"
-            "직전과 완전히 다른 표현을 사용해 질문하세요."
-        )
+        return self.load_first_question_prompt()

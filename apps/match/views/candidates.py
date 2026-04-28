@@ -51,7 +51,7 @@ class MatchCandidatesAPIView(GenericAPIView):
         query_serializer.is_valid(raise_exception=True)
 
         genre_id = query_serializer.validated_data["genre_id"]
-        retry_no = query_serializer.validated_data["retry_no"]
+        retry_no = query_serializer.validated_data.get("retry_no")
 
         data = self.service_class().get_candidates(
             user_id=request.user.id,

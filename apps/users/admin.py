@@ -1,10 +1,8 @@
+from contextlib import suppress
+
 from django.apps import apps
 from django.contrib import admin
-from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group
-from django.urls import reverse
-from django.utils.html import format_html
-from django.utils.http import urlencode
 from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
     OutstandingToken,
@@ -13,40 +11,31 @@ from rest_framework_simplejwt.token_blacklist.models import (
 from apps.users.choices import StatusChoices
 from apps.users.models import SocialUser, User, UserLikeBookmark, UserPreference
 
-# ===== 관리자 기본 설정 =====
+with suppress(admin.sites.NotRegistered):
+    admin.site.unregister(BlacklistedToken)
+with suppress(admin.sites.NotRegistered):
+    admin.site.unregister(OutstandingToken)
+
 admin.site.site_header = "PGTI 관리자"
 admin.site.site_title = "PGTI 관리자"
 admin.site.index_title = "관리자 페이지"
 
-# ===== 앱 이름 한글화 =====
 apps.get_app_config("auth").verbose_name = "인증 및 권한"
-apps.get_app_config("token_blacklist").verbose_name = "토큰 블랙리스트"
 apps.get_app_config("users").verbose_name = "회원 관리"
 
-# ===== 모델 이름 한글화 =====
 Group._meta.verbose_name = "그룹"
 Group._meta.verbose_name_plural = "그룹"
 
-BlacklistedToken._meta.verbose_name = "블랙리스트 토큰"
-BlacklistedToken._meta.verbose_name_plural = "블랙리스트 토큰"
-
-OutstandingToken._meta.verbose_name = "발급 토큰"
-OutstandingToken._meta.verbose_name_plural = "발급 토큰"
-
 User._meta.verbose_name = "회원"
 User._meta.verbose_name_plural = "회원"
-
 SocialUser._meta.verbose_name = "소셜 회원"
 SocialUser._meta.verbose_name_plural = "소셜 회원"
-
 UserLikeBookmark._meta.verbose_name = "게임 좋아요"
 UserLikeBookmark._meta.verbose_name_plural = "게임 좋아요"
-
 UserPreference._meta.verbose_name = "회원 선호 데이터"
 UserPreference._meta.verbose_name_plural = "회원 선호 데이터"
 
 
-# ===== 배치 대시보드 =====
 class UserPreferenceDashboard(UserPreference):
     class Meta:
         proxy = True
@@ -54,7 +43,6 @@ class UserPreferenceDashboard(UserPreference):
         verbose_name_plural = "사용자 특성 데이터"
 
 
-# ===== Inline =====
 class UserLikeBookmarkInline(admin.TabularInline):
     model = UserLikeBookmark
     extra = 0
@@ -76,7 +64,6 @@ class UserLikeBookmarkInline(admin.TabularInline):
         return False
 
 
-# ===== Actions =====
 @admin.action(description="선택한 회원 활성화")
 def activate_users(modeladmin, request, queryset):
     queryset.update(status=StatusChoices.ACTIVE, is_active=True)
@@ -94,7 +81,6 @@ def reset_password(modeladmin, request, queryset):
         user.save(update_fields=["password"])
 
 
-# ===== User Admin =====
 @admin.register(User)
 class UserAdmin(admin.ModelAdmin):
     list_display = (
@@ -110,9 +96,11 @@ class UserAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
     search_fields = ("id", "login_id", "nickname", "email", "name")
     list_filter = ("status", "is_active", "is_staff", "created_at")
-
     inlines = [UserLikeBookmarkInline]
     actions = [activate_users, suspend_users, reset_password]
+    date_hierarchy = "created_at"
+    list_per_page = 30
+    empty_value_display = "-"
 
     @admin.display(description="로그인아이디", ordering="login_id")
     def login_id_display(self, obj):
@@ -139,7 +127,6 @@ class UserAdmin(admin.ModelAdmin):
         return obj.created_at
 
 
-# ===== 좋아요 =====
 @admin.register(UserLikeBookmark)
 class UserLikeBookmarkAdmin(admin.ModelAdmin):
     list_display = (
@@ -150,6 +137,14 @@ class UserLikeBookmarkAdmin(admin.ModelAdmin):
         "game_id",
         "created_at_display",
     )
+
+    ordering = ("-created_at",)
+    search_fields = ("user__login_id", "user__nickname", "user__email", "game_id")
+    list_filter = ("created_at",)
+    list_select_related = ("user",)
+    date_hierarchy = "created_at"
+    list_per_page = 30
+    empty_value_display = "-"
 
     @admin.display(description="로그인아이디")
     def user_login_id(self, obj):
@@ -167,14 +162,30 @@ class UserLikeBookmarkAdmin(admin.ModelAdmin):
     def created_at_display(self, obj):
         return obj.created_at
 
+    def has_add_permission(self, request):
+        return False
 
-# ===== 소셜 =====
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(SocialUser)
 class SocialUserAdmin(admin.ModelAdmin):
     list_display = ("id", "provider", "provider_id", "user")
+    search_fields = (
+        "provider",
+        "provider_id",
+        "user__login_id",
+        "user__nickname",
+        "user__email",
+    )
+    list_select_related = ("user",)
+    empty_value_display = "-"
 
 
-# ===== 선호 데이터 =====
 @admin.register(UserPreference)
 class UserPreferenceAdmin(admin.ModelAdmin):
     list_display = (
@@ -183,6 +194,10 @@ class UserPreferenceAdmin(admin.ModelAdmin):
         "has_survey_vector",
         "has_match_vector",
     )
+
+    search_fields = ("user__login_id", "user__nickname", "user__email")
+    list_select_related = ("user",)
+    empty_value_display = "-"
 
     @admin.display(boolean=True, description="설문 벡터 있음")
     def has_survey_vector(self, obj):
@@ -193,7 +208,6 @@ class UserPreferenceAdmin(admin.ModelAdmin):
         return obj.match_vector is not None
 
 
-# ===== 배치 대시보드 =====
 @admin.register(UserPreferenceDashboard)
 class UserPreferenceDashboardAdmin(admin.ModelAdmin):
     list_display = (
@@ -203,6 +217,10 @@ class UserPreferenceDashboardAdmin(admin.ModelAdmin):
         "has_survey_vector",
         "has_match_vector",
     )
+
+    search_fields = ("user__login_id", "user__nickname", "user__email")
+    list_select_related = ("user",)
+    empty_value_display = "-"
 
     @admin.display(description="로그인아이디")
     def user_login_id(self, obj):
