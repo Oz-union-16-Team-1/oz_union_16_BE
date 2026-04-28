@@ -10,7 +10,8 @@ ALLOWED_HOSTS = [
     "13.211.150.226",
     "13.239.38.172",
     "localhost",
-    "localhost:5173" "127.0.0.1",
+    "localhost:5173",
+    "127.0.0.1",
 ]
 
 STATIC_URL = "/static/"
