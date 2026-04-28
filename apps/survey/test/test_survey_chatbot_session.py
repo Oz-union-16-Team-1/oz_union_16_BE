@@ -25,9 +25,7 @@ from apps.survey.services.survey_chatbot_session import (
 )
 from apps.users.models import User
 
-TEST_FIRST_QUESTION = (
-    "최근 가장 오래 몰입했던 게임에서 어떤 요소가 좋았는지 알려주세요."
-)
+TEST_FIRST_QUESTION = "최근 가장 재미있게 즐긴 게임은 어떤 종류였고, 어떤 점 때문에 계속 플레이하게 되었는지 말씀해 주세요."
 
 
 def create_user(**kwargs) -> User:
@@ -320,10 +318,8 @@ class SurveyChatbotSessionResetAPITest(TestCase):
 
 class SurveyChatbotSessionServiceTest(TestCase):
     def test_default_prompt_constant_exists(self) -> None:
-        self.assertIn("장르나 게임 종류를 좋아하는지", SURVEY_CHATBOT_PROMPT)
-        self.assertIn(
-            "세계관, 분위기, 감정 몰입부터 바로 묻는 질문", SURVEY_CHATBOT_PROMPT
-        )
+        self.assertIn("게임 추천을 위한 설문 챗봇", SURVEY_CHATBOT_PROMPT)
+        self.assertIn("최근 재미있게 한 게임 경험", SURVEY_CHATBOT_PROMPT)
 
     def test_initialize_session_clears_existing_result(self) -> None:
         user = create_user()
@@ -500,10 +496,6 @@ class SurveyChatbotSessionServiceTest(TestCase):
         service = SurveyChatbotSessionService()
 
         with (
-            patch(
-                "apps.survey.services.survey_chatbot_session.random.choice",
-                return_value="최근 가장 재미있었던 게임 경험",
-            ),
             patch.object(
                 service,
                 "generate_question_with_llm",
@@ -515,24 +507,17 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 service.generate_first_question()
 
         called_prompt = generate_question.call_args.args[0]
-        self.assertIn(service.load_first_question_prompt(), called_prompt)
-        self.assertIn("최근 가장 재미있었던 게임 경험", called_prompt)
+        self.assertEqual(service.load_first_question_prompt(), called_prompt)
         self.assertEqual(generate_question.call_args.kwargs["temperature"], 0.85)
         self.assertEqual(logging.getLogger.return_value.warning.call_count, 3)
 
     def test_generate_first_question_uses_valid_llm_response(self) -> None:
         service = SurveyChatbotSessionService()
 
-        with (
-            patch(
-                "apps.survey.services.survey_chatbot_session.random.choice",
-                return_value="선호하는 분위기와 세계관",
-            ),
-            patch.object(
-                service,
-                "generate_question_with_llm",
-                return_value=TEST_FIRST_QUESTION,
-            ),
+        with patch.object(
+            service,
+            "generate_question_with_llm",
+            return_value=TEST_FIRST_QUESTION,
         ):
             question = service.generate_first_question()
 
@@ -580,27 +565,20 @@ class SurveyChatbotSessionServiceTest(TestCase):
         service = SurveyChatbotSessionService()
 
         with (
-            patch(
-                "apps.survey.services.survey_chatbot_session.random.choice",
-                return_value="좋아하는 플레이 방식과 싫어하는 요소",
-            ),
             patch.object(service, "generate_question_with_llm", return_value=None),
             patch("apps.survey.services.survey_chatbot_session.logging"),
         ):
             with self.assertRaises(SurveyQuestionGenerationUnavailable):
                 service.generate_first_question()
 
-    def test_build_first_question_prompt_adds_random_angle(self) -> None:
+    def test_build_first_question_prompt_uses_prompt_file_without_extra_text(
+        self,
+    ) -> None:
         service = SurveyChatbotSessionService()
 
-        with patch(
-            "apps.survey.services.survey_chatbot_session.random.choice",
-            return_value="전투, 탐험, 성장 중 가장 중요하게 느끼는 재미",
-        ):
-            prompt = service.build_first_question_prompt()
+        prompt = service.build_first_question_prompt()
 
-        self.assertIn(service.load_first_question_prompt(), prompt)
-        self.assertIn("전투, 탐험, 성장 중 가장 중요하게 느끼는 재미", prompt)
+        self.assertEqual(service.load_first_question_prompt(), prompt)
 
     def test_generate_valid_question_retries_until_valid_question(self) -> None:
         service = SurveyChatbotSessionService()
