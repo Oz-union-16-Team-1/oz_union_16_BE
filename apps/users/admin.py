@@ -11,7 +11,6 @@ from rest_framework_simplejwt.token_blacklist.models import (
 from apps.users.choices import StatusChoices
 from apps.users.models import SocialUser, User, UserLikeBookmark, UserPreference
 
-
 with suppress(admin.sites.NotRegistered):
     admin.site.unregister(BlacklistedToken)
 
