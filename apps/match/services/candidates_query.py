@@ -4,12 +4,13 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.exceptions import APIException
 
 from apps.games.models import Game
 from apps.match.constants import IGDB_GENRE_NAME_MAP
-from apps.match.models import MatchGameGenreMap
+from apps.match.models import MatchCandidateRetryState, MatchGameGenreMap
 from apps.match.services.candidates_selector import MatchCandidatesSelectorService
 from apps.users.models import UserLikeBookmark
 
@@ -25,20 +26,31 @@ class MatchCandidatesQueryService:
     selector_class = MatchCandidatesSelectorService
 
     def get_candidates(
-        self,
-        *,
-        user_id: int,
-        genre_id: int,
-        retry_no: int = 0,
+            self,
+            *,
+            user_id: int,
+            genre_id: int,
+            retry_no: int | None = None,
     ) -> dict[str, Any]:
         try:
+            effective_retry_no = self._resolve_effective_retry_no(
+                user_id=user_id,
+                genre_id=genre_id,
+                retry_no=retry_no,
+            )
+
             selected_ids = self.selector_class().select_game_ids(
                 user_id=user_id,
                 api_genre_id=genre_id,
-                retry_no=retry_no,
+                retry_no=effective_retry_no,
             )
             if not selected_ids:
-                return {"genre_id": genre_id, "count": 0, "results": []}
+                return {
+                    "genre_id": genre_id,
+                    "retry_no": effective_retry_no,
+                    "count": 0,
+                    "results": [],
+                }
 
             game_rows = list(
                 Game.objects.filter(game_id__in=selected_ids, is_ban=False).values(
@@ -51,12 +63,22 @@ class MatchCandidatesQueryService:
                 )
             )
             if not game_rows:
-                return {"genre_id": genre_id, "count": 0, "results": []}
+                return {
+                    "genre_id": genre_id,
+                    "retry_no": effective_retry_no,
+                    "count": 0,
+                    "results": [],
+                }
 
             game_map = {int(row["game_id"]): row for row in game_rows}
             ordered_ids = [gid for gid in selected_ids if gid in game_map]
             if not ordered_ids:
-                return {"genre_id": genre_id, "count": 0, "results": []}
+                return {
+                    "genre_id": genre_id,
+                    "retry_no": effective_retry_no,
+                    "count": 0,
+                    "results": [],
+                }
 
             liked_ids = set(
                 UserLikeBookmark.objects.filter(
@@ -97,6 +119,7 @@ class MatchCandidatesQueryService:
 
             return {
                 "genre_id": genre_id,
+                "retry_no": effective_retry_no,
                 "count": len(results),
                 "results": results,
             }
@@ -148,3 +171,28 @@ class MatchCandidatesQueryService:
             return video_id
 
         return f"https://www.youtube.com/watch?v={video_id}"
+
+    def _resolve_effective_retry_no(
+        self,
+        *,
+        user_id: int,
+        genre_id: int,
+        retry_no: int | None,
+    ) -> int:
+        if retry_no is not None:
+            return max(0, int(retry_no))
+
+        today = timezone.localdate()
+        state = (
+            MatchCandidateRetryState.objects.filter(
+                user_id=user_id,
+                api_genre_id=genre_id,
+                candidate_date=today,
+            )
+            .only("last_completed_retry_no")
+            .first()
+        )
+        if state is None:
+            return 0
+
+        return max(0, int(state.last_completed_retry_no) + 1)
