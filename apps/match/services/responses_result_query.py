@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import re
 import time
 from collections import defaultdict
 from collections.abc import Iterable as IterableABC
@@ -46,10 +47,18 @@ class MatchResponsesResultDataUnavailable(RuntimeError):
     pass
 
 
+SERIES_SUFFIX_RE = re.compile(
+    r"(?:[-_ ](?:deluxe|ultimate|complete|definitive|gold|goty|edition|bundle|pack|collection|remaster(?:ed)?|remake|director(?:s)?[-_ ]?cut|anniversary))+$",
+    re.IGNORECASE,
+)
+TITLE_NOISE_RE = re.compile(r"[\(\[\{].*?[\)\]\}]")
+
+
 @dataclass(frozen=True)
 class RankedGame:
     game_id: int
     title: str
+    slug: str
     genres: list[str]
     thumbnail_url: str
     rating: float
@@ -158,11 +167,14 @@ class MatchResponsesResultQueryService:
                 )
                 selected = self._merge_unique(selected, stage4)
 
-            final_ranked = sorted(
+            sorted_ranked = sorted(
                 selected,
                 key=lambda item: (item.final_score, item.game_id),
                 reverse=True,
-            )[:MATCH_RESULT_MAX_TOTAL_COUNT]
+            )
+            final_ranked = self._dedupe_series_variants(sorted_ranked)[
+                :MATCH_RESULT_MAX_TOTAL_COUNT
+            ]
 
             page_items, next_cursor = self._paginate(
                 items=final_ranked,
@@ -274,6 +286,7 @@ class MatchResponsesResultQueryService:
             ).values(
                 "game_id",
                 "name",
+                "slug",
                 "cover",
                 "rating",
                 "first_release_date",
@@ -320,6 +333,7 @@ class MatchResponsesResultQueryService:
                 RankedGame(
                     game_id=game_id,
                     title=str(row.get("name") or ""),
+                    slug=str(row.get("slug") or ""),
                     genres=genre_map.get(game_id, []),
                     thumbnail_url=self._to_thumbnail_url(row.get("cover")),
                     rating=self._normalize_rating(row.get("rating")),
@@ -392,6 +406,7 @@ class MatchResponsesResultQueryService:
             qs.values(
                 "game_id",
                 "name",
+                "slug",
                 "cover",
                 "rating",
                 "rating_count",
@@ -437,6 +452,7 @@ class MatchResponsesResultQueryService:
                 RankedGame(
                     game_id=game_id,
                     title=str(row.get("name") or ""),
+                    slug=str(row.get("slug") or ""),
                     genres=genre_map.get(game_id, []),
                     thumbnail_url=self._to_thumbnail_url(row.get("cover")),
                     rating=self._normalize_rating(row.get("rating")),
@@ -586,6 +602,57 @@ class MatchResponsesResultQueryService:
             seen.add(item.game_id)
             out.append(item)
         return out
+
+    def _dedupe_series_variants(self, items: list[RankedGame]) -> list[RankedGame]:
+        """
+        같은 시리즈/에디션(예: Deluxe, Complete, GOTY)은 1개만 남긴다.
+        입력 items는 이미 final_score DESC, game_id DESC 정렬 상태여야 한다.
+        """
+        if not items:
+            return []
+
+        out: list[RankedGame] = []
+        seen_keys: set[str] = set()
+
+        for item in items:
+            key = self._canonical_game_key(item)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            out.append(item)
+
+        return out
+
+
+    def _canonical_game_key(self, item: RankedGame) -> str:
+        slug_key = self._normalize_slug_for_dedupe(item.slug)
+        if slug_key:
+            return f"s:{slug_key}"
+
+        title_key = self._normalize_title_for_dedupe(item.title)
+        return f"t:{title_key}"
+
+
+    def _normalize_slug_for_dedupe(self, slug: str) -> str:
+        text = (slug or "").strip().lower()
+        if not text:
+            return ""
+
+        text = SERIES_SUFFIX_RE.sub("", text)
+        text = re.sub(r"[-_]+", "-", text).strip("-")
+        return text
+
+
+    def _normalize_title_for_dedupe(self, title: str) -> str:
+        text = (title or "").strip().lower()
+        if not text:
+            return ""
+
+        text = TITLE_NOISE_RE.sub(" ", text)  # 괄호 부가정보 제거
+        text = SERIES_SUFFIX_RE.sub("", text)
+        text = re.sub(r"[^a-z0-9가-힣]+", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
 
     def _take_by_popularity(
         self, items: list[RankedGame], limit: int
