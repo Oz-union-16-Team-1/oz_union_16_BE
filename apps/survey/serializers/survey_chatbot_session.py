@@ -1,14 +1,6 @@
 from rest_framework import serializers
 
 
-class SurveyChatbotSessionCreateRequestSerializer(serializers.Serializer):
-    """설문 챗봇 세션 시작 요청"""
-
-    is_reset = serializers.BooleanField(
-        default=False, help_text="기존 세션 초기화 여부"
-    )
-
-
 class SurveyProgressSerializer(serializers.Serializer):
     """프론트 진행도 표시용 응답"""
 

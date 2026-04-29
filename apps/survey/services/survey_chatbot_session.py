@@ -1,4 +1,5 @@
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -46,7 +47,26 @@ class SurveyChatbotSessionCreateResult:
 
 
 class SurveyChatbotSessionService:
+    SAFE_FALLBACK_QUESTIONS = (
+        "{nickname}님은 최근 가장 오래 플레이했던 게임에서 어떤 재미 때문에 계속 하게 되었는지 말씀해 주세요.",
+        "{nickname}님은 최근 몰입해서 플레이했던 게임에서는 어떤 플레이 과정이 가장 기억에 남았는지 말씀해 주세요.",
+        "{nickname}님은 혼자 몰입하는 플레이와 다른 사람과 협력하거나 경쟁하는 플레이 중 어떤 경험이 더 잘 맞는지 말씀해 주세요.",
+    )
+    SAFE_NEXT_FALLBACK_QUESTIONS = (
+        "{nickname}님이 방금 말한 재미는 전투의 긴장감, 성장의 성취감, 탐험의 발견감 중 어디에 가장 가까운지 말씀해 주세요.",
+        "{nickname}님은 비슷한 상황에서 빠르게 판단해 움직이는 플레이와 충분히 준비한 뒤 안정적으로 진행하는 플레이 중 어느 쪽이 더 잘 맞나요?",
+        "{nickname}님은 게임에서 실력이 늘어 이기는 성취감과 새로운 지역이나 보상을 발견하는 만족감 중 어느 쪽이 더 크게 느껴지나요?",
+    )
+    SAFE_REASK_FALLBACK_QUESTIONS = (
+        "{nickname}님이 최근 플레이한 게임 중 오래 기억나는 장면이 있다면 무엇이 재미있었는지 말씀해 주세요.",
+        "{nickname}님은 게임할 때 빠르게 몰아치는 진행과 천천히 준비하며 진행하는 방식 중 어느 쪽이 더 편한지 알려주세요.",
+    )
+    SAFE_CLARIFY_FALLBACK_QUESTIONS = (
+        "쉽게 말해, {nickname}님은 게임을 할 때 전투, 성장, 탐험, 협동 중 무엇이 가장 재미있는지 말씀해 주세요.",
+        "질문을 바꿔서 물어볼게요. {nickname}님이 최근 재미있게 한 게임에서 계속 하게 만든 이유를 알려주세요.",
+    )
     QUESTION_ENDINGS = (
+        "?",
         "요?",
         "나요?",
         "까요?",
@@ -60,6 +80,11 @@ class SurveyChatbotSessionService:
         "인가요",
         "한가요?",
         "한가요",
+    )
+    FIRST_QUESTION_ENDINGS = (
+        "있나요?",
+        "주세요.",
+        "말씀해 주세요.",
     )
     YES_NO_STYLE_ENDINGS = (
         "좋아하시나요?",
@@ -91,16 +116,58 @@ class SurveyChatbotSessionService:
         "더 좋",
         "비교하면",
     )
-    QUESTION_GENERATION_MAX_ATTEMPTS = 3
+    VAGUE_QUESTION_PATTERNS = (
+        r"어떤\s*점",
+        r"어떤\s*부분",
+        r"어떤\s*요소",
+        r"어떤\s*경험",
+        r"어떤\s*게임\s*스타일",
+        r"어떤\s*스타일",
+        r"왜\s*좋",
+        r"무엇을\s*중요",
+        r"자세히\s*말씀해\s*주세요",
+    )
+    GENERIC_QUESTION_PATTERNS = (
+        r"게임에서\s*무엇을\s*중요하게",
+        r"게임할\s*때\s*어떤\s*스타일",
+        r"어떤\s*플레이\s*방식.*좋",
+        r"어떤\s*게임.*좋",
+    )
+    QUESTION_SIMILARITY_STOPWORDS = {
+        "어떤",
+        "무슨",
+        "게임",
+        "플레이",
+        "방식",
+        "스타일",
+        "좋아",
+        "선호",
+        "말씀",
+        "알려",
+        "주세요",
+        "있나요",
+        "느끼시나요",
+        "끌리나요",
+        "경험",
+        "부분",
+        "요소",
+    }
+    QUESTION_TOPIC_KEYWORDS = {
+        "genre": ("장르", "종류", "액션", "RPG", "FPS", "퍼즐", "전략", "시뮬레이션"),
+        "difficulty": ("난이도", "어렵", "쉬운", "도전", "하드", "패턴", "보스"),
+        "coop_competition": ("협력", "협동", "경쟁", "팀", "친구", "역할", "대결"),
+        "story": ("스토리", "서사", "세계관", "몰입", "캐릭터", "감정"),
+        "combat": ("전투", "공격", "수비", "반응", "콤보", "제압", "싸우"),
+        "exploration": ("탐험", "발견", "지역", "숨겨진", "비밀", "맵"),
+        "growth": ("성장", "레벨", "빌드", "장비", "파밍", "강해"),
+        "tempo": ("빠른", "천천히", "템포", "속도", "준비", "진행"),
+        "reward": ("보상", "수집", "아이템", "획득", "드롭"),
+        "mastery": ("숙련", "실력", "연습", "익히", "운용"),
+    }
 
     # 유저별 설문 세션 생성 또는 기존 세션 재사용
-    def create_session(
-        self, user: Any, is_reset: bool = False
-    ) -> SurveyChatbotSessionCreateResult:
+    def create_session(self, user: Any) -> SurveyChatbotSessionCreateResult:
         with transaction.atomic():
-            if is_reset:
-                self.delete_user_session(user)
-
             session, created = self.get_or_create_user_session(user)
 
             if self.should_initialize_session(session, created):
@@ -114,6 +181,21 @@ class SurveyChatbotSessionService:
             ai_question=question,
             progress=self.build_progress(session),
             recommendation_ready=session.status == SurveyStatusChoices.CLOSED,
+        )
+
+    def reset_session(self, user: Any) -> SurveyChatbotSessionCreateResult:
+        with transaction.atomic():
+            self.delete_user_session(user)
+            session, _ = self.get_or_create_user_session(user)
+            self.initialize_session(session)
+            question = self.get_current_question(session)
+
+        return SurveyChatbotSessionCreateResult(
+            session_id=str(session.id),
+            status=session.status,
+            ai_question=question,
+            progress=self.build_progress(session),
+            recommendation_ready=False,
         )
 
     # 유저당 하나의 설문 세션만 유지하도록 세션을 조회하거나 생성
@@ -150,7 +232,7 @@ class SurveyChatbotSessionService:
 
         SurveyChatbotMessage.objects.create(
             session=session,
-            message=self.generate_first_question(),
+            message=self.generate_first_question(session.user),
             role=SurveyRoleChoices.AI,
             sequence=1,
         )
@@ -171,7 +253,9 @@ class SurveyChatbotSessionService:
             .order_by("-sequence")
             .first()
         )
-        return message.message if message else self.generate_first_question()
+        return (
+            message.message if message else self.generate_first_question(session.user)
+        )
 
     # 유저 답변 수 기준으로 설문 진행도 계산
     def build_progress(self, session: SurveyChatbotSession) -> dict:
@@ -185,17 +269,21 @@ class SurveyChatbotSessionService:
             "completion_rate": completion_rate,
         }
 
-    # 첫 질문 생성 실패 시 최대 3회까지 다시 시도
-    def generate_first_question(self) -> str:
-        prompt = self.build_first_question_prompt()
+    # 첫 질문 생성 실패 시 안전한 기본 질문으로 설문 진행을 유지
+    def generate_first_question(self, user: Any | None = None) -> str:
+        nickname = self.get_user_nickname(user) if user else None
+        prompt = self.build_first_question_prompt(user)
         question = self.generate_valid_question(
             prompt=prompt,
             temperature=0.85,
             log_message="Invalid survey question generated by LLM: %s",
+            mode="FIRST",
+            fallback_questions=self.SAFE_FALLBACK_QUESTIONS,
+            nickname=nickname,
         )
         if question:
             return question
-        raise SurveyQuestionGenerationUnavailable()
+        return self.SAFE_FALLBACK_QUESTIONS[0]
 
     # Gemini에게 질문 생성을 요청하고 텍스트 응답 추출
     def generate_question_with_llm(
@@ -246,23 +334,77 @@ class SurveyChatbotSessionService:
             )
         return question
 
-    # 질문 생성 실패 시 재시도, 유효한 질문만 반환
+    # LLM 호출은 1회만 수행하고, 후처리로 보정한 뒤 실패 시 fallback으로 진행
     def generate_valid_question(
         self,
         prompt: str,
         temperature: float,
         log_message: str,
+        mode: str = "FIRST",
+        previous_questions: list[str] | None = None,
+        latest_user_message: str = "",
+        fallback_questions: tuple[str, ...] | None = None,
+        nickname: str | None = None,
     ) -> str | None:
         logger = logging.getLogger(__name__)
-        for _ in range(self.QUESTION_GENERATION_MAX_ATTEMPTS):
-            question = self.generate_question_with_llm(
-                prompt,
-                temperature=temperature,
-            )
-            if question and self.is_valid_survey_question(question):
-                return question
-            logger.warning(log_message, question)
-        return None
+        question = self.generate_question_with_llm(
+            prompt,
+            temperature=temperature,
+        )
+        question = self.normalize_generated_question(question)
+        question = self.ensure_nickname_in_question(question, nickname)
+        question = self.repair_yes_no_question(question)
+        if question and self.is_valid_survey_question(
+            question=question,
+            mode=mode,
+            previous_questions=previous_questions,
+            latest_user_message=latest_user_message,
+        ):
+            return question
+
+        logger.warning(log_message, question)
+
+        return self.get_safe_fallback_question(
+            mode=mode,
+            previous_questions=previous_questions or [],
+            fallback_questions=fallback_questions,
+            nickname=nickname or "사용자",
+        )
+
+    def ensure_nickname_in_question(
+        self,
+        question: str | None,
+        nickname: str | None,
+    ) -> str | None:
+        if not question or not nickname or f"{nickname}님" in question:
+            return question
+        return f"{nickname}님은 {question}"
+
+    def normalize_generated_question(self, question: str | None) -> str | None:
+        if not question:
+            return None
+
+        normalized = " ".join(question.strip().strip('"').strip("'").split())
+        return normalized or None
+
+    def repair_yes_no_question(self, question: str | None) -> str | None:
+        if not question:
+            return None
+
+        replacements = {
+            "좋아하시나요?": "좋아하는 이유나 기억나는 장면을 말씀해 주세요.",
+            "좋아하시나요": "좋아하는 이유나 기억나는 장면을 말씀해 주세요.",
+            "선호하시나요?": "선호하는 이유나 기억나는 장면을 말씀해 주세요.",
+            "선호하시나요": "선호하는 이유나 기억나는 장면을 말씀해 주세요.",
+            "즐거우신가요?": "즐거웠던 이유나 기억나는 장면을 말씀해 주세요.",
+            "즐거우신가요": "즐거웠던 이유나 기억나는 장면을 말씀해 주세요.",
+            "느끼시나요?": "느끼는 이유나 기억나는 장면을 말씀해 주세요.",
+            "느끼시나요": "느끼는 이유나 기억나는 장면을 말씀해 주세요.",
+        }
+        for ending, replacement in replacements.items():
+            if question.endswith(ending):
+                return f"{question[: -len(ending)].rstrip()} {replacement}"
+        return question
 
     # Gemini 응답의 여러 parts를 하나의 질문으로 결합
     def extract_text_from_gemini_response(self, data: dict) -> str | None:
@@ -281,18 +423,32 @@ class SurveyChatbotSessionService:
             return False
 
         question = question.strip()
-        return (
-            40 <= len(question) <= 120
-            and question.endswith(self.QUESTION_ENDINGS)
-            and (
-                any(hint in question for hint in self.OPEN_ENDED_QUESTION_HINTS)
-                or any(hint in question for hint in self.COMPARISON_QUESTION_HINTS)
-            )
+        return 30 <= len(question) <= 180 and question.endswith(
+            self.FIRST_QUESTION_ENDINGS
         )
 
-    # 예/아니오형 질문을 막되 A/B 비교형 질문은 허용
-    def is_valid_survey_question(self, question: str | None) -> bool:
-        if not self.is_complete_first_question(question):
+    def is_complete_survey_question(
+        self,
+        question: str | None,
+        mode: str = "FIRST",
+    ) -> bool:
+        if mode == "FIRST":
+            return self.is_complete_first_question(question)
+        if not question:
+            return False
+
+        question = question.strip()
+        return 20 <= len(question) <= 180 and question.endswith(self.QUESTION_ENDINGS)
+
+    # 설문 진행을 막지 않도록 최소 조건만 검증
+    def is_valid_survey_question(
+        self,
+        question: str | None,
+        mode: str = "FIRST",
+        previous_questions: list[str] | None = None,
+        latest_user_message: str = "",
+    ) -> bool:
+        if not self.is_complete_survey_question(question=question, mode=mode):
             return False
 
         assert question is not None
@@ -307,10 +463,104 @@ class SurveyChatbotSessionService:
 
         return True
 
+    def is_low_quality_question(self, question: str) -> bool:
+        return any(
+            re.search(pattern, question) for pattern in self.VAGUE_QUESTION_PATTERNS
+        ) or any(
+            re.search(pattern, question) for pattern in self.GENERIC_QUESTION_PATTERNS
+        )
+
+    def is_repeated_question(
+        self,
+        question: str,
+        previous_questions: list[str],
+    ) -> bool:
+        return any(
+            self.is_question_too_similar(question, previous_question)
+            for previous_question in previous_questions
+        )
+
+    def is_question_too_similar(self, question: str, previous_question: str) -> bool:
+        if question.strip() == previous_question.strip():
+            return True
+
+        question_tokens = self.extract_question_tokens(question)
+        previous_tokens = self.extract_question_tokens(previous_question)
+        if not question_tokens or not previous_tokens:
+            return False
+
+        overlap = question_tokens & previous_tokens
+        overlap_ratio = len(overlap) / min(len(question_tokens), len(previous_tokens))
+        return overlap_ratio >= 0.6
+
+    def extract_question_tokens(self, question: str) -> set[str]:
+        tokens = re.findall(r"[가-힣A-Za-z0-9]+", question.lower())
+        return {
+            token
+            for token in tokens
+            if len(token) >= 2 and token not in self.QUESTION_SIMILARITY_STOPWORDS
+        }
+
+    def is_unrelated_to_latest_answer(
+        self,
+        question: str,
+        latest_user_message: str,
+    ) -> bool:
+        if not latest_user_message.strip():
+            return False
+
+        user_topics = self.detect_question_topics(latest_user_message)
+        if not user_topics:
+            return False
+
+        question_topics = self.detect_question_topics(question)
+        return bool(question_topics) and user_topics.isdisjoint(question_topics)
+
+    def detect_question_topics(self, text: str) -> set[str]:
+        normalized = text.lower()
+        return {
+            topic
+            for topic, keywords in self.QUESTION_TOPIC_KEYWORDS.items()
+            if any(keyword.lower() in normalized for keyword in keywords)
+        }
+
+    def get_safe_fallback_question(
+        self,
+        mode: str,
+        previous_questions: list[str],
+        fallback_questions: tuple[str, ...] | None = None,
+        nickname: str = "사용자",
+    ) -> str | None:
+        fallback_pool = fallback_questions or self.get_fallback_question_pool(mode)
+        for fallback_question in fallback_pool:
+            personalized_question = fallback_question.format(nickname=nickname)
+            if self.is_valid_survey_question(
+                question=personalized_question,
+                mode=mode,
+                previous_questions=previous_questions,
+            ):
+                return personalized_question
+        return fallback_pool[0].format(nickname=nickname) if fallback_pool else None
+
+    def get_fallback_question_pool(self, mode: str) -> tuple[str, ...]:
+        if mode == "NEXT":
+            return self.SAFE_NEXT_FALLBACK_QUESTIONS
+        if mode == "REASK":
+            return self.SAFE_REASK_FALLBACK_QUESTIONS
+        if mode == "CLARIFY":
+            return self.SAFE_CLARIFY_FALLBACK_QUESTIONS
+        return self.SAFE_FALLBACK_QUESTIONS
+
     # 첫 질문 생성에 사용할 기본 프롬프트를 호출
     def load_first_question_prompt(self) -> str:
         return SURVEY_CHATBOT_PROMPT.strip()
 
+    def get_user_nickname(self, user: Any | None) -> str:
+        nickname = getattr(user, "nickname", None)
+        return str(nickname).strip() if nickname else "사용자"
+
     # 첫 질문 생성 프롬프트를 그대로 사용해 프롬프트 파일의 계약을 보존
-    def build_first_question_prompt(self) -> str:
-        return self.load_first_question_prompt()
+    def build_first_question_prompt(self, user: Any | None = None) -> str:
+        return self.load_first_question_prompt().format(
+            nickname=self.get_user_nickname(user)
+        )
