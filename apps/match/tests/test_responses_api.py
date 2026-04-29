@@ -631,8 +631,8 @@ class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
         }
 
         with patch(
-                "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
-                side_effect=selector_side_effect,
+            "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+            side_effect=selector_side_effect,
         ):
             response = self.client.post(self.url, payload, format="json")
 

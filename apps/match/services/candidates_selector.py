@@ -28,15 +28,15 @@ class CandidateItem:
 
 class MatchCandidatesSelectorService:
     def select_game_ids(
-            self,
-            *,
-            user_id: int,
-            api_genre_id: int,
-            retry_no: int = 0,
-            today: date | None = None,
-            max_count: int = MATCH_CANDIDATE_MAX_COUNT,
-            pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
-            liked_game_ids: set[int] | None = None,
+        self,
+        *,
+        user_id: int,
+        api_genre_id: int,
+        retry_no: int = 0,
+        today: date | None = None,
+        max_count: int = MATCH_CANDIDATE_MAX_COUNT,
+        pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
+        liked_game_ids: set[int] | None = None,
     ) -> list[int]:
         target_genres = API_TO_IGDB_GENRE_MAP.get(api_genre_id, [])
         if not target_genres:

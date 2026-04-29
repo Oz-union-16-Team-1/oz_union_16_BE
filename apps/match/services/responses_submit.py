@@ -238,10 +238,10 @@ class MatchResponsesSubmitService:
             )
 
     def _locked_liked_ids_for_validation(
-            self,
-            *,
-            user_id: int,
-            submitted_game_ids: set[int],
+        self,
+        *,
+        user_id: int,
+        submitted_game_ids: set[int],
     ) -> set[int]:
         """
         제출 검증 시점에 평가중 토글된 liked 변화가
