@@ -218,23 +218,16 @@ class MatchResponsesSubmitService:
         base_day = candidate_date or timezone.localdate()
         submitted_set = set(submitted_game_ids)
 
-        # 평가 중 is_liked 토글로 검증 후보셋이 바뀌는 문제 방지:
-        # 지금 제출하는 게임들에 대한 liked 변경은 검증 계산에서 제외한다.
-        current_liked_ids = set(
-            UserLikeBookmark.objects.filter(user_id=user_id).values_list(
-                "game_id",
-                flat=True,
-            )
-        )
-        locked_liked_ids = current_liked_ids - submitted_set
-
         expected_ids = set(
             MatchCandidatesSelectorService().select_game_ids(
                 user_id=user_id,
                 api_genre_id=genre_id,
                 retry_no=retry_no,
                 today=base_day,
-                liked_game_ids=locked_liked_ids,
+                liked_game_ids=self._locked_liked_ids_for_validation(
+                    user_id=user_id,
+                    submitted_game_ids=submitted_set,
+                ),
             )
         )
 
@@ -243,6 +236,24 @@ class MatchResponsesSubmitService:
             raise MatchResponsesValidationError(
                 "후보 세트에 없는 game_id가 포함되어 있습니다."
             )
+
+    def _locked_liked_ids_for_validation(
+            self,
+            *,
+            user_id: int,
+            submitted_game_ids: set[int],
+    ) -> set[int]:
+        """
+        제출 검증 시점에 평가중 토글된 liked 변화가
+        후보 재계산 결과를 흔들지 않도록 제출 대상 game_id는 제외한다.
+        """
+        current_liked_ids = set(
+            UserLikeBookmark.objects.filter(user_id=user_id).values_list(
+                "game_id",
+                flat=True,
+            )
+        )
+        return current_liked_ids - submitted_game_ids
 
     def _lock_retry_state(
         self,
