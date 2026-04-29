@@ -19,8 +19,26 @@ class GameSyncServiceTest(TestCase):
             "rating": 85.5,
             "total_rating": 87.0,
             "total_rating_count": 100,
-            "cover": "co1234",
+            "cover": {"image_id": "co1234"},
             "genres": [12, 31],
+            "screenshots": [{"image_id": "sc1234"}],
+            "videos": [{"video_id": "yt1234"}],
+            "websites": [
+                {"category": 1, "url": "https://official.example.com"},
+                {"category": 13, "url": "https://store.steampowered.com/app/test"},
+            ],
+            "involved_companies": [
+                {
+                    "company": {"name": "Dev Studio"},
+                    "developer": True,
+                    "publisher": False,
+                },
+                {
+                    "company": {"name": "Pub Studio"},
+                    "developer": False,
+                    "publisher": True,
+                },
+            ],
         }
 
     def test_prepare_game_data_conversion(self):
@@ -34,6 +52,34 @@ class GameSyncServiceTest(TestCase):
         # 2. 기본 필드 값 확인
         self.assertEqual(processed_data["name"], "Test Adventure Game")
         self.assertEqual(processed_data["rating"], 85.5)
+        self.assertEqual(processed_data["cover"], "co1234")
+        self.assertEqual(processed_data["screenshots"], ["sc1234"])
+        self.assertEqual(processed_data["videos"], ["yt1234"])
+        self.assertEqual(
+            processed_data["websites"],
+            [
+                {"category": 1, "url": "https://official.example.com"},
+                {
+                    "category": 13,
+                    "url": "https://store.steampowered.com/app/test",
+                },
+            ],
+        )
+        self.assertEqual(
+            processed_data["involved_companies"],
+            [
+                {
+                    "company_name": "Dev Studio",
+                    "developer": True,
+                    "publisher": False,
+                },
+                {
+                    "company_name": "Pub Studio",
+                    "developer": False,
+                    "publisher": True,
+                },
+            ],
+        )
 
     @patch("apps.games.service.game_sync_services.igdb_client.get_games")
     def test_sync_all_games_success(self, mock_get_games):
@@ -78,3 +124,46 @@ class GameSyncServiceTest(TestCase):
 
         processed_data = GameSyncService.prepare_game_data(invalid_data)
         self.assertIsNone(processed_data["first_release_date"])
+
+    def test_prepare_game_data_skips_invalid_metadata_items(self):
+        """상세 조회용 메타데이터에 잘못된 값이 들어오면 안전하게 제외한다."""
+        raw_data = self.raw_game_data.copy()
+        raw_data["websites"] = [
+            {"category": 1, "url": "https://official.example.com"},
+            {"category": 13},
+            "https://store.epicgames.com/test",
+            123,
+        ]
+        raw_data["involved_companies"] = [
+            {
+                "company": {"name": "Dev Studio"},
+                "developer": True,
+                "publisher": False,
+            },
+            {"company": {}, "developer": False, "publisher": True},
+            {"developer": True},
+            "invalid",
+        ]
+
+        processed_data = GameSyncService.prepare_game_data(raw_data)
+
+        self.assertEqual(
+            processed_data["websites"],
+            [
+                {"category": 1, "url": "https://official.example.com"},
+                {
+                    "category": None,
+                    "url": "https://store.epicgames.com/test",
+                },
+            ],
+        )
+        self.assertEqual(
+            processed_data["involved_companies"],
+            [
+                {
+                    "company_name": "Dev Studio",
+                    "developer": True,
+                    "publisher": False,
+                }
+            ],
+        )
