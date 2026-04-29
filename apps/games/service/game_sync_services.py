@@ -6,6 +6,75 @@ from apps.games.models import Game
 
 class GameSyncService:
     @staticmethod
+    def _extract_image_id(value):
+        if isinstance(value, dict):
+            image_id = value.get("image_id")
+            if isinstance(image_id, str) and image_id.strip():
+                return image_id.strip()
+            return None
+
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+
+        return None
+
+    @staticmethod
+    def _normalize_websites(raw_websites):
+        normalized = []
+
+        for website in raw_websites or []:
+            if isinstance(website, dict):
+                url = website.get("url")
+                if not isinstance(url, str) or not url.strip():
+                    continue
+
+                normalized.append(
+                    {
+                        "category": website.get("category"),
+                        "url": url.strip(),
+                    }
+                )
+                continue
+
+            if isinstance(website, str) and website.strip():
+                normalized.append(
+                    {
+                        "category": None,
+                        "url": website.strip(),
+                    }
+                )
+
+        return normalized
+
+    @staticmethod
+    def _normalize_involved_companies(raw_companies):
+        normalized = []
+
+        for company in raw_companies or []:
+            if not isinstance(company, dict):
+                continue
+
+            company_info = company.get("company")
+            company_name = None
+            if isinstance(company_info, dict):
+                raw_name = company_info.get("name")
+                if isinstance(raw_name, str) and raw_name.strip():
+                    company_name = raw_name.strip()
+
+            if not company_name:
+                continue
+
+            normalized.append(
+                {
+                    "company_name": company_name,
+                    "developer": bool(company.get("developer")),
+                    "publisher": bool(company.get("publisher")),
+                }
+            )
+
+        return normalized
+
+    @staticmethod
     def prepare_game_data(raw_data):
         """IGDB 원본 데이터를 DB 모델 규격에 맞게 전처리합니다."""
 
@@ -54,7 +123,9 @@ class GameSyncService:
                 "expansions": raw_data.get("expansions", []),
                 "dlcs": raw_data.get("dlcs", []),
                 "multiplayer_modes": raw_data.get("multiplayer_modes", []),
-                "involved_companies": raw_data.get("involved_companies", []),
+                "involved_companies": GameSyncService._normalize_involved_companies(
+                    raw_data.get("involved_companies", [])
+                ),
             }
         )
 
@@ -65,28 +136,25 @@ class GameSyncService:
             else collection_obj
         )
 
-        cover_obj = raw_data.get("cover")
-        processed["cover"] = (
-            cover_obj.get("image_id") if isinstance(cover_obj, dict) else None
-        )
+        processed["cover"] = GameSyncService._extract_image_id(raw_data.get("cover"))
 
         processed["screenshots"] = [
-            s.get("image_id")
+            image_id
             for s in raw_data.get("screenshots", [])
-            if isinstance(s, dict) and "image_id" in s
+            if (image_id := GameSyncService._extract_image_id(s)) is not None
         ]
 
         processed["videos"] = [
-            v.get("video_id")
+            video_id
             for v in raw_data.get("videos", [])
-            if isinstance(v, dict) and "video_id" in v
+            if isinstance(v, dict)
+            and isinstance((video_id := v.get("video_id")), str)
+            and video_id.strip()
         ]
 
-        processed["websites"] = [
-            w.get("url")
-            for w in raw_data.get("websites", [])
-            if isinstance(w, dict) and "url" in w
-        ]
+        processed["websites"] = GameSyncService._normalize_websites(
+            raw_data.get("websites", [])
+        )
 
         return processed
 
