@@ -1,3 +1,5 @@
+from datetime import datetime
+from datetime import timezone as dt_timezone
 from unittest.mock import patch
 
 from django.urls import reverse
@@ -107,6 +109,71 @@ class GameTop100APITest(APITestCase):
         # setUpTestData의 게임들이 genres=[12] 포함
         result = GameTop100Service.get_top_100_games(genre_id=3)
         self.assertGreater(len(result), 0)
+
+    def test_service_excludes_games_released_before_1980(self):
+        """1980년 이전 출시 게임은 목록 후보에서 제외한다."""
+        Game.objects.create(
+            game_id=1900,
+            name="Old Arcade Game",
+            total_rating=100.0,
+            total_rating_count=999,
+            first_release_date=datetime(1979, 12, 31, tzinfo=dt_timezone.utc),
+            genres=[12],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=0)
+
+        self.assertNotIn(1900, {game.game_id for game in result})
+
+    def test_service_uses_rating_fallback_for_sparse_genre(self):
+        """엄격한 TOP100 조건을 못 채우는 장르는 완화된 평점 기준으로 보충한다."""
+        Game.objects.create(
+            game_id=2200,
+            name="Sparse Genre Rated Game",
+            total_rating=91.0,
+            total_rating_count=10,
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+
+        self.assertEqual([game.game_id for game in result], [2200])
+
+    def test_service_uses_popularity_fallback_when_ratings_are_missing(self):
+        """평점 데이터가 부족한 장르는 follows/hypes/출시일 기준으로 보충한다."""
+        Game.objects.create(
+            game_id=2300,
+            name="Popular No Rating Game",
+            total_rating=None,
+            total_rating_count=None,
+            rating=None,
+            rating_count=None,
+            aggregated_rating=None,
+            aggregated_rating_count=None,
+            follows=1000,
+            hypes=10,
+            first_release_date=timezone.now() - timezone.timedelta(days=2),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2301,
+            name="Less Popular No Rating Game",
+            total_rating=None,
+            total_rating_count=None,
+            rating=None,
+            rating_count=None,
+            aggregated_rating=None,
+            aggregated_rating_count=None,
+            follows=100,
+            hypes=50,
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+
+        self.assertEqual([game.game_id for game in result[:2]], [2300, 2301])
 
     def test_service_collection_dedup_coverage(self):
         """collection 기반 중복 제거 (lines 88~90): 동일 collection skip"""

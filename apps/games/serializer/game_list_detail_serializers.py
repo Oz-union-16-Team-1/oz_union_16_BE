@@ -94,7 +94,10 @@ class GameListDetailSerializer(serializers.ModelSerializer):
 
     def get_description(self, obj: Game) -> str | None:
         descriptions = []
-        for value in [obj.summary, obj.storyline]:
+        for value in [
+            obj.summary_ko or obj.summary,
+            obj.storyline_ko or obj.storyline,
+        ]:
             if isinstance(value, str) and value.strip():
                 descriptions.append(value.strip())
 
@@ -111,15 +114,22 @@ class GameListDetailSerializer(serializers.ModelSerializer):
         }
 
         for website in obj.websites or []:
-            if not isinstance(website, dict):
+            url = None
+            category = None
+
+            if isinstance(website, dict):
+                raw_url = website.get("url")
+                if isinstance(raw_url, str) and raw_url.strip():
+                    url = raw_url.strip()
+                category = website.get("category")
+
+            elif isinstance(website, str) and website.strip():
+                url = website.strip()
+
+            if not url:
                 continue
 
-            url = website.get("url")
-            if not isinstance(url, str) or not url.strip():
-                continue
-
-            url = url.strip()
-            category = website.get("category")
+            normalized_url = url.lower()
 
             if category == 1 and links["official_site"] is None:
                 links["official_site"] = url
@@ -127,10 +137,12 @@ class GameListDetailSerializer(serializers.ModelSerializer):
                 links["steam"] = url
             elif category == 16 and links["epic_store"] is None:
                 links["epic_store"] = url
-            elif "store.steampowered.com" in url and links["steam"] is None:
+            elif "store.steampowered.com" in normalized_url and links["steam"] is None:
                 links["steam"] = url
-            elif "store.epicgames.com" in url and links["epic_store"] is None:
+            elif "epicgames.com" in normalized_url and links["epic_store"] is None:
                 links["epic_store"] = url
+            elif links["official_site"] is None and self._looks_like_official_site(url):
+                links["official_site"] = url
 
         return links
 
@@ -178,6 +190,34 @@ class GameListDetailSerializer(serializers.ModelSerializer):
             return image_id
 
         return f"https://images.igdb.com/igdb/image/upload/{size}/{image_id}.jpg"
+
+    @staticmethod
+    def _looks_like_official_site(url: str) -> bool:
+        if not url.startswith(("http://", "https://")):
+            return False
+
+        normalized_url = url.lower()
+        excluded_domains = [
+            "store.steampowered.com",
+            "epicgames.com",
+            "store.playstation.com",
+            "xbox.com",
+            "bsky.app",
+            "twitch.tv",
+            "youtube.com",
+            "facebook.com",
+            "twitter.com",
+            "x.com",
+            "instagram.com",
+            "reddit.com",
+            "discord.gg",
+            "wikipedia.org",
+            "wiki",
+            "fandom.com",
+            "gog.com",
+        ]
+
+        return not any(domain in normalized_url for domain in excluded_domains)
 
 
 class GameListDetailResponseSerializer(GameListDetailSerializer):

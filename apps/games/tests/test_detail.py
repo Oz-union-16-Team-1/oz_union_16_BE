@@ -30,6 +30,8 @@ class GameListDetailSerializerTest(TestCase):
             slug="elden-ring",
             summary="Summary text.",
             storyline="Storyline text.",
+            summary_ko="요약 번역.",
+            storyline_ko="스토리 번역.",
             first_release_date=datetime(2024, 6, 21, tzinfo=timezone.utc),
             genres=[12, {"name": "커스텀 장르"}, {"id": 31}, "invalid", None, 999],
             videos=["trailer123"],
@@ -57,7 +59,7 @@ class GameListDetailSerializerTest(TestCase):
 
         self.assertEqual(data["game_id"], 501)
         self.assertEqual(data["title"], "Elden Ring")
-        self.assertEqual(data["genres"], ["역할수행(RPG)", "커스텀 장르", "어드벤처"])
+        self.assertEqual(data["genres"], ["RPG", "커스텀 장르", "어드벤처"])
         self.assertEqual(data["release_date"], "2024-06-21")
         self.assertEqual(data["developer"], "FromSoftware")
         self.assertEqual(data["publisher"], "Bandai Namco")
@@ -71,7 +73,7 @@ class GameListDetailSerializerTest(TestCase):
                 ),
             },
         )
-        self.assertEqual(data["description"], "Summary text.\n\nStoryline text.")
+        self.assertEqual(data["description"], "요약 번역.\n\n스토리 번역.")
         self.assertEqual(
             data["external_links"],
             {

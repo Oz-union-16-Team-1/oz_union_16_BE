@@ -2,6 +2,10 @@ from datetime import datetime, timezone
 
 from apps.core.igdb import igdb_client
 from apps.games.models import Game
+from apps.games.service.game_translation_services import (
+    GameTranslationService,
+    GameTranslationUnavailable,
+)
 
 
 class GameSyncService:
@@ -75,7 +79,7 @@ class GameSyncService:
         return normalized
 
     @staticmethod
-    def prepare_game_data(raw_data):
+    def prepare_game_data(raw_data, *, translate_ko=False):
         """IGDB 원본 데이터를 DB 모델 규격에 맞게 전처리합니다."""
 
         raw_ts = raw_data.get("first_release_date")
@@ -156,10 +160,33 @@ class GameSyncService:
             raw_data.get("websites", [])
         )
 
+        if translate_ko:
+            try:
+                processed.update(
+                    GameTranslationService.translate_descriptions(
+                        summary=processed["summary"],
+                        storyline=processed["storyline"],
+                    )
+                )
+            except GameTranslationUnavailable:
+                processed.update(
+                    {
+                        "summary_ko": None,
+                        "storyline_ko": None,
+                    }
+                )
+
         return processed
 
     @classmethod
-    def sync_all_games(cls, *, page_size=500, max_pages=0, pc_only=False):
+    def sync_all_games(
+        cls,
+        *,
+        page_size=500,
+        max_pages=0,
+        pc_only=False,
+        translate_ko=False,
+    ):
         """
         max_pages=0 이면 응답이 빌 때까지 전체 수집
         """
@@ -184,7 +211,10 @@ class GameSyncService:
             scanned += len(raw_games)
 
             for raw_game in raw_games:
-                clean_data = cls.prepare_game_data(raw_game)
+                clean_data = cls.prepare_game_data(
+                    raw_game,
+                    translate_ko=translate_ko,
+                )
                 Game.objects.update_or_create(
                     game_id=raw_game["id"],
                     defaults=clean_data,

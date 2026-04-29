@@ -1,3 +1,6 @@
+from datetime import datetime
+from datetime import timezone as dt_timezone
+
 from django.db.models import Q
 from django.utils import timezone
 
@@ -23,62 +26,144 @@ class GameTop100Service:
         14: [34],
     }
     CANDIDATE_LIMIT = 500
+    RESULT_LIMIT = 100
+    MIN_RELEASE_DATE = datetime(1980, 1, 1, tzinfo=dt_timezone.utc)
 
     @staticmethod
     def get_top_100_games(
         genre_id: int, search: str = "", fuzzy: bool = False
     ) -> list[Game]:
         now = timezone.now()
-
-        # 1. 기본 필터링
-        queryset = Game.objects.filter(
-            total_rating__isnull=False,
-            total_rating_count__gte=50,
+        base_queryset = Game.objects.filter(
             first_release_date__lte=now,
+            first_release_date__gte=GameTop100Service.MIN_RELEASE_DATE,
             parent_game__isnull=True,
             is_ban=False,
-        ).order_by("-total_rating", "-total_rating_count")
+        )
 
-        # 2. 검색어 필터링
-        if search:
-            if fuzzy:
-                words = search.split()
-                q = Q()
-                for word in words:
-                    q |= Q(name__icontains=word)
-                queryset = queryset.filter(q)
-            else:
-                queryset = queryset.filter(name__icontains=search)
+        base_queryset = GameTop100Service._apply_search_filter(
+            queryset=base_queryset,
+            search=search,
+            fuzzy=fuzzy,
+        )
 
-        # 3. 장르 필터링 (0은 전체)
-        if genre_id != 0:
-            target_igdb_ids = GameTop100Service.GENRE_MAPPING.get(genre_id, [])
-            if not target_igdb_ids:
-                return []
+        base_queryset = GameTop100Service._apply_genre_filter(
+            queryset=base_queryset,
+            genre_id=genre_id,
+        )
+        if base_queryset is None:
+            return []
 
-            genre_filter = Q()
-            for igdb_id in target_igdb_ids:
-                genre_filter |= Q(genres__contains=[igdb_id])
-            queryset = queryset.filter(genre_filter).distinct()
+        ranking_steps = [
+            (
+                Q(total_rating__isnull=False) & Q(total_rating_count__gte=50),
+                ("-total_rating", "-total_rating_count", "-game_id"),
+            ),
+            (
+                Q(total_rating__isnull=False) & Q(total_rating_count__gte=10),
+                ("-total_rating", "-total_rating_count", "-game_id"),
+            ),
+            (
+                Q(rating__isnull=False) & Q(rating_count__gte=10),
+                ("-rating", "-rating_count", "-game_id"),
+            ),
+            (
+                Q(aggregated_rating__isnull=False) & Q(aggregated_rating_count__gte=3),
+                ("-aggregated_rating", "-aggregated_rating_count", "-game_id"),
+            ),
+            (
+                Q(),
+                ("-follows", "-hypes", "-first_release_date", "-game_id"),
+            ),
+        ]
 
-        # 4. 후보군 추출
-        candidates = queryset[: GameTop100Service.CANDIDATE_LIMIT]
+        selected: list[Game] = []
+        selected_ids: set[int] = set()
 
-        # 5. 중복 에디션 제거 로직 (기존 로직 유지)
-        unique_games: list[Game] = []
-        seen_collections: set[int] = set()
-        seen_base_names: set[str] = set()
+        for step_filter, ordering in ranking_steps:
+            if len(selected) >= GameTop100Service.RESULT_LIMIT:
+                break
+
+            queryset = (
+                base_queryset.filter(step_filter)
+                .exclude(game_id__in=selected_ids)
+                .order_by(*ordering)
+            )
+            candidates = queryset[: GameTop100Service.CANDIDATE_LIMIT]
+            selected = GameTop100Service._append_unique_games(
+                selected=selected,
+                candidates=candidates,
+                selected_ids=selected_ids,
+            )
+
+        return selected[: GameTop100Service.RESULT_LIMIT]
+
+    @staticmethod
+    def _apply_search_filter(queryset, search: str, fuzzy: bool):
+        if not search:
+            return queryset
+
+        if fuzzy:
+            words = search.split()
+            q = Q()
+            for word in words:
+                q |= Q(name__icontains=word)
+            return queryset.filter(q)
+
+        return queryset.filter(name__icontains=search)
+
+    @staticmethod
+    def _apply_genre_filter(queryset, genre_id: int):
+        if genre_id == 0:
+            return queryset
+
+        target_igdb_ids = GameTop100Service.GENRE_MAPPING.get(genre_id, [])
+        if not target_igdb_ids:
+            return None
+
+        genre_filter = Q()
+        for igdb_id in target_igdb_ids:
+            genre_filter |= Q(genres__contains=[igdb_id])
+
+        return queryset.filter(genre_filter).distinct()
+
+    @staticmethod
+    def _append_unique_games(
+        *,
+        selected: list[Game],
+        candidates,
+        selected_ids: set[int],
+    ) -> list[Game]:
+        seen_collections: set[int] = {
+            game.collection for game in selected if game.collection is not None
+        }
+        seen_base_names: set[str] = {
+            GameTop100Service._base_name(game.name)
+            for game in selected
+            if game.collection is None
+        }
 
         for game in candidates:
+            if len(selected) >= GameTop100Service.RESULT_LIMIT:
+                break
+            if game.game_id in selected_ids:
+                continue
+
             if game.collection is not None:
                 if game.collection in seen_collections:
                     continue
                 seen_collections.add(game.collection)
             else:
-                base_name = game.name.split(":")[0].split("-")[0].strip().lower()
+                base_name = GameTop100Service._base_name(game.name)
                 if base_name in seen_base_names:
                     continue
                 seen_base_names.add(base_name)
-            unique_games.append(game)
 
-        return unique_games[:100]
+            selected.append(game)
+            selected_ids.add(game.game_id)
+
+        return selected
+
+    @staticmethod
+    def _base_name(name: str) -> str:
+        return name.split(":")[0].split("-")[0].strip().lower()

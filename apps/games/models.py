@@ -10,6 +10,12 @@ class Game(models.Model):
     # 4~7: 개요 및 상태
     summary = models.TextField(null=True, blank=True, verbose_name="게임 개요")
     storyline = models.TextField(null=True, blank=True, verbose_name="게임 스토리라인")
+    summary_ko = models.TextField(
+        null=True, blank=True, verbose_name="게임 개요 한글 번역"
+    )
+    storyline_ko = models.TextField(
+        null=True, blank=True, verbose_name="게임 스토리라인 한글 번역"
+    )
     category = models.IntegerField(null=True, blank=True, verbose_name="게임 카테고리")
     status = models.IntegerField(null=True, blank=True, verbose_name="게임 출시 상태")
 
