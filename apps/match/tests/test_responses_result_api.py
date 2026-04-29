@@ -151,6 +151,7 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             RankedGame(
                 game_id=i,
                 title=f"g{i}",
+                slug="",
                 genres=[],
                 thumbnail_url="",
                 rating=80.0,
@@ -170,6 +171,7 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             RankedGame(
                 game_id=999,
                 title="low",
+                slug="",
                 genres=[],
                 thumbnail_url="",
                 rating=10.0,
