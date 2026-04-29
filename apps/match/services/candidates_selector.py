@@ -36,15 +36,20 @@ class MatchCandidatesSelectorService:
         today: date | None = None,
         max_count: int = MATCH_CANDIDATE_MAX_COUNT,
         pool_size: int = MATCH_CANDIDATE_POOL_SIZE,
+        liked_game_ids: set[int] | None = None,
     ) -> list[int]:
         target_genres = API_TO_IGDB_GENRE_MAP.get(api_genre_id, [])
         if not target_genres:
             return []
 
-        liked_game_ids = set(
-            UserLikeBookmark.objects.filter(user_id=user_id).values_list(
-                "game_id",
-                flat=True,
+        liked_ids = (
+            set(liked_game_ids)
+            if liked_game_ids is not None
+            else set(
+                UserLikeBookmark.objects.filter(user_id=user_id).values_list(
+                    "game_id",
+                    flat=True,
+                )
             )
         )
 
@@ -60,7 +65,7 @@ class MatchCandidatesSelectorService:
             return []
 
         # 2) 1차: liked 제외 풀
-        unliked_ids = [gid for gid in candidate_game_ids if gid not in liked_game_ids]
+        unliked_ids = [gid for gid in candidate_game_ids if gid not in liked_ids]
         unliked_candidates = self._load_candidates_from_game_ids(unliked_ids)
 
         safe_retry_no = self._safe_retry_no(retry_no)
@@ -84,8 +89,8 @@ class MatchCandidatesSelectorService:
 
         # 3) 부족하면 liked 풀로 보충
         if len(selected) < max_count:
-            liked_ids = [gid for gid in candidate_game_ids if gid in liked_game_ids]
-            liked_candidates = self._load_candidates_from_game_ids(liked_ids)
+            liked_only_ids = [gid for gid in candidate_game_ids if gid in liked_ids]
+            liked_candidates = self._load_candidates_from_game_ids(liked_only_ids)
 
             used_ids = {item.game_id for item in selected}
             liked_candidates = [
