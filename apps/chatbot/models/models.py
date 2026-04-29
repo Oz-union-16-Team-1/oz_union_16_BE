@@ -8,6 +8,7 @@ class ChatbotSession(TimeStampedModel, UUIDModel):
 
     # 만료 시각
     expires_at = models.DateTimeField()
+    pending_question = models.TextField(null=True, blank=True)
 
     class Meta:
         db_table = "chatbot_sessions"

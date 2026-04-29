@@ -216,20 +216,44 @@ class MatchResponsesSubmitService:
         submitted_game_ids: list[int],
     ) -> None:
         base_day = candidate_date or timezone.localdate()
+        submitted_set = set(submitted_game_ids)
+
         expected_ids = set(
             MatchCandidatesSelectorService().select_game_ids(
                 user_id=user_id,
                 api_genre_id=genre_id,
                 retry_no=retry_no,
                 today=base_day,
+                liked_game_ids=self._locked_liked_ids_for_validation(
+                    user_id=user_id,
+                    submitted_game_ids=submitted_set,
+                ),
             )
         )
 
-        invalid = sorted(set(submitted_game_ids) - expected_ids)
+        invalid = sorted(submitted_set - expected_ids)
         if invalid:
             raise MatchResponsesValidationError(
                 "후보 세트에 없는 game_id가 포함되어 있습니다."
             )
+
+    def _locked_liked_ids_for_validation(
+        self,
+        *,
+        user_id: int,
+        submitted_game_ids: set[int],
+    ) -> set[int]:
+        """
+        제출 검증 시점에 평가중 토글된 liked 변화가
+        후보 재계산 결과를 흔들지 않도록 제출 대상 game_id는 제외한다.
+        """
+        current_liked_ids = set(
+            UserLikeBookmark.objects.filter(user_id=user_id).values_list(
+                "game_id",
+                flat=True,
+            )
+        )
+        return current_liked_ids - submitted_game_ids
 
     def _lock_retry_state(
         self,

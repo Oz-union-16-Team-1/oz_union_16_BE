@@ -49,6 +49,19 @@ class SignUpSerializer(serializers.Serializer):
         },
     )
 
+    def validate_login_id(self, value):
+        forbidden_keywords = ["naver", "google", "kakao", "admin"]
+
+        lower_value = value.lower()
+
+        for keyword in forbidden_keywords:
+            if keyword in lower_value:
+                raise serializers.ValidationError(
+                    f"'{keyword}'가 포함된 아이디는 사용할 수 없습니다."
+                )
+
+        return value
+
     def validate(self, attrs):
         if attrs["password"] != attrs["password_check"]:
             raise serializers.ValidationError(
