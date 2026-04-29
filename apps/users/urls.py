@@ -31,6 +31,7 @@ from apps.users.views.user_presigned_url_views import (
     ProfileImagePresignedUrlView,
     ProfileImageUpdateView,
 )
+from apps.users.views.user_verify_social_views import UserVerifySocialView
 
 urlpatterns = [
     path("signup", SignUpView.as_view(), name="signup"),  # Auth
@@ -102,5 +103,10 @@ urlpatterns = [
         "me/profile-image",
         ProfileImageUpdateView.as_view(),
         name="profile-image-update",
+    ),
+    path(
+        "me/social",
+        UserVerifySocialView.as_view(),
+        name="user-social-info",
     ),
 ]
