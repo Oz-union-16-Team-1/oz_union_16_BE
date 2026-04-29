@@ -2,7 +2,7 @@ import json
 import math
 import time
 from datetime import timedelta
-from typing import Generator
+from typing import Generator, TypedDict
 from uuid import UUID
 
 from django.core.cache import cache
@@ -13,10 +13,15 @@ from apps.chatbot.models.models import ChatbotSession
 
 SESSION_EXPIRE_MINUTES = 30
 SESSION_TTL_SECONDS = SESSION_EXPIRE_MINUTES * 60
-QUESTION_CACHE_TTL = 60 * 30
 STREAM_LOCK_TTL = 60
 
 OUT_OF_SCOPE_ANSWER = "올바른 질문이 아닙니다."
+
+
+class SiteKnowledge(TypedDict):
+    keywords: tuple[str, ...]
+    answer: str
+
 
 SITE_SCOPE_KEYWORDS = (
     "게임",
@@ -49,7 +54,7 @@ SITE_SCOPE_KEYWORDS = (
     "password",
 )
 
-SITE_KNOWLEDGE_BASE = [
+SITE_KNOWLEDGE_BASE: list[SiteKnowledge] = [
     {
         "keywords": ("사이트",),
         "answer": "우리 사이트는 게임 설문조사를 통해 사용자의 장르와 스타일 취향을 파악하고, 취향에 맞는 게임을 추천해 주는 서비스입니다.",
@@ -165,11 +170,6 @@ def _normalize_session_id(session_id: UUID | str) -> str:
     return str(session_id)
 
 
-def _question_cache_key(session_id: UUID | str) -> str:
-    normalized_session_id = _normalize_session_id(session_id)
-    return f"chatbot:question:{normalized_session_id}"
-
-
 def _stream_lock_key(session_id: UUID | str) -> str:
     normalized_session_id = _normalize_session_id(session_id)
     return f"chatbot:streaming:{normalized_session_id}"
@@ -212,7 +212,7 @@ def get_session_expires_in_seconds(session: ChatbotSession) -> int:
 
 def build_session_payload(session: ChatbotSession) -> dict:
     return {
-        "session_id": session.pk,
+        "session_id": str(session.pk),
         "expires_at": session.expires_at.isoformat(),
         "expires_in_seconds": get_session_expires_in_seconds(session),
         "session_ttl_seconds": SESSION_TTL_SECONDS,
@@ -220,15 +220,20 @@ def build_session_payload(session: ChatbotSession) -> dict:
 
 
 def save_question_to_cache(session_id: UUID | str, message: str) -> None:
-    cache.set(_question_cache_key(session_id), message, timeout=QUESTION_CACHE_TTL)
+    ChatbotSession.objects.filter(pk=session_id).update(pending_question=message)
 
 
 def get_question_from_cache(session_id: UUID | str) -> str | None:
-    return cache.get(_question_cache_key(session_id))
+    session = (
+        ChatbotSession.objects.filter(pk=session_id).only("pending_question").first()
+    )
+    if session is None:
+        return None
+    return session.pending_question
 
 
 def delete_question_from_cache(session_id: UUID | str) -> None:
-    cache.delete(_question_cache_key(session_id))
+    ChatbotSession.objects.filter(pk=session_id).update(pending_question=None)
 
 
 def acquire_stream_lock(session_id: UUID | str) -> bool:
