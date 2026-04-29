@@ -601,3 +601,40 @@ class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
         self.assertEqual(stale.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(stale.data["error_detail"], "유효하지 않은 retry_no 입니다.")
         self.assertEqual(next_ok.status_code, status.HTTP_200_OK)
+
+    def test_submit_success_when_liked_toggled_during_rating(self):
+        """
+        평가 도중 좋아요 상태가 바뀌어도, 같은 retry_no 제출은 성공해야 한다.
+        (검증 시 submitted_game_ids의 liked 변화는 제외되어야 함)
+        """
+        # 평가 중 game1을 liked로 바꾼 상황
+        UserLikeBookmark.objects.get_or_create(
+            user_id=self.user.id,
+            game_id=self.game1.game_id,
+        )
+
+        def selector_side_effect(**kwargs):
+            # old 로직(또는 잘못된 검증)이라면 liked_game_ids에 game1이 남거나(None) 미전달될 수 있음
+            liked_ids = kwargs.get("liked_game_ids")
+            if liked_ids is None or self.game1.game_id in liked_ids:
+                return [self.game2.game_id]  # game1 제외 -> 제출 실패 유도 경로
+            # fixed 로직이면 submitted(game1) 제외된 liked 세트가 들어와야 함
+            return [self.game1.game_id, self.game2.game_id]
+
+        payload = {
+            "genre_id": 2,
+            "retry_no": 0,
+            "match_result": [
+                {"game_id": self.game1.game_id, "rating": 5, "is_liked": True},
+                {"game_id": self.game2.game_id, "rating": 3},
+            ],
+        }
+
+        with patch(
+                "apps.match.services.responses_submit.MatchCandidatesSelectorService.select_game_ids",
+                side_effect=selector_side_effect,
+        ):
+            response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["match_result"]), 2)
