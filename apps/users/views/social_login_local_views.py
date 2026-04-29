@@ -53,7 +53,7 @@ class KakaoLocalLoginView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="카카오 소셜 로그인 시작 로컬",
         description="카카오 OAuth 인증 페이지로 302 redirect합니다.",
         responses={
@@ -71,7 +71,7 @@ class KakaoLocalCallbackView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="카카오 소셜 로그인 콜백 로컬",
         description=(
             "카카오 인증 후 전달받은 code를 처리합니다.\n\n"
@@ -111,7 +111,7 @@ class NaverLocalLoginView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="네이버 소셜 로그인 시작 로컬",
         description="네이버 OAuth 인증 페이지로 302 redirect합니다.",
         responses={
@@ -130,7 +130,7 @@ class NaverLocalCallbackView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="네이버 소셜 로그인 콜백 로컬",
         description=(
             "네이버 인증 후 전달받은 code와 state를 처리합니다.\n\n"
@@ -180,7 +180,7 @@ class GoogleLocalLoginView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="구글 소셜 로그인 시작 로컬",
         description="구글 OAuth 인증 페이지로 302 redirect합니다.",
         responses={
@@ -198,7 +198,7 @@ class GoogleLocalCallbackView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["accounts"],
+        tags=["accounts-local"],
         summary="구글 소셜 로그인 콜백 로컬",
         description=(
             "구글 인증 후 전달받은 code를 처리합니다.\n\n"
