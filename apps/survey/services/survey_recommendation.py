@@ -1,16 +1,27 @@
+import base64
 import json
 import time
 from typing import Any
 
 import requests
 from django.conf import settings
-from django.db.models import Q, QuerySet
+from django.db.models import (
+    BigIntegerField,
+    F,
+    FloatField,
+    IntegerField,
+    Q,
+    QuerySet,
+    Value,
+    Window,
+)
+from django.db.models.functions import Coalesce, RowNumber
 from pgvector.django import CosineDistance
 from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound
 
+from apps.core.igdb import IGDB
 from apps.games.models import Game
-from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.survey.constants import (
     SURVEY_ALLOWED_GAME_CATEGORIES,
     SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR,
@@ -21,13 +32,13 @@ from apps.users.models import UserLikeBookmark
 
 class SurveyRecommendationUnavailable(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    default_detail = "설문 추천 결과를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+    default_detail = "추천 데이터 조회 중 외부 서비스 오류가 발생했습니다."
     default_code = "survey_recommendation_unavailable"
 
 
 class SurveyRecommendationNotReady(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = "설문 추천 준비가 아직 완료되지 않았습니다."
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "설문 추천 결과를 찾을 수 없습니다."
     default_code = "survey_recommendation_not_ready"
 
 
@@ -48,6 +59,7 @@ class SurveyGameEmbeddingService:
         "aggregated_rating",
         "aggregated_rating_count",
         "total_rating",
+        "total_rating_count",
         "genres",
         "themes",
         "keywords",
@@ -74,9 +86,10 @@ class SurveyGameEmbeddingService:
         limit: int = 100,
         only_missing: bool = True,
     ) -> QuerySet[Game]:
-        # 이미 저장된 game_list를 기준으로 임베딩 후보를 추립니다.
+        # 시리즈 대표작을 먼저 확정한 뒤, 이미 임베딩된 대표작만 제외합니다.
+        representative_ids = self.get_series_representative_game_ids()
         queryset = (
-            Game.objects.filter(self.build_candidate_filter())
+            Game.objects.filter(game_id__in=representative_ids)
             .only(*self.CANDIDATE_ONLY_FIELDS)
             .order_by("game_id")
         )
@@ -86,6 +99,43 @@ class SurveyGameEmbeddingService:
             )
 
         return queryset[offset : offset + limit]
+
+    def get_series_representative_game_ids(self) -> QuerySet[Any]:
+        return (
+            Game.objects.filter(self.build_candidate_filter())
+            .annotate(
+                series_key=Coalesce(
+                    "collection",
+                    "game_id",
+                    output_field=BigIntegerField(),
+                ),
+                representative_score=Coalesce(
+                    "total_rating",
+                    "aggregated_rating",
+                    "rating",
+                    Value(0.0),
+                    output_field=FloatField(),
+                ),
+                representative_rating_count=Coalesce(
+                    "total_rating_count",
+                    "aggregated_rating_count",
+                    "rating_count",
+                    Value(0),
+                    output_field=IntegerField(),
+                ),
+                series_rank=Window(
+                    expression=RowNumber(),
+                    partition_by=[F("series_key")],
+                    order_by=[
+                        F("representative_score").desc(),
+                        F("representative_rating_count").desc(),
+                        F("game_id").desc(),
+                    ],
+                ),
+            )
+            .filter(series_rank=1)
+            .values("game_id")
+        )
 
     # DB에서 미리 걸러낼 수 있는 조건은 최대한 queryset에서 처리합니다.
     def build_candidate_filter(self) -> Q:
@@ -108,6 +158,7 @@ class SurveyGameEmbeddingService:
                 | Q(category__in=SURVEY_ALLOWED_GAME_CATEGORIES)
             )
             & (Q(status__isnull=True) | Q(status=0))
+            & Q(parent_game__isnull=True)
             & quality_q
             & Q(first_release_date__isnull=False)
             & Q(first_release_date__year__gte=SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR)
@@ -243,7 +294,7 @@ class SurveyGameEmbeddingService:
             if genre_id is None:
                 continue
 
-            name = IGDB_GENRE_NAME_MAP.get(int(genre_id))
+            name = IGDB.GENRE_NAME_MAP.get(int(genre_id))
             if name and name not in names:
                 names.append(name)
 
@@ -319,6 +370,9 @@ class SurveyGameEmbeddingService:
 
 
 class SurveyRecommendationService:
+    CURSOR_DISTANCE_KEY = "s"
+    CURSOR_GAME_ID_KEY = "g"
+
     def __init__(self) -> None:
         self.embedding_service = SurveyGameEmbeddingService()
 
@@ -344,10 +398,18 @@ class SurveyRecommendationService:
         )
 
         total_count = vector_queryset.count()
-        offset = int(cursor or "0")
-        page = list(vector_queryset[offset : offset + page_size + 1])
+        cursor_position = self.decode_cursor(cursor)
+        if cursor_position:
+            cursor_distance, cursor_game_id = cursor_position
+            vector_queryset = vector_queryset.filter(
+                Q(distance__gt=cursor_distance)
+                | Q(distance=cursor_distance, game_id__gt=cursor_game_id)
+            )
+
+        page = list(vector_queryset[: page_size + 1])
         has_next = len(page) > page_size
         page = page[:page_size]
+        next_cursor = self.encode_cursor(page[-1]) if has_next and page else None
 
         games = Game.objects.filter(game_id__in=[item.game_id for item in page]).only(
             "game_id",
@@ -385,9 +447,35 @@ class SurveyRecommendationService:
         return {
             "user_id": int(user.pk),
             "count": total_count,
-            "next": str(offset + page_size) if has_next else None,
+            "next": next_cursor,
             "results": results,
         }
+
+    def encode_cursor(self, item: SurveyGameVector) -> str:
+        payload = {
+            self.CURSOR_DISTANCE_KEY: float(item.distance),
+            self.CURSOR_GAME_ID_KEY: int(item.game_id),
+        }
+        encoded = base64.urlsafe_b64encode(
+            json.dumps(payload, separators=(",", ":")).encode()
+        ).decode()
+        return encoded.rstrip("=")
+
+    def decode_cursor(self, cursor: str | None) -> tuple[float, int] | None:
+        if not cursor:
+            return None
+
+        try:
+            padded_cursor = cursor + ("=" * (-len(cursor) % 4))
+            payload = json.loads(base64.urlsafe_b64decode(padded_cursor).decode())
+            distance = float(payload[self.CURSOR_DISTANCE_KEY])
+            game_id = int(payload[self.CURSOR_GAME_ID_KEY])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise SurveyRecommendationUnavailable(
+                "유효하지 않은 cursor입니다."
+            ) from exc
+
+        return distance, game_id
 
     def get_closed_session(self, *, user: Any, session_id: str) -> SurveyChatbotSession:
         try:
@@ -396,10 +484,10 @@ class SurveyRecommendationService:
                 user=user,
             )
         except SurveyChatbotSession.DoesNotExist as exc:
-            raise NotFound("설문 챗봇 세션을 찾을 수 없습니다.") from exc
+            raise NotFound("설문 추천 결과를 찾을 수 없습니다.") from exc
 
         if session.status != "closed":
-            raise SurveyRecommendationNotReady("설문이 아직 종료되지 않았습니다.")
+            raise SurveyRecommendationNotReady()
         return session
 
     def get_user_vector(self, user: Any) -> list[float]:

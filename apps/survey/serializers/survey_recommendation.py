@@ -15,11 +15,6 @@ class SurveyRecommendationQuerySerializer(serializers.Serializer):
         max_value=SURVEY_RECOMMENDATION_MAX_PAGE_SIZE,
     )
 
-    def validate_cursor(self, value: str) -> str:
-        if value and not value.isdigit():
-            raise serializers.ValidationError("cursor는 숫자 문자열이어야 합니다.")
-        return value
-
 
 class SurveyRecommendationGameSerializer(serializers.Serializer):
     game_id = serializers.IntegerField()

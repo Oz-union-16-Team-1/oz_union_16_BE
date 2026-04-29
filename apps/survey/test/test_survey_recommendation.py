@@ -144,14 +144,15 @@ class SurveyRecommendationAPITest(TestCase):
         self.assertEqual(first_response.status_code, status.HTTP_200_OK)
         self.assertEqual(first_response.data["user_id"], self.user.pk)
         self.assertEqual(first_response.data["count"], 2)
-        self.assertEqual(first_response.data["next"], "1")
+        self.assertIsInstance(first_response.data["next"], str)
+        self.assertNotEqual(first_response.data["next"], "1")
         self.assertEqual(len(first_response.data["results"]), 1)
         self.assertEqual(
             first_response.data["results"][0]["game_id"], included_game.game_id
         )
         self.assertEqual(first_response.data["results"][0]["title"], "세키로")
         self.assertEqual(
-            first_response.data["results"][0]["genres"], ["카드/보드", "슈팅"]
+            first_response.data["results"][0]["genres"], ["역할수행(RPG)", "격투"]
         )
         self.assertIn("coverid.jpg", first_response.data["results"][0]["thumbnail_url"])
         self.assertFalse(first_response.data["results"][0]["is_liked"])
@@ -167,14 +168,14 @@ class SurveyRecommendationAPITest(TestCase):
             second_response.data["results"][0]["game_id"], second_game.game_id
         )
 
-    def test_open_session_returns_conflict(self) -> None:
+    def test_open_session_returns_not_found(self) -> None:
         self.authenticate()
         self.session.status = SurveyStatusChoices.IN_PROGRESS
         self.session.save(update_fields=["status"])
 
         response = self.client.get(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class SurveyRecommendationServiceTest(TestCase):
@@ -252,7 +253,7 @@ class SurveyRecommendationServiceTest(TestCase):
         source_text = self.embedding_service.build_embedding_source(game)
 
         self.assertIn("제목: 다크소울", source_text)
-        self.assertIn("장르: 카드/보드, 슈팅", source_text)
+        self.assertIn("장르: 역할수행(RPG), 격투", source_text)
         self.assertIn("핵심 설명:", source_text)
 
     def test_is_game_eligible(self) -> None:
@@ -268,14 +269,14 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertTrue(self.embedding_service.is_game_eligible(good_game))
         self.assertFalse(self.embedding_service.is_game_eligible(bad_game))
 
-    def test_query_serializer_validates_cursor_and_default_page_size(self) -> None:
+    def test_query_serializer_accepts_opaque_cursor_and_default_page_size(self) -> None:
         serializer = SurveyRecommendationQuerySerializer(data={})
         self.assertTrue(serializer.is_valid(), serializer.errors)
         self.assertEqual(serializer.validated_data["page_size"], 5)
 
-        invalid = SurveyRecommendationQuerySerializer(data={"cursor": "abc"})
-        self.assertFalse(invalid.is_valid())
-        self.assertIn("cursor", invalid.errors)
+        serializer = SurveyRecommendationQuerySerializer(data={"cursor": "abc"})
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["cursor"], "abc")
 
     def test_category_release_and_required_field_branches(self) -> None:
         no_category_game = create_game(game_id=210, category=None, status=None)
@@ -443,6 +444,80 @@ class SurveyRecommendationServiceTest(TestCase):
             [eligible_game.game_id],
         )
 
+    def test_get_candidate_games_keeps_best_rated_game_per_collection(self) -> None:
+        create_game(
+            game_id=243,
+            name="시리즈 1편",
+            slug="series-1",
+            collection=9000,
+            total_rating=70.0,
+            total_rating_count=100,
+        )
+        best_game = create_game(
+            game_id=244,
+            name="시리즈 2편",
+            slug="series-2",
+            collection=9000,
+            total_rating=95.0,
+            total_rating_count=50,
+        )
+        standalone_game = create_game(
+            game_id=245,
+            name="단독 게임",
+            slug="standalone-game",
+            collection=None,
+        )
+
+        queryset = self.embedding_service.get_candidate_games(limit=10)
+
+        self.assertEqual(
+            list(queryset.values_list("game_id", flat=True)),
+            [best_game.game_id, standalone_game.game_id],
+        )
+
+    def test_get_candidate_games_does_not_embed_lower_series_when_best_exists(
+        self,
+    ) -> None:
+        best_game = create_game(
+            game_id=246,
+            name="임베딩된 대표작",
+            slug="embedded-best-series",
+            collection=9100,
+            total_rating=96.0,
+        )
+        create_game(
+            game_id=247,
+            name="미임베딩 후속작",
+            slug="missing-lower-series",
+            collection=9100,
+            total_rating=80.0,
+        )
+        SurveyGameVector.objects.create(
+            game_id=best_game.game_id,
+            embedding=[0.1] * 1536,
+        )
+
+        queryset = self.embedding_service.get_candidate_games(
+            limit=10,
+            only_missing=True,
+        )
+
+        self.assertEqual(list(queryset.values_list("game_id", flat=True)), [])
+
+    def test_get_candidate_games_excludes_child_games(self) -> None:
+        main_game = create_game(game_id=248, name="메인 게임", slug="main-game")
+        child_game = create_game(
+            game_id=249,
+            name="확장팩 게임",
+            slug="expansion-game",
+            parent_game=main_game.game_id,
+        )
+
+        queryset = self.embedding_service.get_candidate_games(limit=10)
+
+        self.assertIn(main_game.game_id, queryset.values_list("game_id", flat=True))
+        self.assertNotIn(child_game.game_id, queryset.values_list("game_id", flat=True))
+
     def test_stringify_and_extract_helpers_cover_edge_cases(self) -> None:
         self.assertEqual(self.embedding_service.stringify_value_list("invalid"), "")
         self.assertEqual(
@@ -456,7 +531,7 @@ class SurveyRecommendationServiceTest(TestCase):
             self.embedding_service.extract_genre_names(
                 [{"id": 12}, {"id": 12}, {"id": 999}, None]
             ),
-            ["카드/보드"],
+            ["역할수행(RPG)"],
         )
 
     def test_recommendations_only_compare_embedded_games(self) -> None:
@@ -482,6 +557,17 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertIn(embedded_game.game_id, result_ids)
         self.assertNotIn(non_embedded_game.game_id, result_ids)
 
+    def test_cursor_encoding_roundtrip(self) -> None:
+        item = SurveyGameVector.objects.create(
+            game_id=999999,
+            embedding=[1.0] + ([0.0] * 1535),
+        )
+        item.distance = 0.123
+
+        cursor = self.service.encode_cursor(item)
+
+        self.assertEqual(self.service.decode_cursor(cursor), (0.123, item.game_id))
+
     def test_build_embedding_source_truncates_long_text(self) -> None:
         game = create_game(
             game_id=236,
@@ -498,7 +584,7 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertIn("핵심 설명:", source_text)
 
     def test_get_closed_session_and_excluded_keyword_branches(self) -> None:
-        with self.assertRaisesMessage(Exception, "설문 챗봇 세션을 찾을 수 없습니다."):
+        with self.assertRaisesMessage(Exception, "설문 추천 결과를 찾을 수 없습니다."):
             self.service.get_closed_session(
                 user=self.user, session_id=str(uuid.uuid4())
             )
