@@ -156,5 +156,31 @@ class IGDB:
 
         return self.query_games_raw(query)
 
+    def get_ban_games(self, limit=500, offset=0):
+        """
+        성인용 조건(등급 OR 테마 OR 키워드 OR 카테고리) 중 하나라도 만족하는
+        PC 플랫폼 게임의 ID 목록을 조회합니다.
+        """
+        # 조건 구성:
+        # 1. age_ratings.rating = 26 (한국 청불)
+        # 2. themes = 42 (에로틱)
+        # 3. keywords.slug = ("eroge", "sexual-content", "hentai")
+        # 4. category = 7 (Restricted)
+        # 위 조건 중 하나라도 만족(OR)하고, 반드시 platforms = 6 (PC)일 것(AND)
+
+        where_query = (
+            "where ("
+            "age_ratings.rating = 26 | "
+            "themes = 42 | "
+            'keywords.slug = ("eroge", "sexual-content", "hentai") | '
+            "category = 7"
+            ") & platforms = 6;"
+        )
+
+        query = f"fields id; " f"{where_query} " f"limit {limit}; " f"offset {offset};"
+
+        results = self.query_games_raw(query)
+        return results if results else []
+
 
 igdb_client = IGDB()
