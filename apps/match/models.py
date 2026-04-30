@@ -159,6 +159,8 @@ class MatchGenreImagePublished(TimeStampedModel):
 
     class Meta:
         db_table = "match_genre_image_published"
+        verbose_name = "장르 이미지 게시본"
+        verbose_name_plural = "장르 이미지 게시본"
         constraints = [
             models.UniqueConstraint(
                 fields=["api_genre_id"],
@@ -172,3 +174,7 @@ class MatchGenreImagePublished(TimeStampedModel):
         indexes = [
             models.Index(fields=["game"], name="idx_mgip_game"),
         ]
+
+    def __str__(self) -> str:
+        return f"{self.api_genre_id} | {self.game_id}"
+
