@@ -28,7 +28,7 @@ class BaseOAuthService(ABC):
     AUTH_URL: str
     TOKEN_URL: str
     USER_INFO_URL: str
-    PROVIDER: SocialProvider
+    PROVIDER: str
 
     # -- 인증 URL --
 
@@ -45,7 +45,6 @@ class BaseOAuthService(ABC):
         """provider별 인증 파라미터 반환 (client_id, redirect_uri 등)."""
         ...
 
-
     def get_access_token(self, code: str, **kwargs: Any) -> str:
         res = requests.post(
             self.TOKEN_URL,
@@ -53,16 +52,13 @@ class BaseOAuthService(ABC):
             timeout=10,
         )
         if not res.ok:
-            raise SocialLoginException(
-                f"{self.PROVIDER.label} 토큰 발급에 실패했습니다."
-            )
+            raise SocialLoginException(f"{self.PROVIDER} 토큰 발급에 실패했습니다.")
         return cast(str, res.json()["access_token"])
 
     @abstractmethod
     def _token_data(self, code: str, **kwargs: Any) -> dict[str, str]:
         """provider별 토큰 요청 파라미터 반환."""
         ...
-
 
     def get_user_info(self, access_token: str) -> dict[str, Any]:
         res = requests.get(
@@ -72,14 +68,13 @@ class BaseOAuthService(ABC):
         )
         if not res.ok:
             raise SocialLoginException(
-                f"{self.PROVIDER.label} 유저 정보 조회에 실패했습니다."
+                f"{self.PROVIDER} 유저 정보 조회에 실패했습니다."
             )
         return cast(dict[str, Any], self._parse_user_info(res.json()))
 
     def _parse_user_info(self, raw: dict[str, Any]) -> dict[str, Any]:
         """응답 JSON을 표준 형태로 가공. 필요한 provider만 오버라이드."""
         return raw
-
 
     def get_or_create_user(self, user_info: dict[str, Any]) -> Any:
         from django.contrib.auth import get_user_model
@@ -89,9 +84,7 @@ class BaseOAuthService(ABC):
         provider_id, nickname, name = self._extract_user_info(user_info)
 
         social_user = (
-            SocialUser.objects.filter(
-                provider=self.PROVIDER, provider_id=provider_id
-            )
+            SocialUser.objects.filter(provider=self.PROVIDER, provider_id=provider_id)
             .select_related("user")
             .first()
         )
@@ -100,7 +93,7 @@ class BaseOAuthService(ABC):
 
         unique_nickname = generate_unique_nickname(nickname[:10])
         user = UserModel.objects.create_user(
-            login_id=f"{self.PROVIDER.value}_{uuid.uuid4().hex[:10]}",
+            login_id=f"{self.PROVIDER}_{uuid.uuid4().hex[:10]}",
             name=name[:30],
             nickname=unique_nickname,
             gender="M",
@@ -113,12 +106,9 @@ class BaseOAuthService(ABC):
         return user
 
     @abstractmethod
-    def _extract_user_info(
-        self, user_info: dict[str, Any]
-    ) -> tuple[str, str, str]:
+    def _extract_user_info(self, user_info: dict[str, Any]) -> tuple[str, str, str]:
         """(provider_id, nickname, name) 튜플 반환."""
         ...
-
 
     def login(self, code: str, **kwargs: Any) -> dict[str, str]:
         access_token = self.get_access_token(code, **kwargs)
@@ -166,9 +156,7 @@ class KakaoOAuthService(BaseOAuthService):
             data["client_secret"] = settings.KAKAO_CLIENT_SECRET
         return data
 
-    def _extract_user_info(
-        self, user_info: dict[str, Any]
-    ) -> tuple[str, str, str]:
+    def _extract_user_info(self, user_info: dict[str, Any]) -> tuple[str, str, str]:
         kakao_id = str(user_info["id"])
         profile = user_info.get("kakao_account", {}).get("profile", {})
         nickname = profile.get("nickname") or f"kakao_{kakao_id[:4]}"
@@ -225,12 +213,10 @@ class NaverOAuthService(BaseOAuthService):
             raise SocialLoginException("네이버 프로필 응답이 비어있습니다.")
         return cast(dict[str, Any], profile)
 
-    def _extract_user_info(
-        self, user_info: dict[str, Any]
-    ) -> tuple[str, str, str]:
+    def _extract_user_info(self, user_info: dict[str, Any]) -> tuple[str, str, str]:
         naver_id = str(user_info["id"])
         nickname = user_info.get("nickname") or f"naver_{naver_id[:4]}"
-        name = (user_info.get("name") or nickname)
+        name = user_info.get("name") or nickname
         return naver_id, nickname, name
 
     def login(self, code: str, **kwargs: Any) -> dict[str, str]:
@@ -275,9 +261,7 @@ class GoogleOAuthService(BaseOAuthService):
             "code": code,
         }
 
-    def _extract_user_info(
-        self, user_info: dict[str, Any]
-    ) -> tuple[str, str, str]:
+    def _extract_user_info(self, user_info: dict[str, Any]) -> tuple[str, str, str]:
         google_id = str(user_info["id"])
         nickname = user_info.get("name") or f"google_{google_id[:4]}"
         return google_id, nickname, nickname
