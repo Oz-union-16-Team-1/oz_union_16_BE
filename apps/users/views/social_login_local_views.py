@@ -14,7 +14,7 @@ from apps.users.services.social_login_services import (
 FRONTEND_LOCAL_CALLBACK_URI = getattr(
     settings,
     "FRONTEND_LOCAL_CALLBACK_URI",
-    "http://localhost:5173/auth/callback?social_login=success",
+    "https://localhost:5173/auth/callback?social_login=success",
 )
 
 REFRESH_TOKEN_LIFETIME = getattr(settings, "SIMPLE_JWT", {}).get(
@@ -32,8 +32,8 @@ def _set_refresh_cookie_and_redirect(refresh_token: str) -> redirect:
         "key": REFRESH_COOKIE_KEY,
         "value": refresh_token,
         "httponly": True,
-        "secure": not settings.DEBUG,
-        "samesite": "Lax" if settings.DEBUG else "None",
+        "secure": True,
+        "samesite": "None",
         "path": "/",
     }
     if REFRESH_TOKEN_LIFETIME:
