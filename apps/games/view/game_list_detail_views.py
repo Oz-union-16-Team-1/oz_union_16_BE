@@ -43,7 +43,7 @@ class GameListDetailView(APIView):
                         "성공 응답",
                         value={
                             "game_id": 501,
-                            "title": "엘든 링: 황금 나무의 그림자",
+                            "title": "엘든 링: 황금 나무의 그림자 (Elden Ring: Shadow of the Erdtree)",
                             "genres": ["액션", "역할수행(RPG)"],
                             "release_date": "2024-06-21",
                             "developer": "FromSoftware",
@@ -59,7 +59,6 @@ class GameListDetailView(APIView):
                                 "steam": "https://store.steampowered.com/app/eldenring",
                                 "epic_store": None,
                             },
-                            "is_liked": False,
                             "like_count": 1250,
                         },
                         response_only=True,

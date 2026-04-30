@@ -10,17 +10,20 @@ class Command(BaseCommand):
         parser.add_argument("--page-size", type=int, default=500)
         parser.add_argument("--max-pages", type=int, default=0)
         parser.add_argument("--pc-only", action="store_true")
+        parser.add_argument("--translate-ko", action="store_true")
 
     def handle(self, *args, **options):
         page_size = options["page_size"]
         max_pages = options["max_pages"]
         pc_only = options["pc_only"]
+        translate_ko = options["translate_ko"]
 
         self.stdout.write("데이터 수집 중...")
         stats = GameSyncService.sync_all_games(
             page_size=page_size,
             max_pages=max_pages,
             pc_only=pc_only,
+            translate_ko=translate_ko,
         )
         self.stdout.write(
             self.style.SUCCESS(

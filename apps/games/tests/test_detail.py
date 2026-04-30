@@ -27,9 +27,12 @@ class GameListDetailSerializerTest(TestCase):
         game = Game.objects.create(
             game_id=501,
             name="Elden Ring",
+            name_ko="엘든 링",
             slug="elden-ring",
             summary="Summary text.",
             storyline="Storyline text.",
+            summary_ko="요약 번역.",
+            storyline_ko="스토리 번역.",
             first_release_date=datetime(2024, 6, 21, tzinfo=timezone.utc),
             genres=[12, {"name": "커스텀 장르"}, {"id": 31}, "invalid", None, 999],
             videos=["trailer123"],
@@ -56,7 +59,7 @@ class GameListDetailSerializerTest(TestCase):
         ).data
 
         self.assertEqual(data["game_id"], 501)
-        self.assertEqual(data["title"], "Elden Ring")
+        self.assertEqual(data["title"], "엘든 링 (Elden Ring)")
         self.assertEqual(data["genres"], ["역할수행(RPG)", "커스텀 장르", "어드벤처"])
         self.assertEqual(data["release_date"], "2024-06-21")
         self.assertEqual(data["developer"], "FromSoftware")
@@ -71,7 +74,7 @@ class GameListDetailSerializerTest(TestCase):
                 ),
             },
         )
-        self.assertEqual(data["description"], "Summary text.\n\nStoryline text.")
+        self.assertEqual(data["description"], "요약 번역.\n\n스토리 번역.")
         self.assertEqual(
             data["external_links"],
             {
@@ -80,8 +83,10 @@ class GameListDetailSerializerTest(TestCase):
                 "epic_store": "https://store.epicgames.com/game/501",
             },
         )
-        self.assertTrue(data["is_liked"])
         self.assertEqual(data["like_count"], 1250)
+        self.assertNotIn("title_ko", data)
+        self.assertNotIn("title_original", data)
+        self.assertNotIn("is_liked", data)
 
     def test_serializer_returns_nulls_for_missing_optional_data(self):
         game = Game.objects.create(
@@ -100,6 +105,7 @@ class GameListDetailSerializerTest(TestCase):
 
         data = GameListDetailSerializer(game).data
 
+        self.assertEqual(data["title"], "Missing Data Game")
         self.assertEqual(data["genres"], [])
         self.assertIsNone(data["release_date"])
         self.assertIsNone(data["developer"])
@@ -121,7 +127,9 @@ class GameListDetailSerializerTest(TestCase):
                 "epic_store": None,
             },
         )
-        self.assertFalse(data["is_liked"])
+        self.assertNotIn("title_ko", data)
+        self.assertNotIn("title_original", data)
+        self.assertNotIn("is_liked", data)
 
     def test_serializer_supports_dict_video_and_absolute_cover_url(self):
         game = Game.objects.create(
@@ -229,23 +237,27 @@ class GameListDetailServiceTest(TestCase):
 
         self.assertEqual(data["game_id"], self.game.game_id)
         self.assertEqual(data["title"], self.game.name)
-        self.assertFalse(data["is_liked"])
+        self.assertNotIn("title_ko", data)
+        self.assertNotIn("title_original", data)
+        self.assertNotIn("is_liked", data)
 
-    def test_service_returns_liked_detail_for_authenticated_user(self):
+    def test_service_returns_detail_for_authenticated_user(self):
         data = GameListDetailService.get_game_detail(
             game_id=self.game.game_id,
             user=self.user,
         )
 
-        self.assertTrue(data["is_liked"])
+        self.assertEqual(data["game_id"], self.game.game_id)
+        self.assertNotIn("is_liked", data)
 
-    def test_service_returns_not_liked_for_authenticated_user_without_bookmark(self):
+    def test_service_returns_detail_for_authenticated_user_without_bookmark(self):
         data = GameListDetailService.get_game_detail(
             game_id=self.game.game_id,
             user=self.other_user,
         )
 
-        self.assertFalse(data["is_liked"])
+        self.assertEqual(data["game_id"], self.game.game_id)
+        self.assertNotIn("is_liked", data)
 
     def test_service_raises_not_found_for_missing_game(self):
         with self.assertRaisesMessage(
