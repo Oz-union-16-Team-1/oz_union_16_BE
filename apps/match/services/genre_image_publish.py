@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from apps.match.models import MatchGenreImagePublished
-from apps.match.services.genre_image_candidates import GenreImageCandidatesService
+from apps.match.services.genre_image_candidates import (
+    GenreImageCandidate,
+    GenreImageCandidatesService,
+)
+from apps.users.models import User
 
-User = get_user_model()
+UserModel = get_user_model()
 
 
 class MatchGenreImagePublishService:
@@ -19,7 +21,7 @@ class MatchGenreImagePublishService:
 
     def build_candidates(
         self, limit_per_genre: int = 5
-    ) -> dict[int, list[dict[str, Any]]]:
+    ) -> dict[int, list[GenreImageCandidate]]:
         return self.candidates_service.build_candidates_by_genre(
             limit_per_genre=limit_per_genre
         )
