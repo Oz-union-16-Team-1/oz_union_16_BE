@@ -452,7 +452,9 @@ class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
         if bookmark.exists():
             bookmark.delete()
         else:
-            UserLikeBookmark.objects.create(user_id=self.user.id, game_id=target_game_id)
+            UserLikeBookmark.objects.create(
+                user_id=self.user.id, game_id=target_game_id
+            )
 
         # 기존 next cursor로 2페이지 조회 (회귀 포인트)
         second = self.client.get(
