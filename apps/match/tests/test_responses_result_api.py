@@ -151,6 +151,7 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             RankedGame(
                 game_id=i,
                 title=f"g{i}",
+                slug="",
                 genres=[],
                 thumbnail_url="",
                 rating=80.0,
@@ -170,6 +171,7 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             RankedGame(
                 game_id=999,
                 title="low",
+                slug="",
                 genres=[],
                 thumbnail_url="",
                 rating=10.0,
@@ -247,9 +249,10 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertIn("abc123.jpg", self.service._to_thumbnail_url("abc123"))
 
         c = self.service._encode_cursor(0.7777777, 123)
-        s, g = self.service._decode_cursor(c)
+        s, g, o = self.service._decode_cursor(c)
         self.assertEqual(g, 123)
         self.assertAlmostEqual(s, 0.777778, places=6)
+        self.assertIsNone(o)
 
     def test_internal_fallback_and_mean_vector_helpers(self):
         self.assertEqual(
@@ -290,6 +293,69 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         disliked_mean = self.service._load_disliked_mean_vector(user_id=self.user.id)
         self.assertIsNotNone(disliked_mean)
         self.assertEqual(len(disliked_mean), 14)
+
+    def test_internal_series_dedupe_keeps_highest_ranked_variant(self):
+        service = MatchResponsesResultQueryService()
+
+        items = [
+            RankedGame(
+                game_id=1001,
+                title="Way of the Hunter",
+                slug="way-of-the-hunter",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=80.0,
+                is_liked=False,
+                final_score=0.95,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=1002,
+                title="Way of the Hunter Deluxe Edition",
+                slug="way-of-the-hunter-deluxe-edition",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=81.0,
+                is_liked=False,
+                final_score=0.94,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=1003,
+                title="Way of the Hunter Complete",
+                slug="way-of-the-hunter-complete",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=82.0,
+                is_liked=False,
+                final_score=0.93,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=2001,
+                title="Portal 2",
+                slug="portal-2",
+                genres=["퍼즐"],
+                thumbnail_url="",
+                rating=90.0,
+                is_liked=False,
+                final_score=0.90,
+                pop_score=0.9,
+                rec_score=0.6,
+            ),
+        ]
+
+        deduped = service._dedupe_series_variants(items, limit=15)
+        deduped_ids = [x.game_id for x in deduped]
+
+        # same series는 상위 1개만 남아야 함
+        self.assertIn(1001, deduped_ids)
+        self.assertNotIn(1002, deduped_ids)
+        self.assertNotIn(1003, deduped_ids)
+        self.assertIn(2001, deduped_ids)
 
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
@@ -365,3 +431,36 @@ class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
             response.data["error_detail"],
             "추천 데이터 조회 중 외부 서비스 오류가 발생했습니다.",
         )
+
+    def test_get_responses_result_cursor_stable_after_like_toggle(self):
+        # 페이지가 최소 2장 나오도록 데이터 보강
+        for idx, rating in enumerate([69, 67, 65, 63, 61, 59, 57, 55], start=1):
+            self._create_game(game_id=9600 + idx, rating=rating, genre_ids=[2])
+
+        # 1페이지 조회
+        first = self.client.get(self.url, {"genre_id": 2, "page_size": 3})
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(first.data["results"]), 0)
+        self.assertIsNotNone(first.data["next"])
+
+        # 페이지1에서 본 게임 하나를 "좋아요 토글" (상태 변화 유도)
+        target_game_id = first.data["results"][0]["game_id"]
+        bookmark = UserLikeBookmark.objects.filter(
+            user_id=self.user.id,
+            game_id=target_game_id,
+        )
+        if bookmark.exists():
+            bookmark.delete()
+        else:
+            UserLikeBookmark.objects.create(
+                user_id=self.user.id, game_id=target_game_id
+            )
+
+        # 기존 next cursor로 2페이지 조회 (회귀 포인트)
+        second = self.client.get(
+            self.url,
+            {"genre_id": 2, "page_size": 3, "cursor": first.data["next"]},
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertIn("results", second.data)
+        self.assertGreater(len(second.data["results"]), 0)

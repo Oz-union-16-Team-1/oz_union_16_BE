@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import re
 import time
 from collections import defaultdict
 from collections.abc import Iterable as IterableABC
@@ -46,10 +47,18 @@ class MatchResponsesResultDataUnavailable(RuntimeError):
     pass
 
 
+SERIES_SUFFIX_RE = re.compile(
+    r"(?:[-_ ](?:deluxe|ultimate|complete|definitive|gold|goty|edition|bundle|pack|collection|remaster(?:ed)?|remake|director(?:s)?[-_ ]?cut|anniversary))+$",
+    re.IGNORECASE,
+)
+TITLE_NOISE_RE = re.compile(r"[\(\[\{].*?[\)\]\}]")
+
+
 @dataclass(frozen=True)
 class RankedGame:
     game_id: int
     title: str
+    slug: str
     genres: list[str]
     thumbnail_url: str
     rating: float
@@ -63,6 +72,7 @@ class MatchResponsesResultQueryService:
     MAX_SIM_SCAN = 5000
     MIN_FALLBACK_SCAN = 200
     FALLBACK_SCAN_MULTIPLIER = 20
+    DEDUPE_OVERFETCH_FACTOR = 3
 
     def get_results(
         self,
@@ -86,6 +96,11 @@ class MatchResponsesResultQueryService:
                 }
 
             selected: list[RankedGame] = []
+            target_count = MATCH_RESULT_MAX_TOTAL_COUNT
+            selection_target = max(
+                target_count,
+                target_count * self.DEDUPE_OVERFETCH_FACTOR,
+            )
             user_vector = self._load_user_vector(user_id=user_id)
 
             if user_vector:
@@ -107,12 +122,15 @@ class MatchResponsesResultQueryService:
                     for item in personalized_all
                     if item.game_id in allowed_ids and not item.is_liked
                 ]
-                selected = self._merge_unique(selected, self._apply_tau_steps(stage0))
+                selected = self._merge_unique(
+                    selected,
+                    self._apply_tau_steps(stage0, limit=selection_target),
+                )
 
                 # 1순위: 선택 장르 + liked only + sim >= 0.20 + TAU 단계 완화
                 # liked 보충은 전체 결과의 30% 캡
-                if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
-                    liked_cap = self._liked_cap(MATCH_RESULT_MAX_TOTAL_COUNT)
+                if len(selected) < selection_target:
+                    liked_cap = self._liked_cap(target_count)
                     room_for_liked = max(0, liked_cap - self._count_liked(selected))
                     if room_for_liked > 0:
                         stage1 = [
@@ -120,12 +138,12 @@ class MatchResponsesResultQueryService:
                             for item in personalized_all
                             if item.game_id in allowed_ids and item.is_liked
                         ]
-                        stage1 = self._apply_tau_steps(stage1)
+                        stage1 = self._apply_tau_steps(stage1, limit=selection_target)
                         stage1 = self._take_by_popularity(stage1, room_for_liked)
                         selected = self._merge_unique(selected, stage1)
 
                 # 2순위: 전체 + liked 제외 + sim >= 0.20 + 인기순
-                if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+                if len(selected) < selection_target:
                     used_ids = {item.game_id for item in selected}
                     stage2 = [
                         item
@@ -134,35 +152,46 @@ class MatchResponsesResultQueryService:
                     ]
                     stage2 = self._take_by_popularity(
                         stage2,
-                        MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
+                        selection_target - len(selected),
                     )
                     selected = self._merge_unique(selected, stage2)
 
             # 3순위: 선택 장르 + sim 제거 + 인기순
-            if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+            if len(selected) < selection_target:
                 stage3 = self._fallback_popular(
                     source_ids=allowed_ids,
                     excluded_ids=liked_ids.union({item.game_id for item in selected}),
-                    limit=MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
+                    limit=selection_target - len(selected),
                     liked_ids=liked_ids,
                 )
                 selected = self._merge_unique(selected, stage3)
 
             # 4순위: 전체 + sim 제거 + 인기순
-            if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+            if len(selected) < selection_target:
                 stage4 = self._fallback_popular(
                     source_ids=None,
                     excluded_ids=liked_ids.union({item.game_id for item in selected}),
-                    limit=MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
+                    limit=selection_target - len(selected),
                     liked_ids=liked_ids,
                 )
                 selected = self._merge_unique(selected, stage4)
 
-            final_ranked = sorted(
+            sorted_ranked = sorted(
                 selected,
                 key=lambda item: (item.final_score, item.game_id),
                 reverse=True,
-            )[:MATCH_RESULT_MAX_TOTAL_COUNT]
+            )
+
+            deduped_top = self._dedupe_series_variants(
+                sorted_ranked,
+                limit=target_count,
+            )
+
+            final_ranked = self._fill_after_dedupe(
+                deduped_top=deduped_top,
+                ranked_pool=sorted_ranked,
+                limit=target_count,
+            )
 
             page_items, next_cursor = self._paginate(
                 items=final_ranked,
@@ -274,6 +303,7 @@ class MatchResponsesResultQueryService:
             ).values(
                 "game_id",
                 "name",
+                "slug",
                 "cover",
                 "rating",
                 "first_release_date",
@@ -320,6 +350,7 @@ class MatchResponsesResultQueryService:
                 RankedGame(
                     game_id=game_id,
                     title=str(row.get("name") or ""),
+                    slug=str(row.get("slug") or ""),
                     genres=genre_map.get(game_id, []),
                     thumbnail_url=self._to_thumbnail_url(row.get("cover")),
                     rating=self._normalize_rating(row.get("rating")),
@@ -336,14 +367,19 @@ class MatchResponsesResultQueryService:
             reverse=True,
         )
 
-    def _apply_tau_steps(self, ranked: list[RankedGame]) -> list[RankedGame]:
+    def _apply_tau_steps(
+        self,
+        ranked: list[RankedGame],
+        *,
+        limit: int = MATCH_RESULT_MAX_TOTAL_COUNT,
+    ) -> list[RankedGame]:
         if not ranked:
             return []
 
         for tau in MATCH_RESULT_TAU_FINAL_STEPS:
             filtered = [item for item in ranked if item.final_score >= tau]
-            if len(filtered) >= MATCH_RESULT_MAX_TOTAL_COUNT:
-                return filtered[:MATCH_RESULT_MAX_TOTAL_COUNT]
+            if len(filtered) >= limit:
+                return filtered[:limit]
 
         min_tau = MATCH_RESULT_TAU_FINAL_STEPS[-1]
         return [item for item in ranked if item.final_score >= min_tau]
@@ -392,6 +428,7 @@ class MatchResponsesResultQueryService:
             qs.values(
                 "game_id",
                 "name",
+                "slug",
                 "cover",
                 "rating",
                 "rating_count",
@@ -437,6 +474,7 @@ class MatchResponsesResultQueryService:
                 RankedGame(
                     game_id=game_id,
                     title=str(row.get("name") or ""),
+                    slug=str(row.get("slug") or ""),
                     genres=genre_map.get(game_id, []),
                     thumbnail_url=self._to_thumbnail_url(row.get("cover")),
                     rating=self._normalize_rating(row.get("rating")),
@@ -528,15 +566,25 @@ class MatchResponsesResultQueryService:
 
         start = 0
         if cursor:
-            c_score, c_game_id = self._decode_cursor(cursor)
+            c_score, c_game_id, c_offset = self._decode_cursor(cursor)
+
+            found = False
             for idx, item in enumerate(items):
                 if (item.final_score < c_score) or (
                     item.final_score == c_score and item.game_id < c_game_id
                 ):
                     start = idx
+                    found = True
                     break
-            else:
-                start = len(items)
+
+            # 좋아요 토글 등으로 집합이 변해 (score, game_id) anchor를 못 찾는 경우
+            # 커서 offset으로 fallback 해서 "더보기 무응답"을 방지한다.
+            if not found:
+                if c_offset is not None:
+                    # 빈 페이지가 되지 않도록 안전 clamp
+                    start = min(max(c_offset, 0), max(len(items) - 1, 0))
+                else:
+                    start = len(items)
 
         page = items[start : start + page_size]
         if not page:
@@ -546,13 +594,26 @@ class MatchResponsesResultQueryService:
         next_cursor = None
         if has_next:
             last = page[-1]
-            next_cursor = self._encode_cursor(last.final_score, last.game_id)
+            next_cursor = self._encode_cursor(
+                last.final_score,
+                last.game_id,
+                offset=start + page_size,
+            )
 
         return page, next_cursor
 
-    def _encode_cursor(self, score: float, game_id: int) -> str:
+    def _encode_cursor(
+        self, score: float, game_id: int, offset: int | None = None
+    ) -> str:
+        obj: dict[str, int | float] = {
+            "s": round(float(score), 6),
+            "g": int(game_id),
+        }
+        if offset is not None:
+            obj["o"] = int(offset)
+
         payload = json.dumps(
-            {"s": round(float(score), 6), "g": int(game_id)},
+            obj,
             ensure_ascii=False,
             separators=(",", ":"),
         )
@@ -562,12 +623,18 @@ class MatchResponsesResultQueryService:
             .rstrip("=")
         )
 
-    def _decode_cursor(self, cursor: str) -> tuple[float, int]:
+    def _decode_cursor(self, cursor: str) -> tuple[float, int, int | None]:
         try:
             padded = cursor + ("=" * (-len(cursor) % 4))
             raw = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
             obj = json.loads(raw)
-            return round(float(obj["s"]), 6), int(obj["g"])
+
+            score = round(float(obj["s"]), 6)
+            game_id = int(obj["g"])
+            offset_raw = obj.get("o")
+            offset = int(offset_raw) if offset_raw is not None else None
+
+            return score, game_id, offset
         except Exception as exc:
             raise MatchResponsesResultValidationError(
                 "cursor 형식이 올바르지 않습니다."
@@ -586,6 +653,96 @@ class MatchResponsesResultQueryService:
             seen.add(item.game_id)
             out.append(item)
         return out
+
+    def _dedupe_series_variants(
+        self,
+        items: list[RankedGame],
+        *,
+        limit: int,
+    ) -> list[RankedGame]:
+        """
+        상위 limit 구간에서 같은 시리즈/에디션 중복을 제거한다.
+        """
+        if not items or limit <= 0:
+            return []
+
+        out: list[RankedGame] = []
+        seen_keys: set[str] = set()
+
+        for item in items[:limit]:
+            key = self._canonical_game_key(item)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            out.append(item)
+
+        return out
+
+    def _fill_after_dedupe(
+        self,
+        *,
+        deduped_top: list[RankedGame],
+        ranked_pool: list[RankedGame],
+        limit: int,
+    ) -> list[RankedGame]:
+        """
+        dedupe로 limit 미만이 되면, 정렬된 원본 풀에서
+        아직 사용되지 않은 canonical key를 순서대로 보충한다.
+        """
+        if limit <= 0:
+            return []
+
+        out = list(deduped_top)
+        if len(out) >= limit:
+            return out[:limit]
+
+        seen_game_ids = {item.game_id for item in out}
+        seen_keys = {self._canonical_game_key(item) for item in out}
+
+        for item in ranked_pool:
+            if item.game_id in seen_game_ids:
+                continue
+
+            key = self._canonical_game_key(item)
+            if key in seen_keys:
+                continue
+
+            seen_game_ids.add(item.game_id)
+            seen_keys.add(key)
+            out.append(item)
+
+            if len(out) >= limit:
+                break
+
+        return out[:limit]
+
+    def _canonical_game_key(self, item: RankedGame) -> str:
+        slug_key = self._normalize_slug_for_dedupe(item.slug)
+        if slug_key:
+            return f"s:{slug_key}"
+
+        title_key = self._normalize_title_for_dedupe(item.title)
+        return f"t:{title_key}"
+
+    def _normalize_slug_for_dedupe(self, slug: str) -> str:
+        text = (slug or "").strip().lower()
+        if not text:
+            return ""
+
+        text = SERIES_SUFFIX_RE.sub("", text)
+        text = re.sub(r"[-_]+", "-", text).strip("-")
+        return text
+
+    def _normalize_title_for_dedupe(self, title: str) -> str:
+        text = (title or "").strip().lower()
+        if not text:
+            return ""
+
+        text = TITLE_NOISE_RE.sub(" ", text)  # 괄호 부가정보 제거
+        text = SERIES_SUFFIX_RE.sub("", text)
+        text = re.sub(r"[^a-z0-9가-힣]+", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text
 
     def _take_by_popularity(
         self, items: list[RankedGame], limit: int
