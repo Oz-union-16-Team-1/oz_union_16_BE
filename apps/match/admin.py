@@ -1,3 +1,353 @@
-from django.contrib import admin
+from __future__ import annotations
 
-# Register your models here.
+from datetime import timedelta
+from typing import Any
+
+from django.contrib import admin, messages
+from django.db.models import Q
+from django.http import HttpRequest, HttpResponseRedirect
+from django.urls import path, reverse
+from django.utils import timezone
+from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
+
+from apps.games.models import Game
+from apps.match.constants import (
+    API_GENRE_NAME_MAP,
+    API_TO_IGDB_IMAGE_GENRE_MAP,
+    GENRE_PRIORITY,
+    MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES,
+    MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS,
+    MATCH_GENRE_IMAGE_MIN_RATING,
+    MATCH_GENRE_IMAGE_MIN_RATING_COUNT,
+    MATCH_GENRE_IMAGE_REQUIRED_STATUS,
+)
+from apps.match.models import MatchGenreImagePublished
+
+
+def _normalize_image_url(raw: Any) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    url = raw.strip()
+    if not url:
+        return None
+
+    # IGDB //images... 형태 대응
+    if url.startswith("//"):
+        url = f"https:{url}"
+
+    # IGDB image_id만 저장된 경우 대응
+    if not url.startswith("http://") and not url.startswith("https://"):
+        url = f"https://images.igdb.com/igdb/image/upload/t_1080p/{url}.jpg"
+
+    # 썸네일 -> 고해상도
+    return url.replace("t_thumb", "t_1080p")
+
+
+@admin.register(MatchGenreImagePublished)
+class MatchGenreImagePublishedAdmin(admin.ModelAdmin):
+    list_display = (
+        "api_genre_id",
+        "genre_name",
+        "game",
+        "preview",
+        "selected_by",
+        "updated_at",
+    )
+    list_filter = ("api_genre_id",)
+    ordering = ("api_genre_id",)
+    search_fields = ("game__name", "game__game_id")
+    save_on_top = True
+    actions = ("action_seed_or_refresh_with_top1",)
+
+    fields = (
+        "api_genre_id",
+        "genre_name",
+        "game",
+        "image_url",
+        "preview",
+        "candidate_options",
+        "selected_by",
+        "created_at",
+        "updated_at",
+    )
+    readonly_fields = (
+        "genre_name",
+        "preview",
+        "candidate_options",
+        "selected_by",
+        "created_at",
+        "updated_at",
+    )
+
+    def get_queryset(self, request: HttpRequest):
+        return super().get_queryset(request).select_related("game", "selected_by")
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "<path:object_id>/pick/<int:game_id>/",
+                self.admin_site.admin_view(self.pick_candidate_view),
+                name="match_matchgenreimagepublished_pick_candidate",
+            ),
+        ]
+        return custom_urls + urls
+
+    @admin.display(description="장르명")
+    def genre_name(self, obj: MatchGenreImagePublished) -> str:
+        return API_GENRE_NAME_MAP.get(obj.api_genre_id, f"Unknown({obj.api_genre_id})")
+
+    @admin.display(description="대표 이미지")
+    def preview(self, obj: MatchGenreImagePublished) -> str:
+        if not obj.image_url:
+            return "-"
+        return format_html(
+            '<img src="{}" style="max-height:120px;border-radius:8px;" />',
+            obj.image_url,
+        )
+
+    @admin.display(description="후보 5개 (우선순위+중복정책 적용)")
+    def candidate_options(self, obj: MatchGenreImagePublished) -> str:
+        candidates_by_genre = self._build_candidates_by_genre(limit_per_genre=5)
+        candidates = candidates_by_genre.get(obj.api_genre_id, [])
+        if not candidates:
+            return "후보 없음"
+
+        lines: list[str] = []
+        for idx, c in enumerate(candidates, start=1):
+            current = " (현재선택)" if obj.game_id_id == c["game_id"] else ""
+            # change form 경로 기준 상대 링크: ../pick/{game_id}/
+            pick_url = f"../pick/{c['game_id']}/"
+
+            lines.append(
+                format_html(
+                    '{}. game_id={} | {} | rating={} (count={}){} | <a href="{}" target="_blank">img</a> | <a href="{}">선택</a>',
+                    idx,
+                    c["game_id"],
+                    c["name"],
+                    c["rating"],
+                    c["rating_count"],
+                    current,
+                    c["image_url"],
+                    pick_url,
+                )
+            )
+
+        return format_html_join(mark_safe("<br>"), "{}", ((line,) for line in lines))
+
+    def save_model(
+        self,
+        request: HttpRequest,
+        obj: MatchGenreImagePublished,
+        form,
+        change: bool,
+    ) -> None:
+        if request.user.is_authenticated:
+            obj.selected_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description="장르 1~8 게시본 생성/보정 (후보 1순위 자동 반영)")
+    def action_seed_or_refresh_with_top1(self, request: HttpRequest, queryset) -> None:
+        candidates_by_genre = self._build_candidates_by_genre(limit_per_genre=5)
+        updated = 0
+        missing = 0
+
+        for genre_id in range(1, 9):
+            candidates = candidates_by_genre.get(genre_id, [])
+            if not candidates:
+                missing += 1
+                continue
+
+            top1 = candidates[0]
+            MatchGenreImagePublished.objects.update_or_create(
+                api_genre_id=genre_id,
+                defaults={
+                    "game_id_id": top1["game_id"],
+                    "image_url": top1["image_url"],
+                    "selected_by": request.user if request.user.is_authenticated else None,
+                },
+            )
+            updated += 1
+
+        self.message_user(
+            request,
+            f"완료: {updated}개 장르 반영, 후보 없음 {missing}개 장르",
+            level=messages.SUCCESS,
+        )
+
+    def pick_candidate_view(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        game_id: int,
+    ) -> HttpResponseRedirect:
+        obj = self.get_object(request, object_id)
+        if obj is None:
+            self.message_user(request, "대상을 찾을 수 없습니다.", level=messages.ERROR)
+            return HttpResponseRedirect(
+                reverse(
+                    f"{self.admin_site.name}:match_matchgenreimagepublished_changelist"
+                )
+            )
+
+        candidates_by_genre = self._build_candidates_by_genre(limit_per_genre=5)
+        candidate_map = {
+            c["game_id"]: c for c in candidates_by_genre.get(obj.api_genre_id, [])
+        }
+        picked = candidate_map.get(game_id)
+        if picked is None:
+            self.message_user(
+                request,
+                "선택한 게임은 현재 후보 5개에 없습니다. 화면 새로고침 후 다시 선택하세요.",
+                level=messages.ERROR,
+            )
+        else:
+            obj.game_id_id = picked["game_id"]
+            obj.image_url = picked["image_url"]
+            if request.user.is_authenticated:
+                obj.selected_by = request.user
+            obj.save(update_fields=["game", "image_url", "selected_by", "updated_at"])
+            self.message_user(
+                request,
+                f"장르 {obj.api_genre_id} 게시본을 game_id={picked['game_id']}로 반영했습니다.",
+                level=messages.SUCCESS,
+            )
+
+        return HttpResponseRedirect(
+            reverse(
+                f"{self.admin_site.name}:match_matchgenreimagepublished_change",
+                args=[obj.pk],
+            )
+        )
+
+    def _build_candidates_by_genre(self, limit_per_genre: int = 5) -> dict[int, list[dict[str, Any]]]:
+        # 1) 장르별 랭킹 후보를 먼저 수집
+        ranked_by_genre: dict[int, list[dict[str, Any]]] = {}
+        for genre_id in range(1, 9):
+            ranked_by_genre[genre_id] = self._fetch_ranked_candidates_for_genre(
+                api_genre_id=genre_id,
+                scan_limit=300,
+            )
+
+        # 2) 우선순위 순회하며 중복 없는 후보 먼저 채움
+        selected_by_genre: dict[int, list[dict[str, Any]]] = {}
+        used_game_ids: set[int] = set()
+
+        for genre_id in GENRE_PRIORITY:
+            ranked = ranked_by_genre.get(genre_id, [])
+            chosen: list[dict[str, Any]] = []
+            chosen_ids: set[int] = set()
+
+            for c in ranked:
+                gid = c["game_id"]
+                if gid in used_game_ids:
+                    continue
+                chosen.append(c)
+                chosen_ids.add(gid)
+                if len(chosen) >= limit_per_genre:
+                    break
+
+            # 3) B안: 부족하면 같은 장르 내에서 중복허용(타 장르와 겹쳐도)으로 보충
+            if len(chosen) < limit_per_genre:
+                for c in ranked:
+                    gid = c["game_id"]
+                    if gid in chosen_ids:
+                        continue
+                    chosen.append(c)
+                    chosen_ids.add(gid)
+                    if len(chosen) >= limit_per_genre:
+                        break
+
+            selected_by_genre[genre_id] = chosen[:limit_per_genre]
+            used_game_ids.update(chosen_ids)
+
+        return selected_by_genre
+
+    def _fetch_ranked_candidates_for_genre(
+        self,
+        api_genre_id: int,
+        scan_limit: int = 300,
+    ) -> list[dict[str, Any]]:
+        igdb_genre_ids = API_TO_IGDB_IMAGE_GENRE_MAP.get(api_genre_id, [])
+        if not igdb_genre_ids:
+            return []
+
+        genre_q = Q()
+        for gid in igdb_genre_ids:
+            genre_q |= Q(genres__contains=[gid])
+
+        if not genre_q.children:
+            return []
+
+        cutoff_dt = timezone.now() - timedelta(
+            days=MATCH_GENRE_IMAGE_MAX_LOOKBACK_YEARS * 365
+        )
+
+        rows = (
+            Game.objects.filter(genre_q, is_ban=False, cover__isnull=False)
+            .exclude(cover="")
+            .filter(first_release_date__isnull=False, first_release_date__gte=cutoff_dt)
+            .filter(
+                Q(category__isnull=True)
+                | Q(category__in=MATCH_GENRE_IMAGE_ALLOWED_CATEGORIES)
+            )
+            .filter(Q(status__isnull=True) | Q(status=MATCH_GENRE_IMAGE_REQUIRED_STATUS))
+            .values(
+                "game_id",
+                "name",
+                "cover",
+                "total_rating",
+                "rating",
+                "total_rating_count",
+                "rating_count",
+                "first_release_date",
+            )
+            .order_by("-first_release_date", "-game_id")[:scan_limit]
+        )
+
+        candidates: list[dict[str, Any]] = []
+        for row in rows:
+            rating_raw = row.get("total_rating")
+            if rating_raw is None:
+                rating_raw = row.get("rating")
+            rating = float(rating_raw or 0.0)
+
+            rating_count_raw = row.get("total_rating_count")
+            if rating_count_raw is None:
+                rating_count_raw = row.get("rating_count")
+            rating_count = int(rating_count_raw or 0)
+
+            if rating < MATCH_GENRE_IMAGE_MIN_RATING:
+                continue
+            if rating_count < MATCH_GENRE_IMAGE_MIN_RATING_COUNT:
+                continue
+
+            image_url = _normalize_image_url(row.get("cover"))
+            if not image_url:
+                continue
+
+            release_dt = row.get("first_release_date")
+            release_ts = int(release_dt.timestamp()) if release_dt is not None else 0
+
+            candidates.append(
+                {
+                    "game_id": int(row["game_id"]),
+                    "name": str(row.get("name") or ""),
+                    "image_url": image_url,
+                    "rating": round(rating, 2),
+                    "rating_count": rating_count,
+                    "release_ts": release_ts,
+                }
+            )
+
+        candidates.sort(
+            key=lambda x: (
+                x["rating"],
+                x["rating_count"],
+                x["release_ts"],
+                x["game_id"],
+            ),
+            reverse=True,
+        )
+        return candidates
