@@ -72,6 +72,7 @@ class MatchResponsesResultQueryService:
     MAX_SIM_SCAN = 5000
     MIN_FALLBACK_SCAN = 200
     FALLBACK_SCAN_MULTIPLIER = 20
+    DEDUPE_OVERFETCH_FACTOR = 3
 
     def get_results(
         self,
@@ -95,6 +96,11 @@ class MatchResponsesResultQueryService:
                 }
 
             selected: list[RankedGame] = []
+            target_count = MATCH_RESULT_MAX_TOTAL_COUNT
+            selection_target = max(
+                target_count,
+                target_count * self.DEDUPE_OVERFETCH_FACTOR,
+                )
             user_vector = self._load_user_vector(user_id=user_id)
 
             if user_vector:
@@ -116,12 +122,15 @@ class MatchResponsesResultQueryService:
                     for item in personalized_all
                     if item.game_id in allowed_ids and not item.is_liked
                 ]
-                selected = self._merge_unique(selected, self._apply_tau_steps(stage0))
+                selected = self._merge_unique(
+                    selected,
+                    self._apply_tau_steps(stage0, limit=selection_target),
+                )
 
                 # 1순위: 선택 장르 + liked only + sim >= 0.20 + TAU 단계 완화
                 # liked 보충은 전체 결과의 30% 캡
-                if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
-                    liked_cap = self._liked_cap(MATCH_RESULT_MAX_TOTAL_COUNT)
+                if len(selected) < selection_target:
+                    liked_cap = self._liked_cap(target_count)
                     room_for_liked = max(0, liked_cap - self._count_liked(selected))
                     if room_for_liked > 0:
                         stage1 = [
@@ -129,12 +138,12 @@ class MatchResponsesResultQueryService:
                             for item in personalized_all
                             if item.game_id in allowed_ids and item.is_liked
                         ]
-                        stage1 = self._apply_tau_steps(stage1)
+                        stage1 = self._apply_tau_steps(stage1, limit=selection_target)
                         stage1 = self._take_by_popularity(stage1, room_for_liked)
                         selected = self._merge_unique(selected, stage1)
 
                 # 2순위: 전체 + liked 제외 + sim >= 0.20 + 인기순
-                if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+                if len(selected) < selection_target:
                     used_ids = {item.game_id for item in selected}
                     stage2 = [
                         item
@@ -143,26 +152,26 @@ class MatchResponsesResultQueryService:
                     ]
                     stage2 = self._take_by_popularity(
                         stage2,
-                        MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
-                    )
+                        selection_target - len(selected),
+                        )
                     selected = self._merge_unique(selected, stage2)
 
             # 3순위: 선택 장르 + sim 제거 + 인기순
-            if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+            if len(selected) < selection_target:
                 stage3 = self._fallback_popular(
                     source_ids=allowed_ids,
                     excluded_ids=liked_ids.union({item.game_id for item in selected}),
-                    limit=MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
+                    limit=selection_target - len(selected),
                     liked_ids=liked_ids,
                 )
                 selected = self._merge_unique(selected, stage3)
 
             # 4순위: 전체 + sim 제거 + 인기순
-            if len(selected) < MATCH_RESULT_MAX_TOTAL_COUNT:
+            if len(selected) < selection_target:
                 stage4 = self._fallback_popular(
                     source_ids=None,
                     excluded_ids=liked_ids.union({item.game_id for item in selected}),
-                    limit=MATCH_RESULT_MAX_TOTAL_COUNT - len(selected),
+                    limit=selection_target - len(selected),
                     liked_ids=liked_ids,
                 )
                 selected = self._merge_unique(selected, stage4)
@@ -172,9 +181,17 @@ class MatchResponsesResultQueryService:
                 key=lambda item: (item.final_score, item.game_id),
                 reverse=True,
             )
-            final_ranked = self._dedupe_series_variants(sorted_ranked)[
-                :MATCH_RESULT_MAX_TOTAL_COUNT
-            ]
+
+            deduped_top = self._dedupe_series_variants(
+                sorted_ranked,
+                limit=target_count,
+            )
+
+            final_ranked = self._fill_after_dedupe(
+                deduped_top=deduped_top,
+                ranked_pool=sorted_ranked,
+                limit=target_count,
+            )
 
             page_items, next_cursor = self._paginate(
                 items=final_ranked,
@@ -350,14 +367,19 @@ class MatchResponsesResultQueryService:
             reverse=True,
         )
 
-    def _apply_tau_steps(self, ranked: list[RankedGame]) -> list[RankedGame]:
+    def _apply_tau_steps(
+            self,
+            ranked: list[RankedGame],
+            *,
+            limit: int = MATCH_RESULT_MAX_TOTAL_COUNT,
+    ) -> list[RankedGame]:
         if not ranked:
             return []
 
         for tau in MATCH_RESULT_TAU_FINAL_STEPS:
             filtered = [item for item in ranked if item.final_score >= tau]
-            if len(filtered) >= MATCH_RESULT_MAX_TOTAL_COUNT:
-                return filtered[:MATCH_RESULT_MAX_TOTAL_COUNT]
+            if len(filtered) >= limit:
+                return filtered[:limit]
 
         min_tau = MATCH_RESULT_TAU_FINAL_STEPS[-1]
         return [item for item in ranked if item.final_score >= min_tau]
@@ -603,18 +625,22 @@ class MatchResponsesResultQueryService:
             out.append(item)
         return out
 
-    def _dedupe_series_variants(self, items: list[RankedGame]) -> list[RankedGame]:
+    def _dedupe_series_variants(
+            self,
+            items: list[RankedGame],
+            *,
+            limit: int,
+    ) -> list[RankedGame]:
         """
-        같은 시리즈/에디션(예: Deluxe, Complete, GOTY)은 1개만 남긴다.
-        입력 items는 이미 final_score DESC, game_id DESC 정렬 상태여야 한다.
+        상위 limit 구간에서 같은 시리즈/에디션 중복을 제거한다.
         """
-        if not items:
+        if not items or limit <= 0:
             return []
 
         out: list[RankedGame] = []
         seen_keys: set[str] = set()
 
-        for item in items:
+        for item in items[:limit]:
             key = self._canonical_game_key(item)
             if key in seen_keys:
                 continue
@@ -623,6 +649,43 @@ class MatchResponsesResultQueryService:
 
         return out
 
+    def _fill_after_dedupe(
+            self,
+            *,
+            deduped_top: list[RankedGame],
+            ranked_pool: list[RankedGame],
+            limit: int,
+    ) -> list[RankedGame]:
+        """
+        dedupe로 limit 미만이 되면, 정렬된 원본 풀에서
+        아직 사용되지 않은 canonical key를 순서대로 보충한다.
+        """
+        if limit <= 0:
+            return []
+
+        out = list(deduped_top)
+        if len(out) >= limit:
+            return out[:limit]
+
+        seen_game_ids = {item.game_id for item in out}
+        seen_keys = {self._canonical_game_key(item) for item in out}
+
+        for item in ranked_pool:
+            if item.game_id in seen_game_ids:
+                continue
+
+            key = self._canonical_game_key(item)
+            if key in seen_keys:
+                continue
+
+            seen_game_ids.add(item.game_id)
+            seen_keys.add(key)
+            out.append(item)
+
+            if len(out) >= limit:
+                break
+
+        return out[:limit]
 
     def _canonical_game_key(self, item: RankedGame) -> str:
         slug_key = self._normalize_slug_for_dedupe(item.slug)
