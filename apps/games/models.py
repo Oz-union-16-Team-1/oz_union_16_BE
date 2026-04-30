@@ -5,6 +5,12 @@ class Game(models.Model):
     # 1~3: 기본 식별 정보
     game_id = models.BigIntegerField(primary_key=True, verbose_name="IGDB_게임_고유_ID")
     name = models.CharField(max_length=255, verbose_name="게임 이름")
+    name_ko = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="게임 이름 한글 번역",
+    )
     slug = models.CharField(max_length=255, verbose_name="슬러그")
 
     # 4~7: 개요 및 상태

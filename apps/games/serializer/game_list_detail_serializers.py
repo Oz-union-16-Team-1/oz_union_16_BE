@@ -19,7 +19,7 @@ class GameDetailExternalLinksSerializer(serializers.Serializer):
 
 
 class GameListDetailSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source="name", allow_null=True, read_only=True)
+    title = serializers.SerializerMethodField()
     genres = serializers.SerializerMethodField()
     release_date = serializers.SerializerMethodField()
     developer = serializers.SerializerMethodField()
@@ -27,7 +27,6 @@ class GameListDetailSerializer(serializers.ModelSerializer):
     media = serializers.SerializerMethodField()
     description = serializers.SerializerMethodField()
     external_links = serializers.SerializerMethodField()
-    is_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = Game
@@ -41,9 +40,19 @@ class GameListDetailSerializer(serializers.ModelSerializer):
             "media",
             "description",
             "external_links",
-            "is_liked",
             "like_count",
         ]
+
+    def get_title(self, obj: Game) -> str | None:
+        original_title = self._clean_string(obj.name)
+        if original_title is None:
+            return None
+
+        korean_title = self._clean_string(obj.name_ko)
+        if korean_title and korean_title.casefold() != original_title.casefold():
+            return f"{korean_title} ({original_title})"
+
+        return original_title
 
     def get_genres(self, obj: Game) -> list[str]:
         genre_ids = obj.genres or []
@@ -146,10 +155,6 @@ class GameListDetailSerializer(serializers.ModelSerializer):
 
         return links
 
-    def get_is_liked(self, obj: Game) -> bool:
-        liked_game_ids: set[int] = self.context.get("liked_game_ids", set())
-        return obj.game_id in liked_game_ids
-
     @staticmethod
     def _get_company_name(companies: object, role: str) -> str | None:
         if not isinstance(companies, list):
@@ -218,6 +223,14 @@ class GameListDetailSerializer(serializers.ModelSerializer):
         ]
 
         return not any(domain in normalized_url for domain in excluded_domains)
+
+    @staticmethod
+    def _clean_string(value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return None
+
+        stripped = value.strip()
+        return stripped or None
 
 
 class GameListDetailResponseSerializer(GameListDetailSerializer):

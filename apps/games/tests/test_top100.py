@@ -17,6 +17,7 @@ class GameTop100APITest(APITestCase):
         cls.game_main = Game.objects.create(
             game_id=1,
             name="Main Game",
+            name_ko="메인 게임",
             total_rating=95.56,
             total_rating_count=100,
             first_release_date=timezone.now() - timezone.timedelta(days=1),
@@ -58,6 +59,10 @@ class GameTop100APITest(APITestCase):
 
         self.assertEqual(response.data["count"], 100)
         self.assertEqual(len(response.data["results"]), 100)
+        self.assertEqual(response.data["results"][0]["name"], "메인 게임 (Main Game)")
+        self.assertNotIn("title", response.data["results"][0])
+        self.assertNotIn("title_ko", response.data["results"][0])
+        self.assertNotIn("title_original", response.data["results"][0])
 
         self.assertEqual(
             response.data["results"][0]["thumbnail_url"],
@@ -96,12 +101,34 @@ class GameTop100APITest(APITestCase):
         self.assertGreater(len(result), 0)
         self.assertTrue(all("main" in g.name.lower() for g in result))
 
+    def test_service_search_matches_korean_title(self):
+        """한글 검색어도 name_ko 기준으로 검색할 수 있다."""
+        self.game_main.name_ko = "메인 게임"
+        self.game_main.save(update_fields=["name_ko"])
+
+        result = GameTop100Service.get_top_100_games(
+            genre_id=0, search="메인", fuzzy=False
+        )
+
+        self.assertEqual([game.game_id for game in result], [self.game_main.game_id])
+
     def test_service_search_fuzzy_coverage(self):
         """퍼지 검색 (lines 58~62): fuzzy=True + 단어 단위 OR"""
         result = GameTop100Service.get_top_100_games(
             genre_id=0, search="Main Game", fuzzy=True
         )
         self.assertGreater(len(result), 0)
+
+    def test_service_search_fuzzy_matches_korean_title(self):
+        """퍼지 검색도 name_ko를 함께 사용한다."""
+        self.game_main.name_ko = "메인 게임"
+        self.game_main.save(update_fields=["name_ko"])
+
+        result = GameTop100Service.get_top_100_games(
+            genre_id=0, search="메인 액션", fuzzy=True
+        )
+
+        self.assertEqual([game.game_id for game in result], [self.game_main.game_id])
 
     def test_service_genre_filter_coverage(self):
         """장르 Q 필터 빌드 (lines 72~75): 유효한 genre_id"""
@@ -110,14 +137,19 @@ class GameTop100APITest(APITestCase):
         result = GameTop100Service.get_top_100_games(genre_id=3)
         self.assertGreater(len(result), 0)
 
-    def test_service_excludes_games_released_before_1980(self):
+    def test_service_excludes_games_before_min_release_year(self):
         """1980년 이전 출시 게임은 목록 후보에서 제외한다."""
         Game.objects.create(
             game_id=1900,
             name="Old Arcade Game",
             total_rating=100.0,
             total_rating_count=999,
-            first_release_date=datetime(1979, 12, 31, tzinfo=dt_timezone.utc),
+            first_release_date=datetime(
+                GameTop100Service.MIN_RELEASE_YEAR - 1,
+                12,
+                31,
+                tzinfo=dt_timezone.utc,
+            ),
             genres=[12],
         )
 
@@ -125,13 +157,13 @@ class GameTop100APITest(APITestCase):
 
         self.assertNotIn(1900, {game.game_id for game in result})
 
-    def test_service_uses_rating_fallback_for_sparse_genre(self):
-        """엄격한 TOP100 조건을 못 채우는 장르는 완화된 평점 기준으로 보충한다."""
+    def test_service_returns_sparse_genre_by_latest_release(self):
+        """후보가 적은 장르도 최신순으로 반환한다."""
         Game.objects.create(
             game_id=2200,
             name="Sparse Genre Rated Game",
             total_rating=91.0,
-            total_rating_count=10,
+            total_rating_count=50,
             first_release_date=timezone.now() - timezone.timedelta(days=1),
             genres=[7],
         )
@@ -140,49 +172,144 @@ class GameTop100APITest(APITestCase):
 
         self.assertEqual([game.game_id for game in result], [2200])
 
-    def test_service_uses_popularity_fallback_when_ratings_are_missing(self):
-        """평점 데이터가 부족한 장르는 follows/hypes/출시일 기준으로 보충한다."""
+    def test_service_excludes_games_below_lowest_review_threshold(self):
+        """통합 평가 수가 10개 미만인 게임은 목록 후보에서 제외한다."""
         Game.objects.create(
             game_id=2300,
-            name="Popular No Rating Game",
-            total_rating=None,
-            total_rating_count=None,
-            rating=None,
-            rating_count=None,
-            aggregated_rating=None,
-            aggregated_rating_count=None,
-            follows=1000,
-            hypes=10,
-            first_release_date=timezone.now() - timezone.timedelta(days=2),
+            name="Low Review Count Game",
+            total_rating=95.0,
+            total_rating_count=9,
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
             genres=[7],
         )
         Game.objects.create(
             game_id=2301,
-            name="Less Popular No Rating Game",
-            total_rating=None,
-            total_rating_count=None,
-            rating=None,
-            rating_count=None,
-            aggregated_rating=None,
-            aggregated_rating_count=None,
-            follows=100,
-            hypes=50,
+            name="Enough Review Count Game",
+            total_rating=80.0,
+            total_rating_count=10,
             first_release_date=timezone.now() - timezone.timedelta(days=1),
             genres=[7],
         )
 
         result = GameTop100Service.get_top_100_games(genre_id=13)
 
-        self.assertEqual([game.game_id for game in result[:2]], [2300, 2301])
+        self.assertEqual([game.game_id for game in result], [2301])
+
+    def test_service_orders_latest_release_before_high_rating(self):
+        """오래된 고평점 게임보다 최신 출시 게임을 먼저 반환한다."""
+        Game.objects.create(
+            game_id=2310,
+            name="Old High Rating Game",
+            total_rating=100.0,
+            total_rating_count=999,
+            first_release_date=datetime(2020, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2311,
+            name="New Lower Rating Game",
+            total_rating=50.0,
+            total_rating_count=50,
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+
+        self.assertEqual([game.game_id for game in result[:2]], [2311, 2310])
+
+    def test_service_fills_from_lower_review_thresholds_when_needed(self):
+        """리뷰 50개 이상 후보가 부족하면 30개, 10개 이상 후보로 보충한다."""
+        primary_release = timezone.now() - timezone.timedelta(days=1)
+
+        games = []
+        for i in range(98):
+            games.append(
+                Game(
+                    game_id=2500 + i,
+                    name=f"Review 50 Game {i}",
+                    total_rating=80.0,
+                    total_rating_count=60,
+                    first_release_date=primary_release - timezone.timedelta(minutes=i),
+                    genres=[7],
+                )
+            )
+        Game.objects.bulk_create(games)
+        Game.objects.create(
+            game_id=2600,
+            name="Review 30 Fallback Game",
+            total_rating=90.0,
+            total_rating_count=30,
+            first_release_date=primary_release - timezone.timedelta(hours=3),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2601,
+            name="Review 10 Fallback Game",
+            total_rating=88.0,
+            total_rating_count=10,
+            first_release_date=primary_release - timezone.timedelta(hours=4),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2602,
+            name="Too Low Review Game",
+            total_rating=100.0,
+            total_rating_count=9,
+            first_release_date=primary_release - timezone.timedelta(hours=5),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+        result_ids = {game.game_id for game in result}
+
+        self.assertEqual(len(result), 100)
+        self.assertIn(2600, result_ids)
+        self.assertIn(2601, result_ids)
+        self.assertNotIn(2602, result_ids)
+
+    def test_service_fills_from_older_years_when_recent_years_are_short(self):
+        """최근 연도 후보가 부족하면 2023년 이전 후보까지 내려가 보충한다."""
+        recent_release = timezone.now() - timezone.timedelta(days=1)
+
+        games = []
+        for i in range(99):
+            games.append(
+                Game(
+                    game_id=2700 + i,
+                    name=f"Recent Year Game {i}",
+                    total_rating=80.0,
+                    total_rating_count=60,
+                    first_release_date=recent_release - timezone.timedelta(minutes=i),
+                    genres=[7],
+                )
+            )
+        Game.objects.bulk_create(games)
+        Game.objects.create(
+            game_id=2800,
+            name="Older Year Fallback Game",
+            total_rating=90.0,
+            total_rating_count=60,
+            first_release_date=datetime(2019, 6, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+        result_ids = {game.game_id for game in result}
+
+        self.assertEqual(len(result), 100)
+        self.assertIn(2800, result_ids)
 
     def test_service_collection_dedup_coverage(self):
-        """collection 기반 중복 제거 (lines 88~90): 동일 collection skip"""
+        """collection 기반 중복 제거: 동일 collection이면 최신 게임만 남긴다."""
+        latest_release = timezone.now() - timezone.timedelta(days=1)
+        older_release = timezone.now() - timezone.timedelta(days=2)
         Game.objects.create(
             game_id=200,
             name="Series Alpha",
             total_rating=90.0,
             total_rating_count=60,
-            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            first_release_date=older_release,
             genres=[12],
             collection=777,
         )
@@ -191,7 +318,7 @@ class GameTop100APITest(APITestCase):
             name="Series Alpha: Sequel",
             total_rating=89.0,
             total_rating_count=60,
-            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            first_release_date=latest_release,
             genres=[12],
             collection=777,  # 동일 collection → skip 대상
         )
@@ -199,16 +326,18 @@ class GameTop100APITest(APITestCase):
 
         collection_777 = [g for g in result if g.collection == 777]
         self.assertEqual(len(collection_777), 1)
-        self.assertEqual(collection_777[0].name, "Series Alpha")
+        self.assertEqual(collection_777[0].name, "Series Alpha: Sequel")
 
     def test_service_basename_dedup_coverage(self):
-        """base_name 기반 중복 제거 (line 96): 동일 base_name skip"""
+        """base_name 기반 중복 제거: 동일 base_name이면 최신 게임만 남긴다."""
+        latest_release = timezone.now() - timezone.timedelta(days=1)
+        older_release = timezone.now() - timezone.timedelta(days=2)
         Game.objects.create(
             game_id=210,
             name="Omega Game: Director's Cut",
             total_rating=88.0,
             total_rating_count=60,
-            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            first_release_date=older_release,
             genres=[12],
         )
         Game.objects.create(
@@ -216,11 +345,33 @@ class GameTop100APITest(APITestCase):
             name="Omega Game: Enhanced Edition",
             total_rating=87.0,
             total_rating_count=60,
-            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            first_release_date=latest_release,
             genres=[12],
         )
         result = GameTop100Service.get_top_100_games(genre_id=0)
 
         omega_games = [g for g in result if g.name.startswith("Omega Game")]
         self.assertEqual(len(omega_games), 1)
-        self.assertEqual(omega_games[0].name, "Omega Game: Director's Cut")
+        self.assertEqual(omega_games[0].name, "Omega Game: Enhanced Edition")
+
+    def test_service_fills_top100_after_dedup_candidates_are_exhausted(self):
+        """중복 제거 후 100개를 못 채우면 남은 순위 후보로 보충한다."""
+        games = []
+        latest_release = timezone.now() - timezone.timedelta(days=1)
+        for i in range(105):
+            games.append(
+                Game(
+                    game_id=2400 + i,
+                    name=f"Rhythm Saga: Edition {i}",
+                    total_rating=99.0 - (i * 0.1),
+                    total_rating_count=60,
+                    first_release_date=latest_release - timezone.timedelta(minutes=i),
+                    genres=[7],
+                )
+            )
+        Game.objects.bulk_create(games)
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+
+        self.assertEqual(len(result), 100)
+        self.assertEqual(result[0].game_id, 2400)
