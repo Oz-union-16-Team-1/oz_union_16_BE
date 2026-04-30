@@ -6,7 +6,6 @@ from rest_framework.response import Response
 
 from apps.survey.serializers.survey_chatbot_message import (
     SurveyChatbotMessageErrorResponseSerializer,
-    SurveyChatbotMessageLockedResponseSerializer,
     SurveyChatbotMessageRequestSerializer,
     SurveyChatbotMessageResponseSerializer,
 )
@@ -30,13 +29,33 @@ class SurveyChatbotMessageAPIView(GenericAPIView):
         request=SurveyChatbotMessageRequestSerializer,
         responses={
             200: SurveyChatbotMessageResponseSerializer,
+            400: OpenApiResponse(
+                response=SurveyChatbotMessageErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "BadRequest",
+                        value={"error_detail": "필수 입력 항목입니다."},
+                    )
+                ],
+            ),
             401: OpenApiResponse(
                 response=SurveyChatbotMessageErrorResponseSerializer,
                 examples=[
                     OpenApiExample(
                         "Unauthorized",
                         value={
-                            "error_detail": "인증 정보가 유효하지 않거나 만료되었습니다."
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+            403: OpenApiResponse(
+                response=SurveyChatbotMessageErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "Forbidden",
+                        value={
+                            "error_detail": "해당 세션에 대한 접근 권한이 없습니다."
                         },
                     )
                 ],
@@ -48,35 +67,6 @@ class SurveyChatbotMessageAPIView(GenericAPIView):
                         "SessionClosed",
                         value={"error_detail": "이미 종료된 설문 세션입니다."},
                     )
-                ],
-            ),
-            423: OpenApiResponse(
-                response=SurveyChatbotMessageLockedResponseSerializer,
-                examples=[
-                    OpenApiExample(
-                        "SessionLocked",
-                        value={
-                            "error_detail": "질문과 무관한 답변이 반복되어 5분간 설문이 비활성화되었습니다.",
-                            "retry_after_seconds": 300,
-                        },
-                    )
-                ],
-            ),
-            503: OpenApiResponse(
-                response=SurveyChatbotMessageErrorResponseSerializer,
-                examples=[
-                    OpenApiExample(
-                        "QuestionGenerationFailed",
-                        value={
-                            "error_detail": "설문 첫 질문을 생성하지 못했습니다. 잠시 후 다시 시도해주세요."
-                        },
-                    ),
-                    OpenApiExample(
-                        "SummaryGenerationFailed",
-                        value={
-                            "error_detail": "설문 결과를 정리하지 못했습니다. 잠시 후 다시 시도해주세요."
-                        },
-                    ),
                 ],
             ),
         },

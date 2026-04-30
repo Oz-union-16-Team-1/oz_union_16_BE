@@ -49,19 +49,28 @@ class SurveyRecommendationAPIView(GenericAPIView):
                     OpenApiExample(
                         "Unauthorized",
                         value={
-                            "error_detail": "자격 인증데이터(authentication credentials)가 제공되지 않았습니다."
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
                         },
                     )
                 ],
             ),
-            409: OpenApiResponse(
+            403: OpenApiResponse(
                 response=SurveyErrorResponseSerializer,
                 examples=[
                     OpenApiExample(
-                        "RecommendationNotReady",
+                        "Forbidden",
                         value={
-                            "error_detail": "설문 추천 준비가 아직 완료되지 않았습니다."
+                            "error_detail": "해당 세션에 대한 접근 권한이 없습니다."
                         },
+                    )
+                ],
+            ),
+            404: OpenApiResponse(
+                response=SurveyErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "NotFound",
+                        value={"error_detail": "설문 추천 결과를 찾을 수 없습니다."},
                     )
                 ],
             ),
@@ -71,7 +80,7 @@ class SurveyRecommendationAPIView(GenericAPIView):
                     OpenApiExample(
                         "RecommendationUnavailable",
                         value={
-                            "error_detail": "설문 추천 결과를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+                            "error_detail": "추천 데이터 조회 중 외부 서비스 오류가 발생했습니다."
                         },
                     )
                 ],
