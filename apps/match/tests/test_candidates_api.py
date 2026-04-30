@@ -101,8 +101,17 @@ class MatchCandidatesAPITest(MatchCandidatesFixtureMixin, TestCase):
             game = cls._create_game(game_id=gid, genre_ids=[2])
             cls.valid_genre2_ids.append(game.game_id)
 
-        # ingest 필터 탈락(평점 카운트 부족)
-        cls._create_game(game_id=2100, genre_ids=[2], rating=49.0, rating_count=1)
+        # ingest 필터 탈락(평점/카운트 모든 경로 실패)
+        cls._create_game(
+            game_id=2100,
+            genre_ids=[2],
+            rating=49.0,
+            rating_count=1,
+            total_rating=49.0,
+            total_rating_count=1,
+            aggregated_rating=59.0,
+            aggregated_rating_count=2,
+        )
 
         # is_ban=True 탈락
         cls._create_game(game_id=2101, genre_ids=[2], is_ban=True)
