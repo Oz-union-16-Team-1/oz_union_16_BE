@@ -74,8 +74,10 @@ class AuthService:
         try:
             token = RefreshToken(cast(Token, refresh_token))
             token.blacklist()
-        except TokenError:
-            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
+        except TokenError as exc:
+            raise PermissionDenied(
+                "인증 정보가 유효하지 않거나 만료되었습니다."
+            ) from exc
 
     @staticmethod
     def refresh(refresh_token: str | None) -> dict:
@@ -91,8 +93,10 @@ class AuthService:
             user = User.objects.get(pk=user_id)
             new_refresh = RefreshToken.for_user(user)
 
-        except TokenError:
-            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
+        except TokenError as exc:
+            raise PermissionDenied(
+                "인증 정보가 유효하지 않거나 만료되었습니다."
+            ) from exc
 
         except User.DoesNotExist:
             raise AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.")

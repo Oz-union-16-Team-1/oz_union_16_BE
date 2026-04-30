@@ -14,9 +14,6 @@ from apps.users.services.social_login_core import (
     issue_jwt,
 )
 
-User = None
-
-
 # ---------------------------------------------------------------------------
 # Base OAuth Service
 # ---------------------------------------------------------------------------
@@ -43,7 +40,6 @@ class BaseOAuthService(ABC):
     @abstractmethod
     def _base_auth_params(self, is_local: bool) -> dict[str, str]:
         """provider별 인증 파라미터 반환 (client_id, redirect_uri 등)."""
-        ...
 
     def get_access_token(self, code: str, **kwargs: Any) -> str:
         res = requests.post(
@@ -58,7 +54,6 @@ class BaseOAuthService(ABC):
     @abstractmethod
     def _token_data(self, code: str, **kwargs: Any) -> dict[str, str]:
         """provider별 토큰 요청 파라미터 반환."""
-        ...
 
     def get_user_info(self, access_token: str) -> dict[str, Any]:
         res = requests.get(
@@ -108,7 +103,6 @@ class BaseOAuthService(ABC):
     @abstractmethod
     def _extract_user_info(self, user_info: dict[str, Any]) -> tuple[str, str, str]:
         """(provider_id, nickname, name) 튜플 반환."""
-        ...
 
     def login(self, code: str, **kwargs: Any) -> dict[str, str]:
         access_token = self.get_access_token(code, **kwargs)
@@ -161,9 +155,6 @@ class KakaoOAuthService(BaseOAuthService):
         profile = user_info.get("kakao_account", {}).get("profile", {})
         nickname = profile.get("nickname") or f"kakao_{kakao_id[:4]}"
         return kakao_id, nickname, nickname
-
-    def login(self, code: str, **kwargs: Any) -> dict[str, str]:
-        return super().login(code, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -219,9 +210,6 @@ class NaverOAuthService(BaseOAuthService):
         name = user_info.get("name") or nickname
         return naver_id, nickname, name
 
-    def login(self, code: str, **kwargs: Any) -> dict[str, str]:
-        return super().login(code, **kwargs)
-
 
 # ---------------------------------------------------------------------------
 # Google
@@ -265,6 +253,3 @@ class GoogleOAuthService(BaseOAuthService):
         google_id = str(user_info["id"])
         nickname = user_info.get("name") or f"google_{google_id[:4]}"
         return google_id, nickname, nickname
-
-    def login(self, code: str, **kwargs: Any) -> dict[str, str]:
-        return super().login(code, **kwargs)
