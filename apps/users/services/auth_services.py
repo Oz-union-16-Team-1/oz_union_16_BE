@@ -19,10 +19,6 @@ class AuthService:
 
     @staticmethod
     def sign_up(validated_data: dict) -> None:
-
-        if len(validated_data["password"]) < 8:
-            raise ValidationError("비밀번호는 8자 이상이어야 합니다.")
-
         existing = (
             User.objects.filter(
                 Q(login_id=validated_data["login_id"])
