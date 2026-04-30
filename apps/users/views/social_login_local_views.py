@@ -62,7 +62,7 @@ class KakaoLocalLoginView(APIView):
     )
     def get(self, request: Request):
         service = KakaoOAuthService()
-        return redirect(service.get_local_auth_url())
+        return redirect(service.get_auth_url(is_local=True))
 
 
 class KakaoLocalCallbackView(APIView):
@@ -120,7 +120,7 @@ class NaverLocalLoginView(APIView):
     )
     def get(self, request: Request):
         service = NaverOAuthService()
-        auth_url, _ = service.get_local_auth_url()
+        auth_url, _ = service.get_auth_url(is_local=True)
         return redirect(auth_url)
 
 
@@ -162,7 +162,7 @@ class NaverLocalCallbackView(APIView):
     def get(self, request: Request):
         code = request.query_params.get("code")
         state = request.query_params.get("state", "")
-        tokens = NaverOAuthService().login(code, state)
+        tokens = NaverOAuthService().login(code, state=state)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])
 
 
@@ -189,7 +189,7 @@ class GoogleLocalLoginView(APIView):
     )
     def get(self, request: Request):
         service = GoogleOAuthService()
-        return redirect(service.get_local_auth_url())
+        return redirect(service.get_auth_url(is_local=True))
 
 
 class GoogleLocalCallbackView(APIView):
