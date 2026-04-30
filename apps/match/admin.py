@@ -332,7 +332,7 @@ class MatchGenreImagePublishedAdmin(admin.ModelAdmin):
             )
 
             # 각 장르 최소 1개 이상 확보되면 해당 cutoff 채택
-            if all(len(picked.get(gid, [])) >= 1 for gid in range(1, 9)):
+            if all(len(picked.get(gid, [])) >= limit_per_genre for gid in range(1, 9)):
                 selected = picked
                 break
 
@@ -341,6 +341,12 @@ class MatchGenreImagePublishedAdmin(admin.ModelAdmin):
                 ranked_by_genre=ranked_by_genre,
                 limit_per_genre=limit_per_genre,
             )
+
+        selected = self._backfill_short_genres(
+            selected_by_genre=selected,
+            ranked_by_genre=ranked_by_genre,
+            limit_per_genre=limit_per_genre,
+        )
 
         self._attach_artworks(selected)
         return selected
@@ -552,4 +558,31 @@ class MatchGenreImagePublishedAdmin(admin.ModelAdmin):
                 continue
             seen.add(normalized)
             out.append(normalized)
+        return out
+
+    def _backfill_short_genres(
+            self,
+            selected_by_genre: dict[int, list[dict[str, Any]]],
+            ranked_by_genre: dict[int, list[dict[str, Any]]],
+            limit_per_genre: int,
+    ) -> dict[int, list[dict[str, Any]]]:
+        out = {gid: list(rows) for gid, rows in selected_by_genre.items()}
+
+        for genre_id in range(1, 9):
+            cur = out.get(genre_id, [])
+            if len(cur) >= limit_per_genre:
+                continue
+
+            chosen_ids = {int(x["game_id"]) for x in cur}
+            for c in ranked_by_genre.get(genre_id, []):
+                gid = int(c["game_id"])
+                if gid in chosen_ids:
+                    continue
+                cur.append(c)
+                chosen_ids.add(gid)
+                if len(cur) >= limit_per_genre:
+                    break
+
+            out[genre_id] = cur
+
         return out
