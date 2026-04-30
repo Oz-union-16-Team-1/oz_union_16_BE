@@ -555,26 +555,36 @@ class MatchResponsesResultQueryService:
         return dict(out)
 
     def _paginate(
-        self,
-        *,
-        items: list[RankedGame],
-        cursor: str | None,
-        page_size: int,
+            self,
+            *,
+            items: list[RankedGame],
+            cursor: str | None,
+            page_size: int,
     ) -> tuple[list[RankedGame], str | None]:
         if not items:
             return [], None
 
         start = 0
         if cursor:
-            c_score, c_game_id = self._decode_cursor(cursor)
+            c_score, c_game_id, c_offset = self._decode_cursor(cursor)
+
+            found = False
             for idx, item in enumerate(items):
                 if (item.final_score < c_score) or (
-                    item.final_score == c_score and item.game_id < c_game_id
+                        item.final_score == c_score and item.game_id < c_game_id
                 ):
                     start = idx
+                    found = True
                     break
-            else:
-                start = len(items)
+
+            # 좋아요 토글 등으로 집합이 변해 (score, game_id) anchor를 못 찾는 경우
+            # 커서 offset으로 fallback 해서 "더보기 무응답"을 방지한다.
+            if not found:
+                if c_offset is not None:
+                    # 빈 페이지가 되지 않도록 안전 clamp
+                    start = min(max(c_offset, 0), max(len(items) - 1, 0))
+                else:
+                    start = len(items)
 
         page = items[start : start + page_size]
         if not page:
@@ -584,13 +594,24 @@ class MatchResponsesResultQueryService:
         next_cursor = None
         if has_next:
             last = page[-1]
-            next_cursor = self._encode_cursor(last.final_score, last.game_id)
+            next_cursor = self._encode_cursor(
+                last.final_score,
+                last.game_id,
+                offset=start + page_size,
+            )
 
         return page, next_cursor
 
-    def _encode_cursor(self, score: float, game_id: int) -> str:
+    def _encode_cursor(self, score: float, game_id: int, offset: int | None = None) -> str:
+        obj: dict[str, int | float] = {
+            "s": round(float(score), 6),
+            "g": int(game_id),
+        }
+        if offset is not None:
+            obj["o"] = int(offset)
+
         payload = json.dumps(
-            {"s": round(float(score), 6), "g": int(game_id)},
+            obj,
             ensure_ascii=False,
             separators=(",", ":"),
         )
@@ -600,12 +621,18 @@ class MatchResponsesResultQueryService:
             .rstrip("=")
         )
 
-    def _decode_cursor(self, cursor: str) -> tuple[float, int]:
+    def _decode_cursor(self, cursor: str) -> tuple[float, int, int | None]:
         try:
             padded = cursor + ("=" * (-len(cursor) % 4))
             raw = base64.urlsafe_b64decode(padded.encode("utf-8")).decode("utf-8")
             obj = json.loads(raw)
-            return round(float(obj["s"]), 6), int(obj["g"])
+
+            score = round(float(obj["s"]), 6)
+            game_id = int(obj["g"])
+            offset_raw = obj.get("o")
+            offset = int(offset_raw) if offset_raw is not None else None
+
+            return score, game_id, offset
         except Exception as exc:
             raise MatchResponsesResultValidationError(
                 "cursor 형식이 올바르지 않습니다."

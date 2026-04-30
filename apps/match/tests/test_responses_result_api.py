@@ -249,9 +249,10 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertIn("abc123.jpg", self.service._to_thumbnail_url("abc123"))
 
         c = self.service._encode_cursor(0.7777777, 123)
-        s, g = self.service._decode_cursor(c)
+        s, g, o = self.service._decode_cursor(c)
         self.assertEqual(g, 123)
         self.assertAlmostEqual(s, 0.777778, places=6)
+        self.assertIsNone(o)
 
     def test_internal_fallback_and_mean_vector_helpers(self):
         self.assertEqual(
