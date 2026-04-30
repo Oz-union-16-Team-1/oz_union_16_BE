@@ -197,3 +197,37 @@ class GameSyncService:
             page += 1
 
         return {"scanned": scanned, "upserted": upserted}
+
+    @classmethod
+    def update_all_banned_pc_games(cls):
+        """
+        IGDB에서 조건에 맞는 모든 게임을 페이지별로 가져와서 차단 처리합니다.
+        """
+        total_updated = 0
+        limit = 500
+        offset = 0
+
+        while True:
+            # 1. API 호출 (페이지네이션 적용)
+            raw_games = igdb_client.get_ban_games(limit=limit, offset=offset)
+
+            if not raw_games:
+                break
+
+            # 2. ID 추출
+            target_ids = [game["id"] for game in raw_games]
+
+            # 3. DB 업데이트[cite: 1, 2]
+            updated_count = Game.objects.filter(game_id__in=target_ids).update(
+                is_ban=True,
+                ban_reason="성인 콘텐츠(등급/테마/키워드/카테고리) 및 PC 플랫폼 기준 자동 차단",
+            )
+
+            total_updated += updated_count
+
+            # 4. 다음 페이지 준비
+            if len(raw_games) < limit:
+                break
+            offset += limit
+
+        return total_updated
