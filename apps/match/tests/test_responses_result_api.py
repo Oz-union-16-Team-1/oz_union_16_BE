@@ -293,6 +293,69 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertIsNotNone(disliked_mean)
         self.assertEqual(len(disliked_mean), 14)
 
+    def test_internal_series_dedupe_keeps_highest_ranked_variant(self):
+        service = MatchResponsesResultQueryService()
+
+        items = [
+            RankedGame(
+                game_id=1001,
+                title="Way of the Hunter",
+                slug="way-of-the-hunter",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=80.0,
+                is_liked=False,
+                final_score=0.95,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=1002,
+                title="Way of the Hunter Deluxe Edition",
+                slug="way-of-the-hunter-deluxe-edition",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=81.0,
+                is_liked=False,
+                final_score=0.94,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=1003,
+                title="Way of the Hunter Complete",
+                slug="way-of-the-hunter-complete",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=82.0,
+                is_liked=False,
+                final_score=0.93,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=2001,
+                title="Portal 2",
+                slug="portal-2",
+                genres=["퍼즐"],
+                thumbnail_url="",
+                rating=90.0,
+                is_liked=False,
+                final_score=0.90,
+                pop_score=0.9,
+                rec_score=0.6,
+            ),
+        ]
+
+        deduped = service._dedupe_series_variants(items, limit=15)
+        deduped_ids = [x.game_id for x in deduped]
+
+        # same series는 상위 1개만 남아야 함
+        self.assertIn(1001, deduped_ids)
+        self.assertNotIn(1002, deduped_ids)
+        self.assertNotIn(1003, deduped_ids)
+        self.assertIn(2001, deduped_ids)
+
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
     @classmethod
