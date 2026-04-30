@@ -100,7 +100,7 @@ class MatchResponsesResultQueryService:
             selection_target = max(
                 target_count,
                 target_count * self.DEDUPE_OVERFETCH_FACTOR,
-                )
+            )
             user_vector = self._load_user_vector(user_id=user_id)
 
             if user_vector:
@@ -153,7 +153,7 @@ class MatchResponsesResultQueryService:
                     stage2 = self._take_by_popularity(
                         stage2,
                         selection_target - len(selected),
-                        )
+                    )
                     selected = self._merge_unique(selected, stage2)
 
             # 3순위: 선택 장르 + sim 제거 + 인기순
@@ -368,10 +368,10 @@ class MatchResponsesResultQueryService:
         )
 
     def _apply_tau_steps(
-            self,
-            ranked: list[RankedGame],
-            *,
-            limit: int = MATCH_RESULT_MAX_TOTAL_COUNT,
+        self,
+        ranked: list[RankedGame],
+        *,
+        limit: int = MATCH_RESULT_MAX_TOTAL_COUNT,
     ) -> list[RankedGame]:
         if not ranked:
             return []
@@ -555,11 +555,11 @@ class MatchResponsesResultQueryService:
         return dict(out)
 
     def _paginate(
-            self,
-            *,
-            items: list[RankedGame],
-            cursor: str | None,
-            page_size: int,
+        self,
+        *,
+        items: list[RankedGame],
+        cursor: str | None,
+        page_size: int,
     ) -> tuple[list[RankedGame], str | None]:
         if not items:
             return [], None
@@ -571,7 +571,7 @@ class MatchResponsesResultQueryService:
             found = False
             for idx, item in enumerate(items):
                 if (item.final_score < c_score) or (
-                        item.final_score == c_score and item.game_id < c_game_id
+                    item.final_score == c_score and item.game_id < c_game_id
                 ):
                     start = idx
                     found = True
@@ -602,7 +602,9 @@ class MatchResponsesResultQueryService:
 
         return page, next_cursor
 
-    def _encode_cursor(self, score: float, game_id: int, offset: int | None = None) -> str:
+    def _encode_cursor(
+        self, score: float, game_id: int, offset: int | None = None
+    ) -> str:
         obj: dict[str, int | float] = {
             "s": round(float(score), 6),
             "g": int(game_id),
@@ -653,10 +655,10 @@ class MatchResponsesResultQueryService:
         return out
 
     def _dedupe_series_variants(
-            self,
-            items: list[RankedGame],
-            *,
-            limit: int,
+        self,
+        items: list[RankedGame],
+        *,
+        limit: int,
     ) -> list[RankedGame]:
         """
         상위 limit 구간에서 같은 시리즈/에디션 중복을 제거한다.
@@ -677,11 +679,11 @@ class MatchResponsesResultQueryService:
         return out
 
     def _fill_after_dedupe(
-            self,
-            *,
-            deduped_top: list[RankedGame],
-            ranked_pool: list[RankedGame],
-            limit: int,
+        self,
+        *,
+        deduped_top: list[RankedGame],
+        ranked_pool: list[RankedGame],
+        limit: int,
     ) -> list[RankedGame]:
         """
         dedupe로 limit 미만이 되면, 정렬된 원본 풀에서
@@ -722,7 +724,6 @@ class MatchResponsesResultQueryService:
         title_key = self._normalize_title_for_dedupe(item.title)
         return f"t:{title_key}"
 
-
     def _normalize_slug_for_dedupe(self, slug: str) -> str:
         text = (slug or "").strip().lower()
         if not text:
@@ -731,7 +732,6 @@ class MatchResponsesResultQueryService:
         text = SERIES_SUFFIX_RE.sub("", text)
         text = re.sub(r"[-_]+", "-", text).strip("-")
         return text
-
 
     def _normalize_title_for_dedupe(self, title: str) -> str:
         text = (title or "").strip().lower()
