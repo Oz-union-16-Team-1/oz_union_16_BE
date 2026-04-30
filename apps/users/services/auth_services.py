@@ -19,21 +19,13 @@ class AuthService:
 
     @staticmethod
     def sign_up(validated_data: dict) -> None:
-        existing = (
-            User.objects.filter(
-                Q(login_id=validated_data["login_id"])
-                | Q(nickname=validated_data["nickname"])
+        if User.objects.filter(login_id=validated_data["login_id"]).exists():
+            raise ConflictException(
+                field="login_id",
+                detail="이미 중복된 회원가입 내역이 존재합니다.",
             )
-            .values_list("login_id", "nickname")
-            .first()
-        )
 
-        if existing:
-            if existing[0] == validated_data["login_id"]:
-                raise ConflictException(
-                    field="login_id",
-                    detail="이미 중복된 회원가입 내역이 존재합니다.",
-                )
+        if User.objects.filter(nickname=validated_data["nickname"]).exists():
             raise ConflictException(
                 field="nickname",
                 detail="이미 중복된 닉네임이 존재합니다.",

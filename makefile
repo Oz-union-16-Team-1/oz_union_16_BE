@@ -47,7 +47,6 @@ test:  ## mypy 타입체크 + Django 테스트
 	$(COMPOSE) exec django uv run mypy .
 	$(COMPOSE) exec django uv run python manage.py test apps
 
-
 db-shell:  ## PostgreSQL 직접 접속
 	$(COMPOSE) exec db psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-template_db}
 
