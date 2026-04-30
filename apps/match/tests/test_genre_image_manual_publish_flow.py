@@ -119,8 +119,12 @@ class MatchGenreImageManualPublishFlowTest(TestCase):
             gid: [self._candidate(1000 + gid, gid)] for gid in range(1, 9)
         }
 
-        with patch.object(service, "build_candidates", return_value=candidates_by_genre):
-            updated, missing = service.seed_or_refresh(user=self.user, limit_per_genre=5)
+        with patch.object(
+            service, "build_candidates", return_value=candidates_by_genre
+        ):
+            updated, missing = service.seed_or_refresh(
+                user=self.user, limit_per_genre=5
+            )
 
         self.assertEqual(updated, 8)
         self.assertEqual(missing, 0)

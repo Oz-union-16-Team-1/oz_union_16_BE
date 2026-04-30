@@ -226,13 +226,15 @@ class MatchGenreImagePublishedAdmin(admin.ModelAdmin):
         if obj is None:
             self.message_user(request, "대상을 찾을 수 없습니다.", level=messages.ERROR)
             return HttpResponseRedirect(
-                reverse(f"{self.admin_site.name}:match_matchgenreimagepublished_changelist")
+                reverse(
+                    f"{self.admin_site.name}:match_matchgenreimagepublished_changelist"
+                )
             )
 
         raw_img_idx = request.GET.get("img", "0")
         try:
             img_idx = int(raw_img_idx)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             img_idx = 0
 
         ok, msg = self._service().pick_candidate_image(

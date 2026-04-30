@@ -80,5 +80,6 @@ class MatchGenreImageAPITest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
         self.assertEqual(
-            response.data["error_detail"], "이미지 데이터 서비스가 일시적으로 불가합니다."
+            response.data["error_detail"],
+            "이미지 데이터 서비스가 일시적으로 불가합니다.",
         )

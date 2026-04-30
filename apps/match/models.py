@@ -177,4 +177,3 @@ class MatchGenreImagePublished(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.api_genre_id} | {self.game_id}"
-

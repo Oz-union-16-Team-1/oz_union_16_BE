@@ -12,14 +12,22 @@ User = get_user_model()
 
 
 class MatchGenreImagePublishService:
-    def __init__(self, candidates_service: GenreImageCandidatesService | None = None) -> None:
+    def __init__(
+        self, candidates_service: GenreImageCandidatesService | None = None
+    ) -> None:
         self.candidates_service = candidates_service or GenreImageCandidatesService()
 
-    def build_candidates(self, limit_per_genre: int = 5) -> dict[int, list[dict[str, Any]]]:
-        return self.candidates_service.build_candidates_by_genre(limit_per_genre=limit_per_genre)
+    def build_candidates(
+        self, limit_per_genre: int = 5
+    ) -> dict[int, list[dict[str, Any]]]:
+        return self.candidates_service.build_candidates_by_genre(
+            limit_per_genre=limit_per_genre
+        )
 
     @transaction.atomic
-    def seed_or_refresh(self, user: User | None, limit_per_genre: int = 5) -> tuple[int, int]:
+    def seed_or_refresh(
+        self, user: User | None, limit_per_genre: int = 5
+    ) -> tuple[int, int]:
         candidates_by_genre = self.build_candidates(limit_per_genre=limit_per_genre)
         updated = 0
         missing = 0
@@ -58,11 +66,16 @@ class MatchGenreImagePublishService:
         limit_per_genre: int = 5,
     ) -> tuple[bool, str]:
         candidates_by_genre = self.build_candidates(limit_per_genre=limit_per_genre)
-        candidate_map = {c["game_id"]: c for c in candidates_by_genre.get(obj.api_genre_id, [])}
+        candidate_map = {
+            c["game_id"]: c for c in candidates_by_genre.get(obj.api_genre_id, [])
+        }
         picked = candidate_map.get(game_id)
 
         if picked is None:
-            return False, "선택한 게임은 현재 후보 5개에 없습니다. 새로고침 후 다시 선택하세요."
+            return (
+                False,
+                "선택한 게임은 현재 후보 5개에 없습니다. 새로고침 후 다시 선택하세요.",
+            )
 
         images = picked.get("images", [])
         if not images:
@@ -76,4 +89,7 @@ class MatchGenreImagePublishService:
         obj.selected_by = user
         obj.save(update_fields=["game", "image_url", "selected_by", "updated_at"])
 
-        return True, f"장르 {obj.api_genre_id} 게시본을 game_id={picked['game_id']}로 반영했습니다."
+        return (
+            True,
+            f"장르 {obj.api_genre_id} 게시본을 game_id={picked['game_id']}로 반영했습니다.",
+        )

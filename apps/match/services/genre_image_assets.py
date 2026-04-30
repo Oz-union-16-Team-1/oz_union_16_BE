@@ -128,7 +128,9 @@ def build_artwork_options(raw: Any) -> list[ImageOption]:
     return merge_unique_image_options(out)
 
 
-def fetch_artwork_options_map(game_ids: list[int], chunk_size: int = 200) -> dict[int, list[ImageOption]]:
+def fetch_artwork_options_map(
+    game_ids: list[int], chunk_size: int = 200
+) -> dict[int, list[ImageOption]]:
     unique_ids = sorted(set(game_ids))
     if not unique_ids:
         return {}
@@ -155,7 +157,7 @@ def fetch_artwork_options_map(game_ids: list[int], chunk_size: int = 200) -> dic
         for row in rows:
             try:
                 gid = int(row.get("id") or 0)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
             if gid <= 0:
                 continue

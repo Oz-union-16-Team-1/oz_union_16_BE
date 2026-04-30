@@ -71,9 +71,7 @@ class GenreImageCandidatesService:
             )
 
             # 장르별 최소 limit_per_genre 확보 시 종료
-            if all(
-                len(picked.get(gid, [])) >= limit_per_genre for gid in range(1, 9)
-            ):
+            if all(len(picked.get(gid, [])) >= limit_per_genre for gid in range(1, 9)):
                 selected = picked
                 break
 
@@ -99,7 +97,9 @@ class GenreImageCandidatesService:
         ]
         yearly = [
             365 * y
-            for y in range(MATCH_GENRE_IMAGE_YEARLY_START, MATCH_GENRE_IMAGE_YEARLY_END + 1)
+            for y in range(
+                MATCH_GENRE_IMAGE_YEARLY_START, MATCH_GENRE_IMAGE_YEARLY_END + 1
+            )
         ]
         return monthly + yearly
 
@@ -202,7 +202,9 @@ class GenreImageCandidatesService:
                 Q(status__isnull=True) | Q(status=MATCH_GENRE_IMAGE_REQUIRED_STATUS)
             )
             .annotate(
-                score_rating=Coalesce("total_rating", "rating", output_field=FloatField()),
+                score_rating=Coalesce(
+                    "total_rating", "rating", output_field=FloatField()
+                ),
                 score_count=Coalesce(
                     "total_rating_count", "rating_count", output_field=IntegerField()
                 ),
