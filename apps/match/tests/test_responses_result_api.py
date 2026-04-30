@@ -431,3 +431,34 @@ class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
             response.data["error_detail"],
             "추천 데이터 조회 중 외부 서비스 오류가 발생했습니다.",
         )
+
+    def test_get_responses_result_cursor_stable_after_like_toggle(self):
+        # 페이지가 최소 2장 나오도록 데이터 보강
+        for idx, rating in enumerate([69, 67, 65, 63, 61, 59, 57, 55], start=1):
+            self._create_game(game_id=9600 + idx, rating=rating, genre_ids=[2])
+
+        # 1페이지 조회
+        first = self.client.get(self.url, {"genre_id": 2, "page_size": 3})
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(first.data["results"]), 0)
+        self.assertIsNotNone(first.data["next"])
+
+        # 페이지1에서 본 게임 하나를 "좋아요 토글" (상태 변화 유도)
+        target_game_id = first.data["results"][0]["game_id"]
+        bookmark = UserLikeBookmark.objects.filter(
+            user_id=self.user.id,
+            game_id=target_game_id,
+        )
+        if bookmark.exists():
+            bookmark.delete()
+        else:
+            UserLikeBookmark.objects.create(user_id=self.user.id, game_id=target_game_id)
+
+        # 기존 next cursor로 2페이지 조회 (회귀 포인트)
+        second = self.client.get(
+            self.url,
+            {"genre_id": 2, "page_size": 3, "cursor": first.data["next"]},
+        )
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertIn("results", second.data)
+        self.assertGreater(len(second.data["results"]), 0)
