@@ -406,7 +406,9 @@ class GameTranslationServiceTest(SimpleTestCase):
         self.assertIn("직전 번역 후보: 디스패", prompt)
         self.assertIn("Dispatch", prompt)
         self.assertIsNone(GameTranslationService._normalize_title(123))
-        self.assertEqual(GameTranslationService._normalize_title('"디스패치"'), "디스패치")
+        self.assertEqual(
+            GameTranslationService._normalize_title('"디스패치"'), "디스패치"
+        )
 
     def test_extract_text_joins_only_non_blank_text_parts(self):
         payload = {
@@ -424,4 +426,6 @@ class GameTranslationServiceTest(SimpleTestCase):
             ]
         }
 
-        self.assertEqual(GameTranslationService._extract_text(payload), "첫 번째\n두 번째")
+        self.assertEqual(
+            GameTranslationService._extract_text(payload), "첫 번째\n두 번째"
+        )
