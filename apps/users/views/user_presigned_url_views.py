@@ -47,7 +47,7 @@ class ProfileImagePresignedUrlView(BasePresignedUrlView):
 class ProfileImageUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def patch(self, request: Request) -> Response:
+    def put(self, request: Request) -> Response:
         serializer = ProfileImageUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

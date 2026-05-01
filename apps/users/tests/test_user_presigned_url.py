@@ -173,7 +173,7 @@ class ProfileImageUpdateViewTest(TestCase):
     def test_update_profile_image_success(self):
         """인증된 유저가 올바른 요청 시 프로필 이미지 등록 성공 확인"""
         self.client.force_authenticate(user=self.user)
-        response = self.client.patch(self.url, data=self.valid_data, format="json")
+        response = self.client.put(self.url, data=self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["detail"], "프로필 사진이 등록되었습니다.")
@@ -181,7 +181,7 @@ class ProfileImageUpdateViewTest(TestCase):
     def test_update_profile_image_saved_to_db(self):
         """프로필 이미지 URL이 DB에 올바르게 저장되는지 확인"""
         self.client.force_authenticate(user=self.user)
-        self.client.patch(self.url, data=self.valid_data, format="json")
+        self.client.put(self.url, data=self.valid_data, format="json")
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.profile_img_url, self.valid_data["profile_img_url"])
@@ -190,21 +190,21 @@ class ProfileImageUpdateViewTest(TestCase):
 
     def test_update_profile_image_unauthenticated_fail(self):
         """비인증 유저가 접근 시 401 반환 확인"""
-        response = self.client.patch(self.url, data=self.valid_data, format="json")
+        response = self.client.put(self.url, data=self.valid_data, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_update_profile_image_missing_profile_img_url_fail(self):
         """profile_img_url 누락 시 400 반환 확인"""
         self.client.force_authenticate(user=self.user)
-        response = self.client.patch(self.url, data={}, format="json")
+        response = self.client.put(self.url, data={}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_update_profile_image_invalid_url_fail(self):
         """https로 시작하지 않는 URL 입력 시 400 반환 확인"""
         self.client.force_authenticate(user=self.user)
-        response = self.client.patch(
+        response = self.client.put(
             self.url,
             data={"profile_img_url": "http://invalid-url.com/image.png"},
             format="json",
