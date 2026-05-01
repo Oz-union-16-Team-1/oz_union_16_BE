@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("games", "0005_gameblacklist_alter_game_options"),
+        ("games", "0007_gameblacklist_alter_game_options"),
         ("match", "0006_matchcandidateretrystate"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
