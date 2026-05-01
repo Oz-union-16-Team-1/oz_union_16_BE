@@ -29,6 +29,11 @@ class GameTop100Service:
     REVIEW_COUNT_THRESHOLDS = (50, 30, 10)
     MIN_RELEASE_YEAR = 1980
     MIN_RELEASE_DATE = datetime(MIN_RELEASE_YEAR, 1, 1, tzinfo=dt_timezone.utc)
+    EXCLUDED_SERVICE_STATUSES = (
+        5,  # offline
+        6,  # cancelled
+        8,  # delisted
+    )
 
     @staticmethod
     def get_top_100_games(
@@ -41,7 +46,7 @@ class GameTop100Service:
             total_rating__isnull=False,
             parent_game__isnull=True,
             is_ban=False,
-        )
+        ).exclude(status__in=GameTop100Service.EXCLUDED_SERVICE_STATUSES)
 
         base_queryset = GameTop100Service._apply_search_filter(
             queryset=base_queryset,
@@ -56,65 +61,48 @@ class GameTop100Service:
         if base_queryset is None:
             return []
 
-        ordering = ("-first_release_date", "-game_id")
+        ordering = (
+            "-total_rating",
+            "-total_rating_count",
+            "-first_release_date",
+            "-game_id",
+        )
 
         selected: list[Game] = []
         selected_ids: set[int] = set()
 
         for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
-            for year in GameTop100Service._target_release_years(now.year):
+            if len(selected) >= GameTop100Service.RESULT_LIMIT:
+                break
+
+            candidates = (
+                base_queryset.filter(total_rating_count__gte=review_count)
+                .exclude(game_id__in=selected_ids)
+                .order_by(*ordering)[: GameTop100Service.CANDIDATE_LIMIT]
+            )
+            selected = GameTop100Service._append_unique_games(
+                selected=selected,
+                candidates=candidates,
+                selected_ids=selected_ids,
+            )
+
+        if len(selected) < GameTop100Service.RESULT_LIMIT:
+            for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
                 if len(selected) >= GameTop100Service.RESULT_LIMIT:
                     break
 
                 candidates = (
-                    GameTop100Service._filter_by_release_year(
-                        queryset=base_queryset,
-                        year=year,
-                    )
-                    .filter(total_rating_count__gte=review_count)
+                    base_queryset.filter(total_rating_count__gte=review_count)
                     .exclude(game_id__in=selected_ids)
                     .order_by(*ordering)[: GameTop100Service.CANDIDATE_LIMIT]
                 )
-                selected = GameTop100Service._append_unique_games(
+                selected = GameTop100Service._append_games(
                     selected=selected,
                     candidates=candidates,
                     selected_ids=selected_ids,
                 )
 
-        if len(selected) < GameTop100Service.RESULT_LIMIT:
-            for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
-                for year in GameTop100Service._target_release_years(now.year):
-                    if len(selected) >= GameTop100Service.RESULT_LIMIT:
-                        break
-
-                    candidates = (
-                        GameTop100Service._filter_by_release_year(
-                            queryset=base_queryset,
-                            year=year,
-                        )
-                        .filter(total_rating_count__gte=review_count)
-                        .exclude(game_id__in=selected_ids)
-                        .order_by(*ordering)[: GameTop100Service.CANDIDATE_LIMIT]
-                    )
-                    selected = GameTop100Service._append_games(
-                        selected=selected,
-                        candidates=candidates,
-                        selected_ids=selected_ids,
-                    )
-
         return selected[: GameTop100Service.RESULT_LIMIT]
-
-    @staticmethod
-    def _target_release_years(current_year: int) -> list[int]:
-        return list(range(current_year, GameTop100Service.MIN_RELEASE_YEAR - 1, -1))
-
-    @staticmethod
-    def _filter_by_release_year(queryset, year: int):
-        start = datetime(year, 1, 1, tzinfo=dt_timezone.utc)
-        end = datetime(year + 1, 1, 1, tzinfo=dt_timezone.utc)
-        return queryset.filter(
-            first_release_date__gte=start, first_release_date__lt=end
-        )
 
     @staticmethod
     def _apply_search_filter(queryset, search: str, fuzzy: bool):

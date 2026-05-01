@@ -23,7 +23,7 @@ class GameTop100View(APIView):
     VALID_GENRE_IDS = list(range(0, 15))
 
     @extend_schema(
-        summary="최근 연도별 TOP 100 게임 조회",
+        summary="평점순 TOP 100 게임 조회",
         tags=["game"],
         parameters=[
             OpenApiParameter(
@@ -40,7 +40,7 @@ class GameTop100View(APIView):
         responses={
             200: OpenApiResponse(
                 response=GameTop100ListResponseSerializer,
-                description="평가 수 50개 이상 후보를 우선 조회하고 부족하면 30개, 10개 이상 후보로 보충하며 1980년까지 과거 연도 후보를 내려가 채운 TOP 100 목록 조회 성공",
+                description="평가 수 50개 이상 후보를 평점순으로 우선 조회하고 부족하면 30개, 10개 이상 후보를 평점순으로 보충하는 TOP 100 목록 조회 성공",
                 examples=[
                     OpenApiExample(
                         "성공 응답",
