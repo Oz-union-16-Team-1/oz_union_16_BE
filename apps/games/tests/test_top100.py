@@ -204,12 +204,12 @@ class GameTop100APITest(APITestCase):
         self.assertEqual([game.game_id for game in result], [2200])
 
     def test_service_excludes_games_below_lowest_review_threshold(self):
-        """통합 평가 수가 10개 미만인 게임은 목록 후보에서 제외한다."""
+        """통합 평가 수가 5개 미만인 게임은 목록 후보에서 제외한다."""
         Game.objects.create(
             game_id=2300,
             name="Low Review Count Game",
             total_rating=95.0,
-            total_rating_count=9,
+            total_rating_count=4,
             first_release_date=timezone.now() - timezone.timedelta(days=1),
             genres=[7],
         )
@@ -217,7 +217,7 @@ class GameTop100APITest(APITestCase):
             game_id=2301,
             name="Enough Review Count Game",
             total_rating=80.0,
-            total_rating_count=10,
+            total_rating_count=5,
             first_release_date=timezone.now() - timezone.timedelta(days=1),
             genres=[7],
         )
@@ -226,14 +226,15 @@ class GameTop100APITest(APITestCase):
 
         self.assertEqual([game.game_id for game in result], [2301])
 
-    def test_service_orders_high_rating_before_latest_release(self):
-        """최신 출시 게임보다 평점이 높은 게임을 먼저 반환한다."""
+    def test_service_orders_latest_year_before_older_high_rating(self):
+        """개별 장르는 과거 고평점 게임보다 최신 연도 후보를 먼저 반환한다."""
+        current_year = timezone.now().year
         Game.objects.create(
             game_id=2310,
             name="Old High Rating Game",
             total_rating=100.0,
             total_rating_count=999,
-            first_release_date=datetime(2020, 1, 1, tzinfo=dt_timezone.utc),
+            first_release_date=datetime(current_year - 1, 1, 1, tzinfo=dt_timezone.utc),
             genres=[7],
         )
         Game.objects.create(
@@ -241,16 +242,75 @@ class GameTop100APITest(APITestCase):
             name="New Lower Rating Game",
             total_rating=50.0,
             total_rating_count=50,
-            first_release_date=timezone.now() - timezone.timedelta(days=1),
+            first_release_date=datetime(current_year, 1, 1, tzinfo=dt_timezone.utc),
             genres=[7],
         )
 
         result = GameTop100Service.get_top_100_games(genre_id=13)
 
-        self.assertEqual([game.game_id for game in result[:2]], [2310, 2311])
+        self.assertEqual([game.game_id for game in result[:2]], [2311, 2310])
+
+    def test_service_genre_prioritizes_current_year_lower_threshold(self):
+        """개별 장르는 같은 최신 연도의 30개 이상 후보를 이전 연도 50개 이상 후보보다 먼저 반환한다."""
+        current_year = timezone.now().year
+        Game.objects.create(
+            game_id=2320,
+            name="Current Year Review 30 Game",
+            total_rating=70.0,
+            total_rating_count=30,
+            first_release_date=datetime(current_year, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2321,
+            name="Previous Year Review 50 Game",
+            total_rating=100.0,
+            total_rating_count=50,
+            first_release_date=datetime(current_year - 1, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(genre_id=13)
+
+        self.assertEqual([game.game_id for game in result[:2]], [2320, 2321])
+
+    def test_service_global_uses_review_50_and_2020_lower_bound(self):
+        """전체 장르는 평가 수 50개 이상만 2020년까지 보충한다."""
+        current_year = timezone.now().year
+        Game.objects.create(
+            game_id=2330,
+            name="Global Policy Current Low Review",
+            total_rating=100.0,
+            total_rating_count=30,
+            first_release_date=datetime(current_year, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2331,
+            name="Global Policy Fallback Review 50",
+            total_rating=80.0,
+            total_rating_count=50,
+            first_release_date=datetime(current_year - 3, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2332,
+            name="Global Policy Too Old Review 50",
+            total_rating=90.0,
+            total_rating_count=50,
+            first_release_date=datetime(2019, 1, 1, tzinfo=dt_timezone.utc),
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(
+            genre_id=0,
+            search="Global Policy",
+        )
+
+        self.assertEqual([game.game_id for game in result], [2331])
 
     def test_service_fills_from_lower_review_thresholds_when_needed(self):
-        """리뷰 50개 이상 후보가 부족하면 30개, 10개 이상 후보로 보충한다."""
+        """리뷰 50개 이상 후보가 부족하면 30개, 10개, 5개 이상 후보로 보충한다."""
         primary_release = timezone.now() - timezone.timedelta(days=1)
 
         games = []
@@ -286,7 +346,7 @@ class GameTop100APITest(APITestCase):
             game_id=2602,
             name="Too Low Review Game",
             total_rating=100.0,
-            total_rating_count=9,
+            total_rating_count=4,
             first_release_date=primary_release - timezone.timedelta(hours=5),
             genres=[7],
         )

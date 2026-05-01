@@ -151,9 +151,7 @@ class SurveyRecommendationAPITest(TestCase):
             first_response.data["results"][0]["game_id"], included_game.game_id
         )
         self.assertEqual(first_response.data["results"][0]["title"], "세키로")
-        self.assertEqual(
-            first_response.data["results"][0]["genres"], ["역할수행(RPG)", "격투"]
-        )
+        self.assertEqual(first_response.data["results"][0]["genres"], ["RPG", "격투"])
         self.assertIn("coverid.jpg", first_response.data["results"][0]["thumbnail_url"])
         self.assertFalse(first_response.data["results"][0]["is_liked"])
 
@@ -253,7 +251,7 @@ class SurveyRecommendationServiceTest(TestCase):
         source_text = self.embedding_service.build_embedding_source(game)
 
         self.assertIn("제목: 다크소울", source_text)
-        self.assertIn("장르: 역할수행(RPG), 격투", source_text)
+        self.assertIn("장르: RPG, 격투", source_text)
         self.assertIn("핵심 설명:", source_text)
 
     def test_is_game_eligible(self) -> None:
@@ -553,7 +551,7 @@ class SurveyRecommendationServiceTest(TestCase):
             self.embedding_service.extract_genre_names(
                 [{"id": 12}, {"id": 12}, {"id": 999}, None]
             ),
-            ["역할수행(RPG)"],
+            ["RPG"],
         )
 
     def test_recommendations_only_compare_embedded_games(self) -> None:
