@@ -22,18 +22,11 @@ class PresignedUrlResult(TypedDict):
 
 
 class PresignedUrlService:
-    _s3_handler: S3Handler | None = None
-
-    @classmethod
-    def get_s3_handler(cls) -> S3Handler:
-        if cls._s3_handler is None:
-            cls._s3_handler = S3Handler()
-        return cls._s3_handler
-
     @classmethod
     def create(
         cls, folder: str, file_name: str, content_type: str
     ) -> PresignedUrlResult:
+        handler = S3Handler()
         extension = file_name.split(".")[-1].lower()
 
         if not extension or extension not in ALLOWED_EXTENSIONS:
@@ -47,7 +40,6 @@ class PresignedUrlService:
 
         key = f"uploads/images/{folder}/{uuid.uuid4()}.{extension}"
 
-        handler = cls.get_s3_handler()
         presigned_url = handler.generate_presigned_url(
             key=key, content_type=content_type
         )

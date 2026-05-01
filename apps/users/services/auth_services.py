@@ -1,6 +1,7 @@
 from typing import cast
 
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from rest_framework.exceptions import (
     AuthenticationFailed,
     PermissionDenied,
@@ -18,10 +19,6 @@ class AuthService:
 
     @staticmethod
     def sign_up(validated_data: dict) -> None:
-
-        if len(validated_data["password"]) < 8:
-            raise ValidationError("비밀번호는 8자 이상이어야 합니다.")
-
         if User.objects.filter(login_id=validated_data["login_id"]).exists():
             raise ConflictException(
                 field="login_id",
@@ -69,8 +66,10 @@ class AuthService:
         try:
             token = RefreshToken(cast(Token, refresh_token))
             token.blacklist()
-        except TokenError:
-            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
+        except TokenError as exc:
+            raise PermissionDenied(
+                "인증 정보가 유효하지 않거나 만료되었습니다."
+            ) from exc
 
     @staticmethod
     def refresh(refresh_token: str | None) -> dict:
@@ -86,8 +85,10 @@ class AuthService:
             user = User.objects.get(pk=user_id)
             new_refresh = RefreshToken.for_user(user)
 
-        except TokenError:
-            raise PermissionDenied("인증 정보가 유효하지 않거나 만료되었습니다.")
+        except TokenError as exc:
+            raise PermissionDenied(
+                "인증 정보가 유효하지 않거나 만료되었습니다."
+            ) from exc
 
         except User.DoesNotExist:
             raise AuthenticationFailed("자격 인증 데이터가 제공되지 않았습니다.")

@@ -162,7 +162,7 @@ class NaverCallbackView(APIView):
     def get(self, request: Request):
         code = request.query_params.get("code")
         state = request.query_params.get("state", "")
-        tokens = NaverOAuthService().login(code, state)
+        tokens = NaverOAuthService().login(code, state=state)
         return _set_refresh_cookie_and_redirect(tokens["refresh_token"])
 
 
