@@ -332,3 +332,82 @@ class TranslateGameDescriptionsCommandTest(TestCase):
         mock_translate_title.assert_any_call("Escape from Tarkov")
         mock_translate_title.assert_any_call("Missing Title Translation")
         mock_translate_text.assert_not_called()
+
+    @patch(
+        "apps.games.management.commands.translate_game_descriptions."
+        "GameTranslationService.translate_text"
+    )
+    @patch(
+        "apps.games.management.commands.translate_game_descriptions."
+        "GameTranslationService.translate_title"
+    )
+    def test_command_translates_missing_title_summary_and_storyline(
+        self,
+        mock_translate_title,
+        mock_translate_text,
+    ):
+        game = Game.objects.create(
+            game_id=4103,
+            name="Full Translation Target",
+            slug="full-translation-target",
+            summary="Summary needs translation.",
+            storyline="Storyline needs translation.",
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
+        )
+        mock_translate_title.return_value = "전체 번역 대상"
+        mock_translate_text.side_effect = ["요약 번역", "스토리 번역"]
+
+        call_command(
+            "translate_game_descriptions",
+            "--game-id",
+            str(game.game_id),
+        )
+
+        game.refresh_from_db()
+        self.assertEqual(game.name_ko, "전체 번역 대상")
+        self.assertEqual(game.summary_ko, "요약 번역")
+        self.assertEqual(game.storyline_ko, "스토리 번역")
+        mock_translate_title.assert_called_once_with("Full Translation Target")
+        self.assertEqual(mock_translate_text.call_count, 2)
+
+    @patch(
+        "apps.games.management.commands.translate_game_descriptions."
+        "GameTranslationService.translate_text"
+    )
+    @patch(
+        "apps.games.management.commands.translate_game_descriptions."
+        "GameTranslationService.translate_title"
+    )
+    def test_command_counts_title_summary_and_storyline_failures(
+        self,
+        mock_translate_title,
+        mock_translate_text,
+    ):
+        game = Game.objects.create(
+            game_id=4104,
+            name="Failure Target",
+            slug="failure-target",
+            summary="Summary fails.",
+            storyline="Storyline fails.",
+            first_release_date=timezone.now() - timezone.timedelta(days=1),
+        )
+        mock_translate_title.side_effect = GameTranslationUnavailable("title")
+        mock_translate_text.side_effect = GameTranslationUnavailable("text")
+        out = StringIO()
+
+        call_command(
+            "translate_game_descriptions",
+            "--game-id",
+            str(game.game_id),
+            stdout=out,
+        )
+
+        game.refresh_from_db()
+        self.assertFalse(game.name_ko)
+        self.assertFalse(game.summary_ko)
+        self.assertFalse(game.storyline_ko)
+        output = out.getvalue()
+        self.assertIn(f"title 번역 실패: {game.game_id}", output)
+        self.assertIn(f"summary 번역 실패: {game.game_id}", output)
+        self.assertIn(f"storyline 번역 실패: {game.game_id}", output)
+        self.assertIn("번역 완료: translated=0, failed=3", output)
