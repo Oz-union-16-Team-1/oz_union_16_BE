@@ -12,6 +12,7 @@ class GameTop100Serializer(serializers.ModelSerializer):
     명세서 23라인: 인기 TOP 100 게임 리스트 조회를 위한 시리얼라이저
     """
 
+    name = serializers.SerializerMethodField()
     genres = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     rating = serializers.SerializerMethodField()
@@ -28,6 +29,17 @@ class GameTop100Serializer(serializers.ModelSerializer):
             "is_liked",
             "like_count",
         ]
+
+    def get_name(self, obj: Game) -> str | None:
+        original_name = self._clean_string(obj.name)
+        if original_name is None:
+            return None
+
+        korean_name = self._clean_string(obj.name_ko)
+        if korean_name and korean_name.casefold() != original_name.casefold():
+            return f"{korean_name} ({original_name})"
+
+        return original_name
 
     def get_genres(self, obj: Game) -> list[str]:
         """
@@ -66,6 +78,14 @@ class GameTop100Serializer(serializers.ModelSerializer):
         if ret.get("rating") is None:
             ret["rating"] = 0.0
         return ret
+
+    @staticmethod
+    def _clean_string(value: str | None) -> str | None:
+        if not isinstance(value, str):
+            return None
+
+        stripped = value.strip()
+        return stripped or None
 
 
 class GameTop100ListResponseSerializer(serializers.Serializer):

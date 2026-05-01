@@ -135,3 +135,45 @@ class MatchCandidateRetryState(TimeStampedModel):
                 name="ck_mcrs_api_genre_range",
             ),
         ]
+
+
+class MatchGenreImagePublished(TimeStampedModel):
+    match_genre_image_published_id = models.BigAutoField(primary_key=True)
+    api_genre_id = models.PositiveSmallIntegerField()
+    game = models.ForeignKey(
+        "games.Game",
+        on_delete=models.CASCADE,
+        db_column="game_id",
+        to_field="game_id",
+        related_name="match_genre_image_published",
+    )
+    image_url = models.TextField()
+    selected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        db_column="selected_by_id",
+        related_name="selected_match_genre_images",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        db_table = "match_genre_image_published"
+        verbose_name = "장르 이미지 게시본"
+        verbose_name_plural = "장르 이미지 게시본"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["api_genre_id"],
+                name="uq_mgip_api_genre",
+            ),
+            models.CheckConstraint(
+                condition=Q(api_genre_id__gte=1) & Q(api_genre_id__lte=8),
+                name="ck_mgip_api_genre_range",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["game"], name="idx_mgip_game"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.api_genre_id} | {self.game_id}"

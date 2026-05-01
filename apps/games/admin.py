@@ -25,6 +25,7 @@ class GameAdmin(admin.ModelAdmin):
     list_display = (
         "game_id",
         "name",
+        "name_ko",
         "is_ban_display",
         "ban_reason",
         "rating",
@@ -33,7 +34,7 @@ class GameAdmin(admin.ModelAdmin):
     )
 
     ordering = ("-created_at",)
-    search_fields = ("game_id", "name")
+    search_fields = ("game_id", "name", "name_ko")
     list_filter = ("is_ban", "created_at")
     readonly_fields = ("game_id", "created_at")
     actions = (ban_games, unban_games)
@@ -48,6 +49,7 @@ class GameAdmin(admin.ModelAdmin):
                 "fields": (
                     "game_id",
                     "name",
+                    "name_ko",
                     "slug",
                     "summary",
                     "storyline",
@@ -110,14 +112,15 @@ class GameBlacklistAdmin(admin.ModelAdmin):
     list_display = (
         "game_id",
         "name",
+        "name_ko",
         "ban_reason",
         "created_at",
     )
 
     ordering = ("-created_at",)
-    search_fields = ("game_id", "name")
+    search_fields = ("game_id", "name", "name_ko")
     list_filter = ("created_at",)
-    readonly_fields = ("game_id", "name", "created_at")
+    readonly_fields = ("game_id", "name", "name_ko", "created_at")
     actions = (unban_games,)
     date_hierarchy = "created_at"
     list_per_page = 30
@@ -130,6 +133,7 @@ class GameBlacklistAdmin(admin.ModelAdmin):
                 "fields": (
                     "game_id",
                     "name",
+                    "name_ko",
                     "ban_reason",
                     "created_at",
                 )

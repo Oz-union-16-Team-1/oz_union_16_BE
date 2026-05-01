@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from apps.games.models import Game
 from apps.games.service.game_sync_services import GameSyncService
+from apps.games.service.game_translation_services import GameTranslationUnavailable
 
 
 class GameSyncServiceTest(TestCase):
@@ -167,3 +168,38 @@ class GameSyncServiceTest(TestCase):
                 }
             ],
         )
+
+    @patch(
+        "apps.games.service.game_sync_services.GameTranslationService.translate_descriptions"
+    )
+    def test_prepare_game_data_can_translate_descriptions(self, mock_translate):
+        mock_translate.return_value = {
+            "summary_ko": "테스트 게임 요약입니다.",
+            "storyline_ko": None,
+        }
+
+        processed_data = GameSyncService.prepare_game_data(
+            self.raw_game_data,
+            translate_ko=True,
+        )
+
+        self.assertEqual(processed_data["summary_ko"], "테스트 게임 요약입니다.")
+        self.assertIsNone(processed_data["storyline_ko"])
+        mock_translate.assert_called_once_with(
+            summary="This is a test game summary.",
+            storyline="",
+        )
+
+    @patch(
+        "apps.games.service.game_sync_services.GameTranslationService.translate_descriptions"
+    )
+    def test_prepare_game_data_keeps_sync_when_translation_fails(self, mock_translate):
+        mock_translate.side_effect = GameTranslationUnavailable()
+
+        processed_data = GameSyncService.prepare_game_data(
+            self.raw_game_data,
+            translate_ko=True,
+        )
+
+        self.assertIsNone(processed_data["summary_ko"])
+        self.assertIsNone(processed_data["storyline_ko"])
