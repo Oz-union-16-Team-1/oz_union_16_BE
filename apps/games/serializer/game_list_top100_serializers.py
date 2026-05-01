@@ -53,9 +53,6 @@ class GameTop100Serializer(serializers.ModelSerializer):
         ]
 
     def get_thumbnail_url(self, obj: Game) -> str | None:
-        """
-        IGDB 커버 이미지 ID를 720p 해상도 URL로 변환합니다.
-        """
         if obj.cover:
             return f"https://images.igdb.com/igdb/image/upload/t_720p/{obj.cover}.jpg"
         return None
