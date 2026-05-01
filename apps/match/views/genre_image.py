@@ -41,10 +41,10 @@ class MatchGenreImageAPIView(APIView):
                 description="인증 토큰이 없거나 유효하지 않아 요청을 인증할 수 없습니다.",
             ),
             404: OpenApiResponse(
-                description="요청한 장르에 매핑된 대표 이미지를 현재 찾을 수 없습니다. (예: 캐시 미생성 또는 장르 이미지 미존재)",
+                description="요청한 장르에 매핑된 게시본 이미지를 찾을 수 없습니다. (예: 해당 장르 미게시)",
             ),
             503: OpenApiResponse(
-                description="장르 이미지 조회에 필요한 캐시/데이터 서비스가 일시적으로 불안정하여 요청을 처리할 수 없습니다.",
+                description="장르 이미지 데이터 조회 중 일시적 장애가 발생해 요청을 처리할 수 없습니다.",
             ),
         },
     )
