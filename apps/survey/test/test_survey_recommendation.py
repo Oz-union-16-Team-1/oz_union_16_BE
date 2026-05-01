@@ -258,16 +258,28 @@ class SurveyRecommendationServiceTest(TestCase):
 
     def test_is_game_eligible(self) -> None:
         good_game = create_game(game_id=207)
-        bad_game = create_game(
+        no_rating_game = create_game(
             game_id=208,
             rating=None,
             rating_count=None,
             aggregated_rating=None,
             aggregated_rating_count=None,
+            total_rating=None,
+            total_rating_count=None,
+        )
+        bad_rating_game = create_game(
+            game_id=220,
+            rating=40.0,
+            rating_count=30,
+            aggregated_rating=None,
+            aggregated_rating_count=None,
+            total_rating=None,
+            total_rating_count=None,
         )
 
         self.assertTrue(self.embedding_service.is_game_eligible(good_game))
-        self.assertFalse(self.embedding_service.is_game_eligible(bad_game))
+        self.assertTrue(self.embedding_service.is_game_eligible(no_rating_game))
+        self.assertFalse(self.embedding_service.is_game_eligible(bad_rating_game))
 
     def test_query_serializer_accepts_opaque_cursor_and_default_page_size(self) -> None:
         serializer = SurveyRecommendationQuerySerializer(data={})
@@ -321,6 +333,15 @@ class SurveyRecommendationServiceTest(TestCase):
             aggregated_rating=55.0,
             aggregated_rating_count=5,
         )
+        no_rating_game = create_game(
+            game_id=250,
+            rating=None,
+            rating_count=None,
+            aggregated_rating=None,
+            aggregated_rating_count=None,
+            total_rating=None,
+            total_rating_count=None,
+        )
 
         self.assertFalse(
             self.embedding_service.is_release_date_eligible(no_release_date)
@@ -330,6 +351,7 @@ class SurveyRecommendationServiceTest(TestCase):
         )
         self.assertTrue(self.embedding_service.is_quality_eligible(critic_only_game))
         self.assertFalse(self.embedding_service.is_quality_eligible(critic_fail_game))
+        self.assertTrue(self.embedding_service.is_quality_eligible(no_rating_game))
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")
     @patch("apps.survey.services.survey_recommendation.requests.post")

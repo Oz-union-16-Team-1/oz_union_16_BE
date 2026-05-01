@@ -134,7 +134,7 @@ class SurveyGameEmbeddingService:
                 ),
             )
             .filter(series_rank=1)
-            .values("game_id")
+            .values_list("game_id", flat=True)
         )
 
     # DB에서 미리 걸러낼 수 있는 조건은 최대한 queryset에서 처리합니다.
@@ -144,12 +144,22 @@ class SurveyGameEmbeddingService:
             aggregated_rating__isnull=False,
             aggregated_rating_count__isnull=False,
         )
+        total_available_q = Q(
+            total_rating__isnull=False,
+            total_rating_count__isnull=False,
+        )
         user_ok_q = Q(rating_count__gte=20, rating__gte=50)
         critic_ok_q = Q(aggregated_rating_count__gte=3, aggregated_rating__gte=60)
+        total_ok_q = Q(total_rating_count__gte=20, total_rating__gte=50)
+        no_rating_data_q = ~user_available_q & ~critic_available_q & ~total_available_q
 
-        quality_q = (
-            user_available_q & user_ok_q & (~critic_available_q | critic_ok_q)
-        ) | (critic_available_q & critic_ok_q & (~user_available_q | user_ok_q))
+        available_rating_q = user_available_q | critic_available_q | total_available_q
+        quality_q = no_rating_data_q | (
+            available_rating_q
+            & (~user_available_q | user_ok_q)
+            & (~critic_available_q | critic_ok_q)
+            & (~total_available_q | total_ok_q)
+        )
 
         return (
             Q(is_ban=False)
@@ -197,18 +207,21 @@ class SurveyGameEmbeddingService:
             game.aggregated_rating is not None
             and game.aggregated_rating_count is not None
         )
+        total_available = (
+            game.total_rating is not None and game.total_rating_count is not None
+        )
 
-        user_ok = True
-        critic_ok = True
-
-        if user_available:
-            user_ok = game.rating_count >= 20 and game.rating >= 50
-        if critic_available:
-            critic_ok = (
-                game.aggregated_rating_count >= 3 and game.aggregated_rating >= 60
+        return (
+            (not user_available or (game.rating_count >= 20 and game.rating >= 50))
+            and (
+                not critic_available
+                or (game.aggregated_rating_count >= 3 and game.aggregated_rating >= 60)
             )
-
-        return (user_available or critic_available) and user_ok and critic_ok
+            and (
+                not total_available
+                or (game.total_rating_count >= 20 and game.total_rating >= 50)
+            )
+        )
 
     def has_required_fields(self, game: Game) -> bool:
         has_genres = bool(game.genres)
