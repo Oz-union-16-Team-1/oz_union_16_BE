@@ -60,7 +60,7 @@ class GameListDetailSerializerTest(TestCase):
 
         self.assertEqual(data["game_id"], 501)
         self.assertEqual(data["title"], "엘든 링 (Elden Ring)")
-        self.assertEqual(data["genres"], ["역할수행(RPG)", "커스텀 장르", "어드벤처"])
+        self.assertEqual(data["genres"], ["RPG", "커스텀 장르", "어드벤처"])
         self.assertEqual(data["release_date"], "2024-06-21")
         self.assertEqual(data["developer"], "FromSoftware")
         self.assertEqual(data["publisher"], "Bandai Namco")

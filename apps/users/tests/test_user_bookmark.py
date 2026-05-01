@@ -126,9 +126,9 @@ class UserLikeBookmarkListTest(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # 엘든링: genres=[12, 31, 32] -> ["역할수행(RPG)", "어드벤처", "인디"]
+        # 엘든링: genres=[12, 31, 32] -> ["RPG", "어드벤처", "인디"]
         elden_ring = next(r for r in response.data["results"] if r["game_id"] == 1001)
-        self.assertEqual(elden_ring["genres"], ["역할수행(RPG)", "어드벤처", "인디"])
+        self.assertEqual(elden_ring["genres"], ["RPG", "어드벤처", "인디"])
 
         # 로스트아크: genres=[4, 32] -> ["격투", "인디"]
         lost_ark = next(r for r in response.data["results"] if r["game_id"] == 1002)

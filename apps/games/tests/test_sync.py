@@ -126,6 +126,23 @@ class GameSyncServiceTest(TestCase):
         processed_data = GameSyncService.prepare_game_data(invalid_data)
         self.assertIsNone(processed_data["first_release_date"])
 
+    def test_prepare_game_data_handles_type_error_date(self):
+        """출시일 변환 중 TypeError가 발생해도 None으로 처리한다."""
+        invalid_data = self.raw_game_data.copy()
+        invalid_data["first_release_date"] = object()
+
+        processed_data = GameSyncService.prepare_game_data(invalid_data)
+
+        self.assertIsNone(processed_data["first_release_date"])
+
+    def test_extract_image_id_handles_blank_and_invalid_values(self):
+        """이미지 ID가 비어 있거나 형식이 맞지 않으면 None을 반환한다."""
+        self.assertIsNone(GameSyncService._extract_image_id({"image_id": "   "}))
+        self.assertIsNone(GameSyncService._extract_image_id({"url": "missing"}))
+        self.assertIsNone(GameSyncService._extract_image_id(""))
+        self.assertIsNone(GameSyncService._extract_image_id(123))
+        self.assertEqual(GameSyncService._extract_image_id(" co9876 "), "co9876")
+
     def test_prepare_game_data_skips_invalid_metadata_items(self):
         """상세 조회용 메타데이터에 잘못된 값이 들어오면 안전하게 제외한다."""
         raw_data = self.raw_game_data.copy()
@@ -203,3 +220,83 @@ class GameSyncServiceTest(TestCase):
 
         self.assertIsNone(processed_data["summary_ko"])
         self.assertIsNone(processed_data["storyline_ko"])
+
+    @patch("apps.games.service.game_sync_services.igdb_client.get_games")
+    def test_sync_all_games_stops_when_api_returns_empty_page(self, mock_get_games):
+        """IGDB 응답이 비어 있으면 동기화를 종료한다."""
+        mock_get_games.return_value = []
+
+        stats = GameSyncService.sync_all_games(page_size=500, max_pages=0)
+
+        self.assertEqual(stats, {"scanned": 0, "upserted": 0})
+        mock_get_games.assert_called_once_with(
+            limit=500,
+            offset=0,
+            pc_only=False,
+        )
+
+    @patch("apps.games.service.game_sync_services.igdb_client.get_games")
+    def test_sync_all_games_stops_when_last_page_is_short(self, mock_get_games):
+        """마지막 페이지가 page_size보다 작으면 다음 페이지를 요청하지 않는다."""
+        mock_get_games.return_value = [self.raw_game_data]
+
+        stats = GameSyncService.sync_all_games(
+            page_size=2,
+            max_pages=0,
+            pc_only=True,
+        )
+
+        self.assertEqual(stats, {"scanned": 1, "upserted": 1})
+        mock_get_games.assert_called_once_with(
+            limit=2,
+            offset=0,
+            pc_only=True,
+        )
+
+    @patch("apps.games.service.game_sync_services.igdb_client.get_ban_games")
+    def test_update_all_banned_pc_games_returns_zero_when_no_targets(
+        self,
+        mock_get_ban_games,
+    ):
+        """차단 대상이 없으면 0을 반환하고 종료한다."""
+        mock_get_ban_games.return_value = []
+
+        updated_count = GameSyncService.update_all_banned_pc_games()
+
+        self.assertEqual(updated_count, 0)
+        mock_get_ban_games.assert_called_once_with(limit=500, offset=0)
+
+    @patch("apps.games.service.game_sync_services.igdb_client.get_ban_games")
+    def test_update_all_banned_pc_games_updates_paginated_targets(
+        self,
+        mock_get_ban_games,
+    ):
+        """차단 대상 ID를 페이지별로 가져와 기존 게임을 블랙리스트 처리한다."""
+        first_page = [{"id": game_id} for game_id in range(9000, 9500)]
+        second_page = [{"id": 9501}]
+        mock_get_ban_games.side_effect = [first_page, second_page]
+
+        Game.objects.create(game_id=9001, name="Ban Target One", slug="ban-one")
+        Game.objects.create(game_id=9501, name="Ban Target Two", slug="ban-two")
+        Game.objects.create(game_id=9999, name="Safe Game", slug="safe-game")
+
+        updated_count = GameSyncService.update_all_banned_pc_games()
+
+        self.assertEqual(updated_count, 2)
+        self.assertEqual(mock_get_ban_games.call_count, 2)
+        mock_get_ban_games.assert_any_call(limit=500, offset=0)
+        mock_get_ban_games.assert_any_call(limit=500, offset=500)
+
+        banned_games = Game.objects.filter(is_ban=True).order_by("game_id")
+        self.assertEqual(
+            list(banned_games.values_list("game_id", flat=True)),
+            [9001, 9501],
+        )
+        self.assertTrue(
+            all(
+                game.ban_reason
+                == "성인 콘텐츠(등급/테마/키워드/카테고리) 및 PC 플랫폼 기준 자동 차단"
+                for game in banned_games
+            )
+        )
+        self.assertFalse(Game.objects.get(game_id=9999).is_ban)
