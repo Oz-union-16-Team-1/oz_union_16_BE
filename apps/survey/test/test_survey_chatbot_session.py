@@ -7,6 +7,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
+from apps.core.igdb import IGDB
 from apps.survey.choices import (
     ChatbotModelChoices,
     SurveyRoleChoices,
@@ -269,9 +270,10 @@ class SurveyChatbotSessionServiceTest(TestCase):
     def test_default_prompt_constant_exists(self) -> None:
         self.assertIn("게임 추천을 위한 게임 취향 설문 챗봇", SURVEY_CHATBOT_PROMPT)
         self.assertIn(
-            "{nickname}님이 자신의 실제 플레이 경험을 자연스럽게 떠올리도록 유도",
+            "사용자가 실제 플레이 경험을 자연스럽게 떠올리도록 돕고",
             SURVEY_CHATBOT_PROMPT,
         )
+        self.assertIn("취향 앵커", SURVEY_CHATBOT_PROMPT)
 
     def test_initialize_session_clears_existing_result(self) -> None:
         user = create_user()
@@ -392,6 +394,33 @@ class SurveyChatbotSessionServiceTest(TestCase):
         self.assertEqual(
             request_payload["generationConfig"]["responseMimeType"],
             "text/plain",
+        )
+
+    @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-api-key")
+    def test_generate_question_with_llm_uses_system_instruction(self) -> None:
+        service = SurveyChatbotSessionService()
+        response = Mock()
+        response.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": "질문을 말씀해 주세요."}]}}]
+        }
+
+        with patch(
+            "apps.survey.services.survey_chatbot_session.requests.post",
+            return_value=response,
+        ) as mocked_post:
+            service.generate_question_with_llm(
+                "유저 프롬프트",
+                system_prompt="시스템 프롬프트",
+            )
+
+        request_payload = mocked_post.call_args.kwargs["json"]
+        self.assertEqual(
+            request_payload["systemInstruction"]["parts"][0]["text"],
+            "시스템 프롬프트",
+        )
+        self.assertEqual(
+            request_payload["contents"][0]["parts"][0]["text"],
+            "유저 프롬프트",
         )
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-api-key")
@@ -626,3 +655,76 @@ class SurveyChatbotSessionServiceTest(TestCase):
             question, service.SAFE_FALLBACK_QUESTIONS[0].format(nickname="사용자")
         )
         self.assertEqual(logging.getLogger.return_value.warning.call_count, 1)
+
+    def test_generate_valid_question_uses_contextual_next_fallback(self) -> None:
+        service = SurveyChatbotSessionService()
+
+        with (
+            patch.object(
+                service,
+                "generate_question_with_llm",
+                return_value="최근 가장 인상",
+            ),
+            patch("apps.survey.services.survey_chatbot_session.logging"),
+        ):
+            question = service.generate_valid_question(
+                prompt="prompt",
+                temperature=0.4,
+                log_message="invalid: %s",
+                mode="NEXT",
+                latest_user_message="팀원들과 전략을 짜서 사이트를 뚫는 재미가 좋아요.",
+                nickname="qwer",
+            )
+
+        self.assertEqual(
+            question,
+            "qwer님이 팀 전략이 성공했던 장면에서 직접 맡은 역할은 진입을 여는 쪽이었는지, 정보를 보고 판단해 마무리하는 쪽이었는지 말씀해 주세요.",
+        )
+
+    def test_contextual_next_fallback_does_not_return_fixed_fun_question(self) -> None:
+        service = SurveyChatbotSessionService()
+
+        fallback_pool = service.build_contextual_fallback_pool(
+            mode="NEXT",
+            nickname="qwer",
+            latest_user_message="재미가 좋아요.",
+        )
+
+        self.assertNotIn(
+            "전투의 긴장감, 성장의 성취감, 탐험의 발견감", fallback_pool[0]
+        )
+
+    def test_contextual_next_fallback_covers_all_igdb_genres(self) -> None:
+        service = SurveyChatbotSessionService()
+        covered_genres = {
+            genre_name for genre_name, _, _ in service.CONTEXTUAL_NEXT_FALLBACK_RULES
+        }
+
+        self.assertEqual(set(IGDB.GENRE_NAME_MAP.values()), covered_genres)
+
+    def test_contextual_next_fallback_uses_genre_specific_templates(self) -> None:
+        service = SurveyChatbotSessionService()
+
+        cases = (
+            (
+                "보스를 잡고 장비를 맞춰서 성장하는 RPG가 좋아요.",
+                "캐릭터를 성장시켰던 장면",
+            ),
+            (
+                "상대 콤보를 막고 카운터로 이기는 격투가 좋아요.",
+                "상대 패턴을 읽고 반격한 순간",
+            ),
+            (
+                "숨겨진 지역을 발견하는 어드벤처 탐험이 좋아요.",
+                "숨겨진 장소를 직접 발견한 순간",
+            ),
+        )
+        for message, expected_text in cases:
+            with self.subTest(message=message):
+                fallback_pool = service.build_contextual_fallback_pool(
+                    mode="NEXT",
+                    nickname="qwer",
+                    latest_user_message=message,
+                )
+
+                self.assertIn(expected_text, fallback_pool[0])

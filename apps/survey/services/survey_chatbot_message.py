@@ -24,12 +24,18 @@ from apps.survey.models import (
 )
 from apps.survey.prompts.survey_chatbot_message_intent_prompt import (
     SURVEY_CHATBOT_MESSAGE_INTENT_PROMPT,
+    SURVEY_CHATBOT_MESSAGE_INTENT_SYSTEM_PROMPT,
+    SURVEY_CHATBOT_MESSAGE_INTENT_USER_PROMPT,
 )
 from apps.survey.prompts.survey_chatbot_question_generation_prompt import (
     SURVEY_CHATBOT_QUESTION_GENERATION_PROMPT,
+    SURVEY_CHATBOT_QUESTION_GENERATION_SYSTEM_PROMPT,
+    SURVEY_CHATBOT_QUESTION_GENERATION_USER_PROMPT,
 )
 from apps.survey.prompts.survey_chatbot_summary_prompt import (
     SURVEY_CHATBOT_SUMMARY_PROMPT,
+    SURVEY_CHATBOT_SUMMARY_SYSTEM_PROMPT,
+    SURVEY_CHATBOT_SUMMARY_USER_PROMPT,
 )
 from apps.survey.services.survey_chatbot_session import (
     SURVEY_COMPLETION_MESSAGE,
@@ -41,6 +47,7 @@ from apps.users.models import UserPreference
 UNRELATED_COUNT_TTL = 60 * 30
 UNRELATED_LOCK_SECONDS = 60 * 5
 UNRELATED_MAX_ATTEMPTS = 3
+PROFANITY_WARNING_MESSAGE = "비속어가 포함되어있습니다. 답변을 다시 작성해 주세요."
 OBVIOUS_UNRELATED_PATTERNS = (
     r"프롬프트",
     r"system prompt",
@@ -51,12 +58,27 @@ OBVIOUS_UNRELATED_PATTERNS = (
     r"무슨\s*게임.*재밌",
     r"게임\s*추천",
 )
+PROFANITY_PATTERNS = (
+    r"존나",
+    r"ㅈㄴ",
+    r"시발",
+    r"씨발",
+    r"ㅅㅂ",
+    r"병신",
+    r"개새",
+    r"좆",
+    r"꺼져",
+)
 GAME_PREFERENCE_SIGNAL_PATTERNS = (
     r"좋",
     r"싫",
     r"재밌",
+    r"몰입",
+    r"쾌감",
+    r"성취감",
     r"선호",
     r"피곤",
+    r"압박감",
     r"어렵",
     r"쉬운",
     r"전투",
@@ -79,6 +101,7 @@ GAME_PREFERENCE_SIGNAL_PATTERNS = (
     r"세계관",
     r"캐릭터",
     r"스킬",
+    r"에이스",
     r"공략",
     r"플레이",
 )
@@ -200,6 +223,9 @@ DIRECT_GAME_KEYWORD_PATTERNS = (
 DIRECT_GAME_SUFFIX_PATTERN = (
     r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:처럼|같은|같이)"
 )
+DIRECT_GAME_CONTEXT_PATTERNS = (
+    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:\s*할\s*때|\s*할때|\s*하면서|\s*하면)",
+)
 DIRECT_GAME_CONNECTORS = r"(?:이랑|랑|하고|와|과|,|/)"
 DIRECT_GAME_KEYWORD_STOPWORDS = {
     "게임",
@@ -289,6 +315,12 @@ class SurveyChatbotMessageService:
         if retry_after_seconds > 0:
             raise SurveyChatbotSessionLocked(retry_after_seconds)
 
+        if self.contains_profanity(message):
+            return self.handle_unrelated_answer(
+                session=session,
+                warning_message=PROFANITY_WARNING_MESSAGE,
+            )
+
         current_question = self.get_current_question(session)
         intent = self.classify_user_message_intent(
             current_question=current_question,
@@ -313,7 +345,6 @@ class SurveyChatbotMessageService:
             )
 
         with transaction.atomic():
-            self.reset_unrelated_attempts(session.id)
             self.save_user_message(session=session, message=message)
 
             if session.target_question_count is None:
@@ -394,7 +425,9 @@ class SurveyChatbotMessageService:
         return question
 
     def handle_unrelated_answer(
-        self, session: SurveyChatbotSession
+        self,
+        session: SurveyChatbotSession,
+        warning_message: str = "설문 질문과 관련된 게임 취향 답변을 입력해주세요.",
     ) -> SurveyChatbotMessageResult:
         attempts = self.increment_unrelated_attempts(session.id)
         if attempts >= UNRELATED_MAX_ATTEMPTS:
@@ -405,7 +438,7 @@ class SurveyChatbotMessageService:
         return SurveyChatbotMessageResult(
             session_id=str(session.id),
             status=session.status,
-            warning_message=("설문 질문과 관련된 게임 취향 답변을 입력해주세요."),
+            warning_message=warning_message,
             ai_message=self.get_current_question(session),
             progress=self.session_service.build_progress(session),
             recommendation_ready=False,
@@ -428,7 +461,7 @@ class SurveyChatbotMessageService:
         return SurveyChatbotMessageResult(
             session_id=str(session.id),
             status=session.status,
-            warning_message="알겠습니다. 그럼 다른 질문으로 바꿔드리겠습니다!",
+            warning_message="다른 질문으로 바꿔서 여쭤보겠습니다.",
             ai_message=next_question,
             progress=self.session_service.build_progress(session),
             recommendation_ready=False,
@@ -451,7 +484,7 @@ class SurveyChatbotMessageService:
         return SurveyChatbotMessageResult(
             session_id=str(session.id),
             status=session.status,
-            warning_message="알겠습니다. 같은 의미를 더 쉽게 다시 물어볼게요!",
+            warning_message="같은 의미를 더 쉽게 다시 물어볼게요!",
             ai_message=next_question,
             progress=self.session_service.build_progress(session),
             recommendation_ready=False,
@@ -490,6 +523,12 @@ class SurveyChatbotMessageService:
         return any(
             re.search(pattern, normalized_message, flags=re.IGNORECASE)
             for pattern in OBVIOUS_UNRELATED_PATTERNS
+        )
+
+    def contains_profanity(self, message: str) -> bool:
+        return any(
+            re.search(pattern, message, flags=re.IGNORECASE)
+            for pattern in PROFANITY_PATTERNS
         )
 
     def has_game_preference_signal(self, normalized_message: str) -> bool:
@@ -540,6 +579,25 @@ class SurveyChatbotMessageService:
             f"{nickname}님 답변:\n{user_message}\n"
         )
 
+    def build_message_intent_prompts(
+        self,
+        current_question: str,
+        user_message: str,
+        session: SurveyChatbotSession | None = None,
+    ) -> tuple[str, str]:
+        nickname = self.session_service.get_user_nickname(
+            session.user if session else None
+        )
+        system_prompt = SURVEY_CHATBOT_MESSAGE_INTENT_SYSTEM_PROMPT.strip().format(
+            nickname=nickname
+        )
+        user_prompt = (
+            f"{SURVEY_CHATBOT_MESSAGE_INTENT_USER_PROMPT.strip().format(nickname=nickname)}\n\n"
+            f"## 현재 질문\n\n{current_question}\n\n"
+            f"## {nickname}님 답변\n\n{user_message}\n"
+        )
+        return system_prompt, user_prompt
+
     def classify_user_message_intent(
         self,
         current_question: str,
@@ -551,18 +609,20 @@ class SurveyChatbotMessageService:
             return "UNRELATED"
         if self.is_fallback_clarify_answer(normalized_message):
             return "CLARIFY"
-        if self.is_fallback_reask_answer(normalized_message):
-            return "REASK"
         if self.has_game_preference_signal(normalized_message):
             return "NORMAL"
+        if self.is_fallback_reask_answer(normalized_message):
+            return "REASK"
 
-        prompt = self.build_message_intent_prompt(
+        system_prompt, user_prompt = self.build_message_intent_prompts(
             current_question=current_question,
             user_message=user_message,
             session=session,
         )
         response = self.session_service.generate_question_with_llm(
-            prompt, temperature=0.1
+            user_prompt,
+            temperature=0.1,
+            system_prompt=system_prompt,
         )
         if response:
             normalized_response = response.strip().upper()
@@ -589,10 +649,11 @@ class SurveyChatbotMessageService:
         return 5
 
     def generate_next_question(self, session: SurveyChatbotSession) -> str:
-        prompt = self.build_next_question_prompt(session)
+        system_prompt, prompt = self.build_next_question_prompts(session)
         latest_user_message = self.get_latest_user_message(session)
         question = self.session_service.generate_valid_question(
             prompt=prompt,
+            system_prompt=system_prompt,
             temperature=0.4,
             log_message="Invalid follow-up survey question generated by LLM: %s",
             mode="NEXT",
@@ -613,7 +674,16 @@ class SurveyChatbotMessageService:
             user_message="",
         )
 
-    # 이 기능은 질문 생성 프롬프트를 하나로 통합해 상황별로 재사용
+    def build_next_question_prompts(
+        self, session: SurveyChatbotSession
+    ) -> tuple[str, str]:
+        return self.build_question_generation_prompts(
+            mode="NEXT",
+            session=session,
+            current_question=self.get_current_question(session),
+            user_message="",
+        )
+
     def build_question_generation_prompt(
         self,
         mode: str,
@@ -621,24 +691,79 @@ class SurveyChatbotMessageService:
         current_question: str,
         user_message: str,
     ) -> str:
+        _, user_prompt = self.build_question_generation_prompts(
+            mode=mode,
+            session=session,
+            current_question=current_question,
+            user_message=user_message,
+        )
+        return user_prompt
+
+    # 이 기능은 질문 생성 프롬프트를 시스템/유저 프롬프트로 나눠 상황별로 재사용
+    def build_question_generation_prompts(
+        self,
+        mode: str,
+        session: SurveyChatbotSession,
+        current_question: str,
+        user_message: str,
+    ) -> tuple[str, str]:
         conversation = self.build_conversation_text(session)
         latest_user_message = self.get_latest_user_message(session)
         confirmed_preferences, uncertain_preferences = self.build_preference_state(
             session
         )
         active_genre_context = self.detect_active_genre_context(session)
-        return SURVEY_CHATBOT_QUESTION_GENERATION_PROMPT.format(
-            nickname=self.session_service.get_user_nickname(session.user),
-            mode=mode,
-            current_step=session.messages.filter(role=SurveyRoleChoices.USER).count(),
-            target_question_count=session.target_question_count,
-            confirmed_preferences=confirmed_preferences,
-            uncertain_preferences=uncertain_preferences,
-            active_genre_context=active_genre_context,
-            current_question=current_question,
-            latest_user_message=latest_user_message,
-            conversation=conversation,
+        anchor_answer = self.get_anchor_answer(session)
+        anchor_topics = self.build_anchor_topics(anchor_answer)
+        values = {
+            "nickname": self.session_service.get_user_nickname(session.user),
+            "mode": mode,
+            "current_step": session.messages.filter(
+                role=SurveyRoleChoices.USER
+            ).count(),
+            "target_question_count": session.target_question_count,
+            "anchor_answer": anchor_answer,
+            "anchor_topics": anchor_topics,
+            "confirmed_preferences": confirmed_preferences,
+            "uncertain_preferences": uncertain_preferences,
+            "active_genre_context": active_genre_context,
+            "current_question": current_question,
+            "latest_user_message": latest_user_message,
+            "conversation": conversation,
+        }
+        return (
+            SURVEY_CHATBOT_QUESTION_GENERATION_SYSTEM_PROMPT.strip().format(**values),
+            SURVEY_CHATBOT_QUESTION_GENERATION_USER_PROMPT.strip().format(**values),
         )
+
+    def get_anchor_answer(self, session: SurveyChatbotSession) -> str:
+        return (
+            session.messages.filter(role=SurveyRoleChoices.USER)
+            .order_by("sequence")
+            .values_list("message", flat=True)
+            .first()
+            or "없음"
+        )
+
+    def build_anchor_topics(self, anchor_answer: str) -> str:
+        if not anchor_answer or anchor_answer == "없음":
+            return "없음"
+
+        topic_labels = {
+            "genre": "선호 장르",
+            "difficulty": "난이도 성향",
+            "coop_competition": "경쟁/협동 성향",
+            "story": "스토리 몰입",
+            "combat": "전투 스타일",
+            "exploration": "탐험 성향",
+            "growth": "성장 방식",
+            "tempo": "플레이 템포",
+            "reward": "보상 구조",
+            "mastery": "숙련/캐릭터 운용",
+        }
+        topics = self.session_service.detect_question_topics(anchor_answer)
+        labels = [label for key, label in topic_labels.items() if key in topics]
+        return ", ".join(labels) if labels else "없음"
 
     def get_latest_user_message(self, session: SurveyChatbotSession) -> str:
         return (
@@ -717,7 +842,7 @@ class SurveyChatbotMessageService:
         current_question: str,
         user_message: str,
     ) -> str:
-        prompt = self.build_question_generation_prompt(
+        system_prompt, prompt = self.build_question_generation_prompts(
             mode="REASK",
             session=session,
             current_question=current_question,
@@ -725,6 +850,7 @@ class SurveyChatbotMessageService:
         )
         question = self.session_service.generate_valid_question(
             prompt=prompt,
+            system_prompt=system_prompt,
             temperature=0.4,
             log_message="Invalid rephrased survey question generated by LLM: %s",
             mode="REASK",
@@ -742,7 +868,7 @@ class SurveyChatbotMessageService:
         current_question: str,
         user_message: str,
     ) -> str:
-        prompt = self.build_question_generation_prompt(
+        system_prompt, prompt = self.build_question_generation_prompts(
             mode="CLARIFY",
             session=session,
             current_question=current_question,
@@ -750,6 +876,7 @@ class SurveyChatbotMessageService:
         )
         question = self.session_service.generate_valid_question(
             prompt=prompt,
+            system_prompt=system_prompt,
             temperature=0.4,
             log_message="Invalid clarified survey question generated by LLM: %s",
             mode="CLARIFY",
@@ -767,25 +894,29 @@ class SurveyChatbotMessageService:
                 "message", flat=True
             )
         )
-        prompt = SURVEY_CHATBOT_SUMMARY_PROMPT.format(
-            nickname=self.session_service.get_user_nickname(session.user),
-            user_messages="\n".join(f"- {message}" for message in user_messages),
+        prompt_values = {
+            "nickname": self.session_service.get_user_nickname(session.user),
+            "user_messages": "\n".join(f"- {message}" for message in user_messages),
+        }
+        system_prompt = SURVEY_CHATBOT_SUMMARY_SYSTEM_PROMPT.strip().format(
+            **prompt_values
         )
+        prompt = SURVEY_CHATBOT_SUMMARY_USER_PROMPT.strip().format(**prompt_values)
         direct_keywords = self.extract_direct_game_keywords(user_messages)
 
         for _ in range(SUMMARY_GENERATION_MAX_ATTEMPTS):
-            response = self.session_service.generate_question_with_llm(prompt)
+            response = self.session_service.generate_question_with_llm(
+                prompt,
+                system_prompt=system_prompt,
+            )
             if not response:
                 continue
 
-            survey_answer, excluded_keywords = self.parse_summary_response(response)
+            survey_answer, _ = self.parse_summary_response(response)
             if self.is_complete_summary_answer(
                 survey_answer
             ) and not self.has_repeated_summary_sentences(survey_answer):
-                merged_keywords = self.normalize_excluded_keywords(
-                    [*excluded_keywords, *direct_keywords]
-                )
-                return survey_answer or "", merged_keywords
+                return survey_answer or "", direct_keywords
 
         fallback_summary = self.build_fallback_summary(user_messages)
         if fallback_summary:
@@ -859,18 +990,7 @@ class SurveyChatbotMessageService:
                 return None, []
             return cleaned or None, []
 
-        survey_answer = str(data.get("survey_answer") or "").strip() or None
-        raw_keywords = data.get("excluded_keywords") or []
-        if isinstance(raw_keywords, str):
-            excluded_keywords = self.normalize_excluded_keywords(
-                raw_keywords.split(",")
-            )
-        elif isinstance(raw_keywords, list):
-            excluded_keywords = self.normalize_excluded_keywords(raw_keywords)
-        else:
-            excluded_keywords = []
-
-        return survey_answer, excluded_keywords
+        return str(data.get("survey_answer") or "").strip() or None, []
 
     def extract_survey_answer_from_broken_json(self, response: str) -> str | None:
         match = re.search(
@@ -981,6 +1101,10 @@ class SurveyChatbotMessageService:
         suffix_keywords: list[str] = []
         db_checked_keywords: list[str] = []
         for message in user_messages:
+            for pattern in DIRECT_GAME_CONTEXT_PATTERNS:
+                for match in re.finditer(pattern, message, flags=re.IGNORECASE):
+                    suffix_keywords.append(match.group("keyword"))
+
             for segment in re.split(DIRECT_GAME_CONNECTORS, message):
                 for match in re.finditer(
                     DIRECT_GAME_SUFFIX_PATTERN,
