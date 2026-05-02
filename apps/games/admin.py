@@ -1,3 +1,5 @@
+import json
+
 from django.contrib import admin
 from django.utils.html import format_html
 
@@ -56,7 +58,12 @@ class GameAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
     search_fields = ("game_id", "name", "name_ko")
     list_filter = ("is_ban", "created_at")
-    readonly_fields = ("game_id", "created_at", "match_vector_dimensions")
+    readonly_fields = (
+        "game_id",
+        "created_at",
+        "match_vector_radar",
+        "match_vector_dimensions",
+    )
     actions = (ban_games, unban_games)
     date_hierarchy = "created_at"
     list_per_page = 30
@@ -124,11 +131,18 @@ class GameAdmin(admin.ModelAdmin):
             "매칭 벡터 정보",
             {
                 "fields": (
+                    "match_vector_radar",
                     "match_vector_dimensions",
                 )
             },
         ),
     )
+
+    class Media:
+        js = (
+            "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js",
+            "games_admin/game_vector_chart.js",
+        )
 
     def _get_match_vector(self, obj) -> list[float] | None:
         pref = (
@@ -148,6 +162,28 @@ class GameAdmin(admin.ModelAdmin):
         if len(values) < len(MATCH_VECTOR_DIM_LABELS):
             values.extend([0.0] * (len(MATCH_VECTOR_DIM_LABELS) - len(values)))
         return values[: len(MATCH_VECTOR_DIM_LABELS)]
+
+    @admin.display(description="벡터 별자리 맵")
+    def match_vector_radar(self, obj):
+        values = self._get_match_vector(obj)
+        if values is None:
+            return "벡터 데이터 없음"
+
+        labels_json = json.dumps(list(MATCH_VECTOR_DIM_LABELS), ensure_ascii=False)
+        values_json = json.dumps([round(v, 4) for v in values], ensure_ascii=False)
+
+        return format_html(
+            "<div style='max-width: 860px;'>"
+            "<canvas class='js-game-vector-radar' "
+            "data-game-id='{}' "
+            "data-labels='{}' "
+            "data-values='{}' "
+            "height='320'></canvas>"
+            "</div>",
+            obj.game_id,
+            labels_json,
+            values_json,
+        )
 
     @admin.display(description="차원별 벡터값")
     def match_vector_dimensions(self, obj):
