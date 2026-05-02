@@ -1,7 +1,7 @@
 import json
 
 from django.contrib import admin
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 
 from apps.games.models import Game
 from apps.match.models import MatchGamePreference
@@ -9,20 +9,38 @@ from apps.match.models import MatchGamePreference
 
 MATCH_VECTOR_DIM_LABELS = (
     "액션/격투",
-    "어드벤처/플랫폼",
+    "어드벤처",
     "RPG/스토리",
     "전략/시뮬",
-    "스포츠/레이싱",
+    "스포츠",
     "두뇌/퍼즐",
     "슈팅",
     "음악/리듬",
-    "난이도(캐주얼↔하드코어)",
-    "톤(밝음↔어두움)",
-    "그래픽(2D↔3D)",
-    "템포(정적↔동적)",
-    "사회성(솔로↔멀티)",
-    "인기도 참조",
+    "난이도",
+    "톤",
+    "그래픽",
+    "템포",
+    "사회성",
+    "인기도",
 )
+
+MATCH_VECTOR_RADAR_LABELS = (
+    "액션",
+    "어드벤처",
+    "RPG",
+    "전략",
+    "스포츠",
+    "두뇌",
+    "슈팅",
+    "음악",
+    "난이도",
+    "톤",
+    "그래픽",
+    "템포",
+    "사회성",
+    "인기도",
+)
+
 
 
 class GameBlacklist(Game):
@@ -163,22 +181,63 @@ class GameAdmin(admin.ModelAdmin):
             values.extend([0.0] * (len(MATCH_VECTOR_DIM_LABELS) - len(values)))
         return values[: len(MATCH_VECTOR_DIM_LABELS)]
 
+    def _clamp(self, value: float, min_value: float, max_value: float) -> float:
+        return max(min_value, min(value, max_value))
+
+    def _value_color(self, dim_index: int, value: float) -> str:
+        if dim_index == 14:
+            return "#a3e635"  # lime
+        if dim_index <= 8:
+            return "#7c6cff"  # purple
+        if dim_index == 13:
+            return "#22d3ee" if value < 0 else "#06b6d4"  # cyan
+        return "#ff7a1a" if value >= 0 else "#22d3ee"  # orange / cyan
+
+    def _render_unipolar_track(self, color: str, value: float):
+        width = self._clamp(value, 0.0, 1.0) * 100.0
+        return format_html(
+            "<div style='position:relative;height:12px;background:#1a2336;border-radius:9999px;overflow:hidden;'>"
+            "<span style='position:absolute;left:0;top:0;bottom:0;width:{:.2f}%;background:{};border-radius:9999px;'></span>"
+            "</div>",
+            width,
+            color,
+        )
+
+    def _render_bipolar_track(self, color: str, value: float):
+        v = self._clamp(value, -1.0, 1.0)
+        if v >= 0:
+            left = 50.0
+            width = v * 50.0
+        else:
+            left = 50.0 - abs(v) * 50.0
+            width = abs(v) * 50.0
+
+        return format_html(
+            "<div style='position:relative;height:12px;background:#1a2336;border-radius:9999px;overflow:hidden;'>"
+            "<span style='position:absolute;left:50%;top:0;bottom:0;width:1px;background:#334155;opacity:.8;'></span>"
+            "<span style='position:absolute;left:{:.2f}%;top:0;bottom:0;width:{:.2f}%;background:{};border-radius:9999px;'></span>"
+            "</div>",
+            left,
+            width,
+            color,
+        )
+
     @admin.display(description="벡터 별자리 맵")
     def match_vector_radar(self, obj):
         values = self._get_match_vector(obj)
         if values is None:
             return "벡터 데이터 없음"
 
-        labels_json = json.dumps(list(MATCH_VECTOR_DIM_LABELS), ensure_ascii=False)
+        labels_json = json.dumps(list(MATCH_VECTOR_RADAR_LABELS), ensure_ascii=False)
         values_json = json.dumps([round(v, 4) for v in values], ensure_ascii=False)
 
         return format_html(
-            "<div style='max-width: 860px;'>"
+            "<div style='max-width:860px;margin:0 auto;min-height:420px;display:flex;justify-content:center;align-items:center;'>"
             "<canvas class='js-game-vector-radar' "
             "data-game-id='{}' "
             "data-labels='{}' "
             "data-values='{}' "
-            "height='320'></canvas>"
+            "style='width:100%;max-width:720px;height:420px;'></canvas>"
             "</div>",
             obj.game_id,
             labels_json,
@@ -191,13 +250,35 @@ class GameAdmin(admin.ModelAdmin):
         if values is None:
             return "벡터 데이터 없음"
 
-        lines = []
-        for idx, label in enumerate(MATCH_VECTOR_DIM_LABELS, start=1):
-            lines.append(f"{idx:02d}. {label}: {values[idx - 1]:.4f}")
+        rows = []
+        for idx, (label, value) in enumerate(zip(MATCH_VECTOR_DIM_LABELS, values), start=1):
+            color = self._value_color(idx, value)
+
+            if idx <= 8 or idx == 14:
+                track = self._render_unipolar_track(color, value)
+                value_text = f"{self._clamp(value, 0.0, 1.0):.2f}"
+            else:
+                track = self._render_bipolar_track(color, value)
+                vv = self._clamp(value, -1.0, 1.0)
+                if abs(vv) < 0.005:
+                    vv = 0.0
+                value_text = f"{vv:.2f}"
+
+            rows.append((label, track, color, value_text))
+
+        rows_html = format_html_join(
+            "",
+            "<div style='display:grid;grid-template-columns:160px 1fr 72px;gap:14px;align-items:center;margin-bottom:10px;'>"
+            "<div style='font-weight:700;color:#9ca3af;font-size:15px;'>{}</div>"
+            "<div>{}</div>"
+            "<div style='text-align:right;font-weight:800;color:{};font-size:16px;'>{}</div>"
+            "</div>",
+            rows,
+        )
 
         return format_html(
-            "<pre style='white-space: pre-wrap; margin: 0;'>{}</pre>",
-            "\n".join(lines),
+            "<div style='max-width:860px;padding:8px 0 4px 0;'>{}</div>",
+            rows_html,
         )
 
     @admin.display(boolean=True, description="블랙리스트", ordering="is_ban")
