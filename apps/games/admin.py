@@ -2,6 +2,7 @@ import json
 
 from django.contrib import admin
 from django.utils.html import format_html, format_html_join
+from django.utils.safestring import mark_safe
 
 from apps.games.models import Game
 from apps.match.models import MatchGamePreference
@@ -196,10 +197,11 @@ class GameAdmin(admin.ModelAdmin):
     def _render_unipolar_track(self, color: str, value: float):
         width = self._clamp(value, 0.0, 1.0) * 100.0
         return format_html(
-            "<div style='position:relative;height:12px;background:#1a2336;border-radius:9999px;overflow:hidden;'>"
-            "<span style='position:absolute;left:0;top:0;bottom:0;width:{:.2f}%;background:{};border-radius:9999px;'></span>"
+            "<div style='display:block;width:100%;height:12px;background:#1f2937;"
+            "border:1px solid #334155;border-radius:9999px;overflow:hidden;'>"
+            "<div style='display:block;height:100%;width:{}%;background:{};border-radius:9999px;'></div>"
             "</div>",
-            width,
+            f"{width:.2f}",
             color,
         )
 
@@ -213,12 +215,13 @@ class GameAdmin(admin.ModelAdmin):
             width = abs(v) * 50.0
 
         return format_html(
-            "<div style='position:relative;height:12px;background:#1a2336;border-radius:9999px;overflow:hidden;'>"
-            "<span style='position:absolute;left:50%;top:0;bottom:0;width:1px;background:#334155;opacity:.8;'></span>"
-            "<span style='position:absolute;left:{:.2f}%;top:0;bottom:0;width:{:.2f}%;background:{};border-radius:9999px;'></span>"
+            "<div style='display:block;width:100%;height:12px;background:#1f2937;"
+            "border:1px solid #334155;border-radius:9999px;overflow:hidden;position:relative;'>"
+            "<div style='position:absolute;left:50%;top:0;bottom:0;width:1px;background:#475569;'></div>"
+            "<div style='position:absolute;left:{}%;top:0;height:100%;width:{}%;background:{};border-radius:9999px;'></div>"
             "</div>",
-            left,
-            width,
+            f"{left:.2f}",
+            f"{width:.2f}",
             color,
         )
 
@@ -250,7 +253,7 @@ class GameAdmin(admin.ModelAdmin):
         if values is None:
             return "벡터 데이터 없음"
 
-        rows = []
+        rows_html = []
         for idx, (label, value) in enumerate(zip(MATCH_VECTOR_DIM_LABELS, values), start=1):
             color = self._value_color(idx, value)
 
@@ -264,21 +267,23 @@ class GameAdmin(admin.ModelAdmin):
                     vv = 0.0
                 value_text = f"{vv:.2f}"
 
-            rows.append((label, track, color, value_text))
+            row = (
+                "<div style='display:grid;grid-template-columns:160px 380px 72px;"
+                "gap:14px;align-items:center;margin-bottom:10px;'>"
+                f"<div style='font-weight:700;color:#9ca3af;font-size:15px;'>{label}</div>"
+                f"<div>{track}</div>"
+                f"<div style='text-align:right;font-weight:800;color:{color};font-size:16px;'>{value_text}</div>"
+                "</div>"
+            )
+            rows_html.append(row)
 
-        rows_html = format_html_join(
-            "",
-            "<div style='display:grid;grid-template-columns:160px 1fr 72px;gap:14px;align-items:center;margin-bottom:10px;'>"
-            "<div style='font-weight:700;color:#9ca3af;font-size:15px;'>{}</div>"
-            "<div>{}</div>"
-            "<div style='text-align:right;font-weight:800;color:{};font-size:16px;'>{}</div>"
-            "</div>",
-            rows,
-        )
+        if not rows_html:
+            return "벡터 데이터 없음"
 
-        return format_html(
-            "<div style='max-width:860px;padding:8px 0 4px 0;'>{}</div>",
-            rows_html,
+        return mark_safe(
+            "<div style='max-width:860px;padding:8px 0 4px 0;'>"
+            + "".join(rows_html)
+            + "</div>"
         )
 
     @admin.display(boolean=True, description="블랙리스트", ordering="is_ban")
