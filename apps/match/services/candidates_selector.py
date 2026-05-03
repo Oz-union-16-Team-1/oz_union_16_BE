@@ -13,6 +13,7 @@ from apps.match.constants import (
     API_TO_IGDB_GENRE_MAP,
     MATCH_CANDIDATE_MAX_COUNT,
     MATCH_CANDIDATE_POOL_SIZE,
+    MATCH_CANDIDATE_VECTOR_WEIGHTS,
 )
 from apps.match.models import MatchGameGenreMap, MatchGamePreference
 from apps.match.services.game_list_query import INGEST_DB_FIELDS, to_ingest_row
@@ -214,7 +215,7 @@ class MatchCandidatesSelectorService:
 
             for idx, cand in enumerate(remaining):
                 score = min(
-                    self._cosine_distance(cand.vector, picked.vector)
+                    self._weighted_cosine_distance(cand.vector, picked.vector)
                     for picked in selected
                 )
                 if score > best_score:
@@ -225,20 +226,38 @@ class MatchCandidatesSelectorService:
 
         return selected
 
-    def _cosine_distance(self, a: list[float], b: list[float]) -> float:
+    def _weighted_cosine_distance(self, a: list[float], b: list[float]) -> float:
         if not a or not b or len(a) != len(b):
             return 1.0
 
-        dot = sum(x * y for x, y in zip(a, b))
-        norm_a = math.sqrt(sum(x * x for x in a))
-        norm_b = math.sqrt(sum(y * y for y in b))
+        weights = self._candidate_weights(len(a))
 
-        if norm_a == 0.0 or norm_b == 0.0:
+        dot = 0.0
+        norm_a_sq = 0.0
+        norm_b_sq = 0.0
+
+        for idx, (x, y) in enumerate(zip(a, b)):
+            w = weights[idx]
+            dot += w * x * y
+            norm_a_sq += w * x * x
+            norm_b_sq += w * y * y
+
+        if norm_a_sq <= 0.0 or norm_b_sq <= 0.0:
             return 1.0
 
-        cosine_similarity = dot / (norm_a * norm_b)
+        cosine_similarity = dot / (math.sqrt(norm_a_sq) * math.sqrt(norm_b_sq))
         cosine_similarity = max(-1.0, min(1.0, cosine_similarity))
         return 1.0 - cosine_similarity
+
+
+    def _candidate_weights(self, dim: int) -> list[float]:
+        base = list(MATCH_CANDIDATE_VECTOR_WEIGHTS)
+
+        if dim <= len(base):
+            return base[:dim]
+
+        # 예외적으로 차원이 늘면 마지막 가중치(인기도 약가중)로 채움
+        return base + [base[-1]] * (dim - len(base))
 
     def _seed(
         self,
