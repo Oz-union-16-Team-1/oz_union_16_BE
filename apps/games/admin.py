@@ -42,6 +42,13 @@ MATCH_VECTOR_RADAR_LABELS = (
     "인기도",
 )
 
+MATCH_VECTOR_BIPOLAR_HINTS = {
+    9: ("캐주얼", "하드코어"),   # 난이도
+    10: ("밝음", "어두움"),     # 톤
+    11: ("2D", "3D"),           # 그래픽
+    12: ("정적", "동적"),       # 템포
+    13: ("솔로", "멀티"),       # 사회성
+}
 
 
 class GameBlacklist(Game):
@@ -257,6 +264,8 @@ class GameAdmin(admin.ModelAdmin):
         for idx, (label, value) in enumerate(zip(MATCH_VECTOR_DIM_LABELS, values), start=1):
             color = self._value_color(idx, value)
 
+            axis_hint = ""
+
             if idx <= 8 or idx == 14:
                 track = self._render_unipolar_track(color, value)
                 value_text = f"{self._clamp(value, 0.0, 1.0):.2f}"
@@ -267,11 +276,20 @@ class GameAdmin(admin.ModelAdmin):
                     vv = 0.0
                 value_text = f"{vv:.2f}"
 
+                left_label, right_label = MATCH_VECTOR_BIPOLAR_HINTS.get(idx, ("왼쪽", "오른쪽"))
+                axis_hint = (
+                    "<div style='display:flex;justify-content:space-between;"
+                    "margin-top:4px;font-size:12px;color:#6b7280;'>"
+                    f"<span>← {left_label}</span>"
+                    f"<span>{right_label} →</span>"
+                    "</div>"
+                )
+
             row = (
                 "<div style='display:grid;grid-template-columns:160px 380px 72px;"
                 "gap:14px;align-items:center;margin-bottom:10px;'>"
                 f"<div style='font-weight:700;color:#9ca3af;font-size:15px;'>{label}</div>"
-                f"<div>{track}</div>"
+                f"<div>{track}{axis_hint}</div>"
                 f"<div style='text-align:right;font-weight:800;color:{color};font-size:16px;'>{value_text}</div>"
                 "</div>"
             )
