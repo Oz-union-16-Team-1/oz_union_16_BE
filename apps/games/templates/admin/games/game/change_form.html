@@ -1,0 +1,232 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .game-dashboard {
+    display: grid;
+    gap: 18px;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .dashboard-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--body-bg);
+    padding: 16px;
+  }
+
+  .dashboard-panel h2 {
+    margin: 0 0 14px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .metric-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--hairline-color);
+    padding-bottom: 8px;
+  }
+
+  .metric-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .metric-label {
+    color: var(--body-quiet-color);
+  }
+
+  .metric-value {
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .status-good {
+    color: #11803b;
+    font-weight: 700;
+  }
+
+  .status-bad {
+    color: #ba2121;
+    font-weight: 700;
+  }
+
+  .vector-bars {
+    display: grid;
+    gap: 9px;
+  }
+
+  .vector-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 54px;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .vector-track {
+    height: 8px;
+    border-radius: 99px;
+    background: var(--hairline-color);
+    overflow: hidden;
+  }
+
+  .vector-fill {
+    height: 100%;
+    min-width: 2px;
+    border-radius: 99px;
+    background: var(--link-fg);
+  }
+
+  .dashboard-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .dashboard-table th,
+  .dashboard-table td {
+    border-bottom: 1px solid var(--hairline-color);
+    padding: 9px 8px;
+    text-align: left;
+  }
+
+  .dashboard-table th {
+    color: var(--body-quiet-color);
+    font-weight: 600;
+  }
+
+  .empty-note {
+    color: var(--body-quiet-color);
+    margin: 0;
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {{ dashboard.basic_info.game_name }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="game-dashboard">
+  <div class="dashboard-grid">
+    <section class="dashboard-panel">
+      <h2>기본 정보</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">게임명</dt><dd class="metric-value">{{ dashboard.basic_info.game_name }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">게임 ID</dt><dd class="metric-value">{{ dashboard.basic_info.game_id }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">장르</dt><dd class="metric-value">{{ dashboard.basic_info.genres|join:", "|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">총 좋아요 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_like_count }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">총 평가 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_rating_count }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">평균 별점</dt><dd class="metric-value">{{ dashboard.basic_info.average_star_rating|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">블랙리스트 여부</dt><dd class="metric-value">{% if dashboard.basic_info.is_ban %}<span class="status-bad">True</span>{% else %}<span class="status-good">False</span>{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>인기/성능 지표</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">추천 노출 횟수</dt><dd class="metric-value">{{ dashboard.performance_metrics.recommendation_impressions }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">추천 클릭/선택 횟수</dt><dd class="metric-value">{{ dashboard.performance_metrics.recommendation_clicks }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">유저 평균 점수</dt><dd class="metric-value">{{ dashboard.performance_metrics.user_average_score|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">최근 7일</dt><dd class="metric-value">{{ dashboard.performance_metrics.trend_7d.rating_count }}건 / {{ dashboard.performance_metrics.trend_7d.average_star_rating|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">최근 30일</dt><dd class="metric-value">{{ dashboard.performance_metrics.trend_30d.rating_count }}건 / {{ dashboard.performance_metrics.trend_30d.average_star_rating|default:"-" }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>유저 반응 분석</h2>
+      <dl class="metric-list">
+        {% for item in dashboard.user_reaction_analysis.star_distribution_items %}
+          <div class="metric-row"><dt class="metric-label">별점 {{ item.star }}</dt><dd class="metric-value">{{ item.count }}</dd></div>
+        {% endfor %}
+        <div class="metric-row"><dt class="metric-label">좋아요 비율</dt><dd class="metric-value">{{ dashboard.user_reaction_analysis.like_ratio }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">싫어요/제외 비율</dt><dd class="metric-value">{{ dashboard.user_reaction_analysis.dislike_or_excluded_ratio }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>블랙리스트 영향</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">차단 여부</dt><dd class="metric-value">{% if dashboard.blacklist_impact.is_ban %}<span class="status-bad">True</span>{% else %}<span class="status-good">False</span>{% endif %}</dd></div>
+        <div class="metric-row"><dt class="metric-label">차단 사유</dt><dd class="metric-value">{{ dashboard.blacklist_impact.ban_reason|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">추천 가능</dt><dd class="metric-value">{% if dashboard.blacklist_impact.recommendation_available %}<span class="status-good">True</span>{% else %}<span class="status-bad">False</span>{% endif %}</dd></div>
+        <div class="metric-row"><dt class="metric-label">영향 추천 수</dt><dd class="metric-value">{{ dashboard.blacklist_impact.affected_recommendation_count }}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <section class="dashboard-panel">
+    <h2>장르 / 성향 벡터</h2>
+    {% if dashboard.preference_vector.exists %}
+      <div class="vector-bars">
+        {% for axis in dashboard.preference_vector.axes %}
+          <div class="vector-row">
+            <span>{{ axis.label }}</span>
+            <div class="vector-track"><div class="vector-fill" style="width: {{ axis.bar_width }}%"></div></div>
+            <strong>{{ axis.value }}</strong>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-note">벡터 데이터가 없습니다.</p>
+    {% endif %}
+  </section>
+
+  <section class="dashboard-panel">
+    <h2>추천 이력 연결</h2>
+    {% if dashboard.recommendation_histories %}
+      <table class="dashboard-table">
+        <thead>
+          <tr>
+            <th>유저</th>
+            <th>추천 유형</th>
+            <th>점수</th>
+            <th>날짜</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for history in dashboard.recommendation_histories %}
+            <tr>
+              <td>{{ history.user_id|default:"-" }}</td>
+              <td>{{ history.recommendation_type|default:"-" }}</td>
+              <td>{{ history.score|default:"-" }}</td>
+              <td>{{ history.created_at|date:"Y-m-d H:i"|default:"-" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty-note">추천 이력 데이터가 없습니다.</p>
+    {% endif %}
+  </section>
+
+  <section class="dashboard-panel">
+    <h2>데이터 상태 체크</h2>
+    <dl class="metric-list">
+      <div class="metric-row"><dt class="metric-label">벡터 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_preference_vector %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
+      <div class="metric-row"><dt class="metric-label">장르 매핑 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_genre_mapping %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
+      <div class="metric-row"><dt class="metric-label">이미지 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_image %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
+      <div class="metric-row"><dt class="metric-label">메타 데이터 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_metadata %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
+    </dl>
+  </section>
+</div>
+{% endblock %}
