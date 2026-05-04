@@ -51,6 +51,7 @@ class SurveyChatbotSessionCreateResult:
 
 class SurveyChatbotSessionService:
     QUESTION_MAX_LENGTH = 100
+    QUESTION_GENERATION_MAX_ATTEMPTS = 3
     SAFE_FALLBACK_QUESTIONS = (
         "{nickname}님은 혼자 편하게 몰입하는 플레이와 다른 사람과 함께하는 플레이 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요.",
         "{nickname}님은 빠르게 반응하는 플레이와 차근차근 계획하는 플레이 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
@@ -73,122 +74,122 @@ class SurveyChatbotSessionService:
         (
             "슈팅",
             ("슈팅", "fps", "에임", "총", "교전", "사이트", "스파이크", "에이스"),
-            "{nickname}님이 팀 전략이 성공했던 장면에서 직접 맡은 역할은 진입을 여는 쪽이었는지, 정보를 보고 판단해 마무리하는 쪽이었는지 말씀해 주세요.",
+            "{nickname}님은 슈팅 게임에서 직접 진입하는 역할과 정보를 보고 마무리하는 역할 중 어느 쪽이 더 편한지 말씀해 주세요.",
         ),
         (
             "전술",
             ("전술", "전략", "팀", "역할", "포지션", "진입", "수비", "공격"),
-            "{nickname}님이 전략이 성공했던 장면에서 더 중요했던 건 맡은 역할을 정확히 수행한 점인지, 상황에 맞춰 판단을 바꾼 점인지 말씀해 주세요.",
+            "{nickname}님은 정해진 역할을 정확히 수행하는 방식과 상황에 맞춰 판단을 바꾸는 방식 중 어느 쪽이 더 맞나요?",
         ),
         (
             "모바(MOBA)",
             ("moba", "모바", "라인", "한타", "갱", "오브젝트", "로밍"),
-            "{nickname}님이 팀 싸움에서 만족감을 느꼈던 장면은 교전을 여는 역할이었는지, 흐름을 보고 합류해 마무리하는 역할이었는지 말씀해 주세요.",
+            "{nickname}님은 팀 싸움에서 먼저 교전을 여는 역할과 흐름을 보고 합류하는 역할 중 어느 쪽이 더 편한지 말씀해 주세요.",
         ),
         (
             "실시간 전략",
             ("rts", "실시간 전략", "빌드오더", "멀티태스킹", "자원", "유닛"),
-            "{nickname}님이 실시간으로 운영했던 장면에서 더 만족스러웠던 건 빠른 자원 관리였는지, 상대 움직임에 맞춘 병력 운용이었는지 말씀해 주세요.",
+            "{nickname}님은 빠른 자원 관리와 상대 움직임에 맞춘 병력 운용 중 어느 쪽이 더 중요한지 말씀해 주세요.",
         ),
         (
             "턴제 전략",
             ("턴제", "tbs", "턴", "수읽기", "행동력", "배치"),
-            "{nickname}님이 턴마다 선택을 고민했던 장면에서 더 재미있었던 건 안전한 계산이었는지, 위험을 감수한 큰 수였는지 말씀해 주세요.",
+            "{nickname}님은 안전하게 계산하는 선택과 위험을 감수한 큰 선택 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
         ),
         (
             "전략",
             ("전략", "운영", "계획", "판단", "상황 판단", "전술"),
-            "{nickname}님이 전략적으로 성공했던 장면에서 더 만족스러웠던 건 미리 세운 계획이 맞아떨어진 순간인지, 예상 밖 상황에 맞춰 운영을 바꾼 순간인지 말씀해 주세요.",
+            "{nickname}님은 미리 세운 계획대로 풀어가는 방식과 예상 밖 상황에 맞춰 바꾸는 방식 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "격투",
             ("격투", "콤보", "심리전", "반격", "카운터", "잡기"),
-            "{nickname}님이 상대를 이겼던 장면에서 더 짜릿했던 건 상대 패턴을 읽고 반격한 순간인지, 연습한 콤보를 정확히 성공시킨 순간인지 말씀해 주세요.",
+            "{nickname}님은 상대 패턴을 읽고 반격하는 플레이와 연습한 콤보를 정확히 성공시키는 플레이 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "액션",
             ("액션", "회피", "공격", "타격", "전투", "손맛", "피지컬"),
-            "{nickname}님이 액션 플레이에서 만족했던 장면은 빠르게 반응해 위기를 넘긴 순간인지, 공격 흐름을 직접 만들며 밀어붙인 순간인지 말씀해 주세요.",
+            "{nickname}님은 빠르게 반응해 위기를 넘기는 플레이와 공격 흐름을 만들며 밀어붙이는 플레이 중 어느 쪽이 더 맞나요?",
         ),
         (
             "핵 앤 슬래시",
             ("핵앤슬래시", "핵 앤 슬래시", "쓸어버", "몰이", "파밍", "스킬 빌드"),
-            "{nickname}님이 적을 몰아 상대했던 장면에서 더 재미있었던 건 강한 스킬로 몰아치는 쾌감인지, 장비와 빌드를 맞춰 효율을 높인 과정인지 말씀해 주세요.",
+            "{nickname}님은 강한 스킬로 몰아치는 플레이와 장비나 빌드를 맞춰 효율을 높이는 플레이 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "RPG",
             ("rpg", "역할수행", "성장", "레벨", "장비", "빌드", "보스", "퀘스트"),
-            "{nickname}님이 캐릭터를 성장시켰던 장면에서 더 만족스러웠던 건 어려운 적을 공략한 순간인지, 장비와 빌드를 준비해 강해지는 과정인지 말씀해 주세요.",
+            "{nickname}님은 어려운 적을 공략하는 재미와 장비나 빌드를 준비해 강해지는 재미 중 어느 쪽이 더 중요한지 말씀해 주세요.",
         ),
         (
             "어드벤처",
             ("어드벤처", "탐험", "발견", "단서", "지역", "모험"),
-            "{nickname}님이 탐험에서 만족감을 느낀 장면은 숨겨진 장소를 직접 발견한 순간이었는지, 새로운 단서를 따라 세계를 이해한 순간이었는지 말씀해 주세요.",
+            "{nickname}님은 숨겨진 장소를 자유롭게 찾는 탐험과 단서를 따라 세계를 이해하는 진행 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
         ),
         (
             "포인트 앤 클릭",
             ("포인트", "클릭", "단서", "조사", "추리", "상호작용"),
-            "{nickname}님이 단서를 찾아 해결했던 장면에서 더 재미있었던 건 사물을 꼼꼼히 조사하는 과정인지, 연결된 단서를 추리해 답을 찾는 과정인지 말씀해 주세요.",
+            "{nickname}님은 사물을 꼼꼼히 조사하는 방식과 연결된 단서를 추리해 답을 찾는 방식 중 어느 쪽이 더 맞나요?",
         ),
         (
             "퍼즐",
             ("퍼즐", "규칙", "문제", "논리", "해답", "두뇌"),
-            "{nickname}님이 퍼즐을 풀었던 장면에서 더 만족스러웠던 건 규칙을 파악하는 과정인지, 막혔던 해답을 떠올려 해결한 순간인지 말씀해 주세요.",
+            "{nickname}님은 규칙을 차근차근 파악하는 퍼즐과 막힌 해답을 떠올려 푸는 퍼즐 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "퀴즈/상식",
             ("퀴즈", "상식", "문제 맞히", "정답", "지식"),
-            "{nickname}님이 문제를 맞혔던 장면에서 더 재미있었던 건 알고 있던 지식을 바로 떠올린 순간인지, 힌트를 보고 추론해 맞힌 순간인지 말씀해 주세요.",
+            "{nickname}님은 알고 있는 지식을 바로 쓰는 방식과 힌트를 보고 추론하는 방식 중 어느 쪽이 더 재미있는지 말씀해 주세요.",
         ),
         (
             "시뮬레이션",
             ("시뮬", "시뮬레이션", "관리", "운영", "효율", "루틴"),
-            "{nickname}님이 시뮬레이션에서 만족했던 장면은 시스템을 효율적으로 관리한 순간인지, 직접 세운 루틴이 안정적으로 돌아간 순간인지 말씀해 주세요.",
+            "{nickname}님은 시스템을 효율적으로 관리하는 방식과 직접 세운 루틴을 안정적으로 굴리는 방식 중 어느 쪽이 더 맞나요?",
         ),
         (
             "스포츠",
             ("스포츠", "경기", "선수", "팀 운영", "시합", "득점"),
-            "{nickname}님이 경기에서 만족감을 느낀 장면은 직접 조작으로 득점한 순간인지, 팀 운영과 전술 선택이 결과로 이어진 순간인지 말씀해 주세요.",
+            "{nickname}님은 직접 조작으로 득점하는 플레이와 팀 운영이나 전술 선택으로 이기는 플레이 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "레이싱",
             ("레이싱", "주행", "코스", "기록", "드리프트", "속도"),
-            "{nickname}님이 주행에서 만족했던 장면은 코스를 완벽하게 익혀 기록을 줄인 순간인지, 순간적인 조작으로 위기를 넘긴 순간인지 말씀해 주세요.",
+            "{nickname}님은 코스를 익혀 기록을 줄이는 플레이와 순간 조작으로 위기를 넘기는 플레이 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
         ),
         (
             "플랫폼",
             ("플랫폼", "점프", "타이밍", "발판", "조작", "구간"),
-            "{nickname}님이 어려운 구간을 넘겼던 장면에서 더 재미있었던 건 정확한 점프 타이밍인지, 반복 연습으로 조작을 익혀 돌파한 과정인지 말씀해 주세요.",
+            "{nickname}님은 정확한 타이밍으로 넘기는 플레이와 반복 연습으로 조작을 익히는 플레이 중 어느 쪽이 더 맞나요?",
         ),
         (
             "음악",
             ("음악", "리듬", "박자", "노트", "정확도", "연주"),
-            "{nickname}님이 리듬을 맞췄던 장면에서 더 만족스러웠던 건 박자를 정확히 따라간 순간인지, 어려운 구간을 반복 연습해 성공한 순간인지 말씀해 주세요.",
+            "{nickname}님은 박자를 정확히 따라가는 플레이와 어려운 구간을 반복 연습하는 플레이 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "핀볼",
             ("핀볼", "공", "플리퍼", "점수", "반사"),
-            "{nickname}님이 점수를 올렸던 장면에서 더 재미있었던 건 공의 흐름을 예측해 조작한 순간인지, 우연한 연쇄 반응이 크게 이어진 순간인지 말씀해 주세요.",
+            "{nickname}님은 공의 흐름을 예측해 조작하는 재미와 우연한 연쇄 반응이 이어지는 재미 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
         ),
         (
             "아케이드",
             ("아케이드", "점수", "콤보", "라운드", "짧게", "반복"),
-            "{nickname}님이 짧은 판을 반복했던 장면에서 더 끌렸던 건 점수를 조금씩 높이는 과정인지, 즉각적인 조작과 반응으로 결과가 나는 순간인지 말씀해 주세요.",
+            "{nickname}님은 점수를 조금씩 높이는 반복 플레이와 즉각적인 조작으로 결과가 나는 플레이 중 어느 쪽이 더 맞나요?",
         ),
         (
             "인디",
             ("인디", "독특", "실험적", "개성", "소규모"),
-            "{nickname}님이 인디 게임에서 끌렸던 장면은 익숙하지 않은 규칙을 발견한 순간인지, 독특한 분위기나 표현 방식에 몰입한 순간인지 말씀해 주세요.",
+            "{nickname}님은 낯선 규칙을 발견하는 재미와 독특한 분위기나 표현 방식에 몰입하는 재미 중 어느 쪽이 더 좋으신가요?",
         ),
         (
             "비주얼 노벨",
             ("비주얼노벨", "비주얼 노벨", "선택지", "캐릭터 관계", "분기", "감정선"),
-            "{nickname}님이 이야기 선택에서 몰입했던 장면은 캐릭터 관계가 바뀌는 순간인지, 선택에 따라 다른 결말을 확인하는 과정인지 말씀해 주세요.",
+            "{nickname}님은 캐릭터 관계가 깊어지는 이야기와 선택에 따라 다른 결말을 확인하는 이야기 중 어느 쪽이 더 끌리나요?",
         ),
         (
             "카드 및 보드 게임",
             ("카드", "보드", "덱", "수읽기", "패", "카드 조합"),
-            "{nickname}님이 카드나 보드 게임에서 만족했던 장면은 덱이나 조합을 미리 준비한 과정인지, 상대 선택을 읽고 대응한 순간인지 말씀해 주세요.",
+            "{nickname}님은 덱이나 조합을 미리 준비하는 플레이와 상대 선택을 읽고 대응하는 플레이 중 어느 쪽이 더 맞나요?",
         ),
     )
     QUESTION_ENDINGS = (
@@ -462,11 +463,14 @@ class SurveyChatbotSessionService:
         question = self.extract_text_from_gemini_response(response_data)
         if not question:
             logging.getLogger(__name__).warning(
-                "Empty Gemini response for survey question: %s", response_data
+                "Empty Gemini response for survey question. finish_reason=%s prompt_feedback=%s response=%s",
+                self.get_gemini_finish_reason(response_data),
+                response_data.get("promptFeedback"),
+                response_data,
             )
         return question
 
-    # LLM 호출은 1회만 수행하고, 후처리로 보정한 뒤 실패 시 fallback으로 진행
+    # LLM 질문 생성은 최대 3회 시도하고, 모두 실패하면 fallback으로 진행
     def generate_valid_question(
         self,
         prompt: str,
@@ -480,25 +484,35 @@ class SurveyChatbotSessionService:
         nickname: str | None = None,
     ) -> str | None:
         logger = logging.getLogger(__name__)
-        question = self.generate_question_with_llm(
-            prompt,
-            temperature=temperature,
-            system_prompt=system_prompt,
-        )
-        question = self.normalize_generated_question(question)
-        question = self.ensure_nickname_in_question(question, nickname)
-        question = self.repair_yes_no_question(question)
-        question = self.repair_incomplete_question_ending(question)
-        question = self.polish_generated_question(question)
-        if question and self.is_valid_survey_question(
-            question=question,
-            mode=mode,
-            previous_questions=previous_questions,
-            latest_user_message=latest_user_message,
-        ):
-            return question
+        question = None
+        for attempt in range(self.QUESTION_GENERATION_MAX_ATTEMPTS):
+            retry_system_prompt, retry_prompt = self.build_retry_question_prompts(
+                original_system_prompt=system_prompt,
+                original_prompt=prompt,
+                attempt=attempt,
+                mode=mode,
+                nickname=nickname or "사용자",
+                latest_user_message=latest_user_message,
+            )
+            question = self.generate_question_with_llm(
+                retry_prompt,
+                temperature=temperature if attempt == 0 else min(temperature, 0.3),
+                system_prompt=retry_system_prompt,
+            )
+            question = self.normalize_generated_question(question)
+            question = self.ensure_nickname_in_question(question, nickname)
+            question = self.repair_yes_no_question(question)
+            question = self.repair_incomplete_question_ending(question)
+            question = self.polish_generated_question(question)
+            if question and self.is_valid_survey_question(
+                question=question,
+                mode=mode,
+                previous_questions=previous_questions,
+                latest_user_message=latest_user_message,
+            ):
+                return question
 
-        logger.warning(log_message, question)
+            logger.warning(log_message, question)
 
         return self.get_safe_fallback_question(
             mode=mode,
@@ -507,6 +521,44 @@ class SurveyChatbotSessionService:
             latest_user_message=latest_user_message,
             nickname=nickname or "사용자",
         )
+
+    def build_retry_question_prompts(
+        self,
+        original_system_prompt: str | None,
+        original_prompt: str,
+        attempt: int,
+        mode: str,
+        nickname: str,
+        latest_user_message: str,
+    ) -> tuple[str | None, str]:
+        if attempt == 0:
+            return original_system_prompt, original_prompt
+
+        system_prompt = (
+            "당신은 게임 추천 설문용 질문을 만드는 챗봇입니다. "
+            "한국어 질문 한 문장만 출력하세요. 설명, 번호, 따옴표는 출력하지 마세요."
+        )
+        if attempt == 1:
+            prompt = (
+                f"{nickname}님에게 물어볼 게임 취향 질문을 한 문장으로 작성하세요.\n"
+                f"작업 유형: {mode}\n"
+                f"직전 사용자 답변: {latest_user_message or '없음'}\n"
+                "조건:\n"
+                f"- 반드시 '{nickname}님'을 포함합니다.\n"
+                "- 100자 이내로 작성합니다.\n"
+                "- 게임 추천에 필요한 취향 축을 하나 확인합니다.\n"
+                "- 자연스럽고 편하게 답할 수 있는 질문으로 작성합니다.\n"
+                "- 경험을 깊게 캐묻지 않습니다.\n"
+                "질문 한 문장만 출력하세요."
+            )
+            return system_prompt, prompt
+
+        prompt = (
+            "아래 질문 문장을 그대로 출력하세요.\n"
+            f"{nickname}님은 혼자/협동/경쟁, 피지컬/전략, 쉬움/어려움 중 "
+            "어떤 기준이 게임을 고를 때 더 중요한지 편하게 말씀해 주세요."
+        )
+        return system_prompt, prompt
 
     def ensure_nickname_in_question(
         self,
@@ -557,6 +609,8 @@ class SurveyChatbotSessionService:
             return None
 
         normalized = question.rstrip()
+        if normalized.endswith("신가"):
+            return f"{normalized}요?"
         if normalized.endswith(self.QUESTION_ENDINGS):
             return normalized
         if len(normalized) < 30:
@@ -576,9 +630,6 @@ class SurveyChatbotSessionService:
                 normalized = re.sub(pattern, "", normalized).rstrip(" ,，")
                 return f"{normalized} 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요."
 
-        if " 중 " in normalized or "중 " in normalized:
-            return f"{normalized} 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요."
-
         return None
 
     # Gemini 응답의 여러 parts를 하나의 질문으로 결합
@@ -592,14 +643,21 @@ class SurveyChatbotSessionService:
         text = text.strip()
         return text or None
 
+    def get_gemini_finish_reason(self, data: dict) -> str | None:
+        try:
+            return data["candidates"][0].get("finishReason")
+        except KeyError, IndexError, TypeError:
+            return None
+
     # 첫 질문/후속 질문이 문장 형태로 완성됐는지 검사
     def is_complete_first_question(self, question: str | None) -> bool:
         if not question:
             return False
 
         question = question.strip()
-        return 10 <= len(question) <= self.QUESTION_MAX_LENGTH and question.endswith(
-            self.FIRST_QUESTION_ENDINGS
+        return self.is_complete_question_text(
+            question=question,
+            endings=self.FIRST_QUESTION_ENDINGS,
         )
 
     def is_complete_survey_question(
@@ -612,10 +670,41 @@ class SurveyChatbotSessionService:
         if not question:
             return False
 
-        question = question.strip()
-        return 10 <= len(question) <= self.QUESTION_MAX_LENGTH and question.endswith(
-            self.QUESTION_ENDINGS
+        return self.is_complete_question_text(
+            question=question,
+            endings=self.QUESTION_ENDINGS,
         )
+
+    def is_complete_question_text(
+        self,
+        question: str | None,
+        endings: tuple[str, ...],
+    ) -> bool:
+        if not question:
+            return False
+
+        question = question.strip()
+        if not 10 <= len(question) <= self.QUESTION_MAX_LENGTH:
+            return False
+        if question.endswith(endings):
+            return True
+        return not self.looks_cut_off_question(question)
+
+    def looks_cut_off_question(self, question: str) -> bool:
+        cut_off_endings = (
+            "생각하시",
+            "중 어떤",
+            "중 어느",
+            "어떤 것을 더",
+            "어떤 것이 더",
+            "어느 쪽이 더",
+            "더 선",
+            "더 좋",
+            "더 끌",
+            "더 맞",
+            "인상",
+        )
+        return question.endswith(cut_off_endings)
 
     # 설문 진행을 막지 않도록 최소 조건만 검증
     def is_valid_survey_question(
@@ -705,6 +794,7 @@ class SurveyChatbotSessionService:
             latest_user_message=latest_user_message,
             fallback_questions=fallback_questions,
         )
+        valid_fallback_questions = []
         for fallback_question in fallback_pool:
             personalized_question = fallback_question.format(nickname=nickname)
             if self.is_valid_survey_question(
@@ -712,8 +802,14 @@ class SurveyChatbotSessionService:
                 mode=mode,
                 previous_questions=previous_questions,
             ):
+                valid_fallback_questions.append(personalized_question)
+                if self.is_repeated_question(
+                    question=personalized_question,
+                    previous_questions=previous_questions,
+                ):
+                    continue
                 return personalized_question
-        return fallback_pool[0].format(nickname=nickname) if fallback_pool else None
+        return valid_fallback_questions[0] if valid_fallback_questions else None
 
     def build_contextual_fallback_pool(
         self,
@@ -734,8 +830,8 @@ class SurveyChatbotSessionService:
                 if any(keyword.lower() in normalized_message for keyword in keywords)
             ),
             (
-                "{nickname}님이 방금 말한 경험에서 가장 결정적이었던 행동이나 "
-                "판단이 무엇이었는지 말씀해 주세요."
+                "{nickname}님은 혼자 진행하는 방식과 다른 사람과 함께하는 방식 중 "
+                "어느 쪽이 더 편한지 말씀해 주세요."
             ),
         )
 

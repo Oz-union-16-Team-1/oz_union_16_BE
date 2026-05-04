@@ -490,10 +490,15 @@ class SurveyChatbotSessionServiceTest(TestCase):
         ):
             question = service.generate_first_question()
 
-        called_prompt = generate_question.call_args.args[0]
+        called_prompt = generate_question.call_args_list[0].args[0]
         self.assertEqual(service.build_first_question_prompt(), called_prompt)
-        self.assertEqual(generate_question.call_args.kwargs["temperature"], 0.85)
-        self.assertEqual(logging.getLogger.return_value.warning.call_count, 1)
+        self.assertEqual(
+            generate_question.call_args_list[0].kwargs["temperature"], 0.85
+        )
+        self.assertEqual(
+            logging.getLogger.return_value.warning.call_count,
+            service.QUESTION_GENERATION_MAX_ATTEMPTS,
+        )
         self.assertEqual(
             question, service.SAFE_FALLBACK_QUESTIONS[0].format(nickname="사용자")
         )
@@ -504,11 +509,12 @@ class SurveyChatbotSessionServiceTest(TestCase):
         with patch.object(
             service,
             "generate_question_with_llm",
-            return_value=TEST_FIRST_QUESTION,
-        ):
+            side_effect=[None, "최근 가장 인상", TEST_FIRST_QUESTION],
+        ) as generate_question:
             question = service.generate_first_question()
 
         self.assertEqual(question, TEST_FIRST_QUESTION)
+        self.assertEqual(generate_question.call_count, 3)
 
     def test_is_complete_first_question(self) -> None:
         service = SurveyChatbotSessionService()
@@ -707,6 +713,37 @@ class SurveyChatbotSessionServiceTest(TestCase):
         )
         self.assertEqual(logging.getLogger.return_value.warning.call_count, 0)
 
+    def test_generate_valid_question_does_not_duplicate_comparison_tail(self) -> None:
+        service = SurveyChatbotSessionService()
+
+        with (
+            patch.object(
+                service,
+                "generate_question_with_llm",
+                return_value=(
+                    "qwer님은 목표를 극복할 때, 차분히 계획을 세워 해결하는 재미와 "
+                    "빠르게 반응하며 돌파하는 재미 중 어느 쪽이 더 좋으신가"
+                ),
+            ),
+            patch("apps.survey.services.survey_chatbot_session.logging") as logging,
+        ):
+            question = service.generate_valid_question(
+                prompt="prompt",
+                temperature=0.4,
+                log_message="invalid: %s",
+                nickname="qwer",
+            )
+
+        self.assertEqual(
+            question,
+            (
+                "qwer님은 목표를 극복할 때, 차분히 계획을 세워 해결하는 재미와 "
+                "빠르게 반응하며 돌파하는 재미 중 어느 쪽이 더 좋으신가요?"
+            ),
+        )
+        self.assertNotIn("중 어느 쪽이 더 좋으신가 중", question or "")
+        self.assertEqual(logging.getLogger.return_value.warning.call_count, 0)
+
     def test_generate_valid_question_falls_back_for_unrepairable_cut_sentence(
         self,
     ) -> None:
@@ -735,17 +772,20 @@ class SurveyChatbotSessionServiceTest(TestCase):
         self.assertEqual(
             question,
             (
-                "qwer님이 탐험에서 만족감을 느낀 장면은 숨겨진 장소를 직접 "
-                "발견한 순간이었는지, 새로운 단서를 따라 세계를 이해한 순간이었는지 말씀해 주세요."
+                "qwer님은 숨겨진 장소를 자유롭게 찾는 탐험과 단서를 따라 "
+                "세계를 이해하는 진행 중 어느 쪽이 더 끌리는지 말씀해 주세요."
             ),
         )
         if question is None:
             self.fail("question should not be None")
         assert question is not None
         self.assertLessEqual(len(question), service.QUESTION_MAX_LENGTH)
-        self.assertEqual(logging.getLogger.return_value.warning.call_count, 1)
+        self.assertEqual(
+            logging.getLogger.return_value.warning.call_count,
+            service.QUESTION_GENERATION_MAX_ATTEMPTS,
+        )
 
-    def test_generate_valid_question_returns_fallback_after_single_failure(
+    def test_generate_valid_question_returns_fallback_after_three_failures(
         self,
     ) -> None:
         service = SurveyChatbotSessionService()
@@ -767,7 +807,10 @@ class SurveyChatbotSessionServiceTest(TestCase):
         self.assertEqual(
             question, service.SAFE_FALLBACK_QUESTIONS[0].format(nickname="사용자")
         )
-        self.assertEqual(logging.getLogger.return_value.warning.call_count, 1)
+        self.assertEqual(
+            logging.getLogger.return_value.warning.call_count,
+            service.QUESTION_GENERATION_MAX_ATTEMPTS,
+        )
 
     def test_generate_valid_question_uses_contextual_next_fallback(self) -> None:
         service = SurveyChatbotSessionService()
@@ -791,7 +834,78 @@ class SurveyChatbotSessionServiceTest(TestCase):
 
         self.assertEqual(
             question,
-            "qwer님이 팀 전략이 성공했던 장면에서 직접 맡은 역할은 진입을 여는 쪽이었는지, 정보를 보고 판단해 마무리하는 쪽이었는지 말씀해 주세요.",
+            "qwer님은 슈팅 게임에서 직접 진입하는 역할과 정보를 보고 마무리하는 역할 중 어느 쪽이 더 편한지 말씀해 주세요.",
+        )
+
+    def test_generate_valid_question_uses_short_retry_prompts(self) -> None:
+        service = SurveyChatbotSessionService()
+
+        with (
+            patch.object(
+                service,
+                "generate_question_with_llm",
+                side_effect=[
+                    None,
+                    None,
+                    "qwer님은 혼자/협동/경쟁 중 어떤 방식이 게임을 고를 때 더 중요한지 말씀해 주세요.",
+                ],
+            ) as generate_question,
+            patch("apps.survey.services.survey_chatbot_session.logging"),
+        ):
+            question = service.generate_valid_question(
+                prompt="원본 프롬프트",
+                system_prompt="원본 시스템 프롬프트",
+                temperature=0.4,
+                log_message="invalid: %s",
+                mode="NEXT",
+                latest_user_message="팀원이랑 하는 게 좋아요.",
+                nickname="qwer",
+            )
+
+        self.assertEqual(
+            question,
+            "qwer님은 혼자/협동/경쟁 중 어떤 방식이 게임을 고를 때 더 중요한지 말씀해 주세요.",
+        )
+        first_call, second_call, third_call = generate_question.call_args_list
+        self.assertEqual(first_call.args[0], "원본 프롬프트")
+        self.assertIn("직전 사용자 답변: 팀원이랑 하는 게 좋아요.", second_call.args[0])
+        self.assertIn("아래 질문 문장을 그대로 출력하세요.", third_call.args[0])
+        self.assertEqual(first_call.kwargs["system_prompt"], "원본 시스템 프롬프트")
+        self.assertNotEqual(second_call.kwargs["system_prompt"], "원본 시스템 프롬프트")
+        self.assertEqual(third_call.kwargs["temperature"], 0.3)
+
+    def test_generate_valid_question_skips_repeated_fallback_question(self) -> None:
+        service = SurveyChatbotSessionService()
+        repeated_question = (
+            "qwer님은 혼자 진행하는 방식과 다른 사람과 함께하는 방식 중 "
+            "어느 쪽이 더 편한지 말씀해 주세요."
+        )
+
+        with (
+            patch.object(
+                service,
+                "generate_question_with_llm",
+                return_value="최근 가장 인상",
+            ),
+            patch("apps.survey.services.survey_chatbot_session.logging"),
+        ):
+            question = service.generate_valid_question(
+                prompt="prompt",
+                temperature=0.4,
+                log_message="invalid: %s",
+                mode="NEXT",
+                latest_user_message="재미가 좋아요.",
+                previous_questions=[repeated_question],
+                nickname="qwer",
+            )
+
+        self.assertNotEqual(question, repeated_question)
+        self.assertEqual(
+            question,
+            (
+                "qwer님은 방금 말한 취향이 빠르게 판단하는 쪽과 차근차근 "
+                "준비하는 쪽 중 어디에 더 가까운지 편하게 말씀해 주세요."
+            ),
         )
 
     def test_contextual_next_fallback_does_not_return_fixed_fun_question(self) -> None:
@@ -806,6 +920,9 @@ class SurveyChatbotSessionServiceTest(TestCase):
         self.assertNotIn(
             "전투의 긴장감, 성장의 성취감, 탐험의 발견감", fallback_pool[0]
         )
+        self.assertNotIn("방금 말한 경험", fallback_pool[0])
+        self.assertNotIn("결정적이었던 행동", fallback_pool[0])
+        self.assertIn("혼자 진행하는 방식", fallback_pool[0])
 
     def test_contextual_next_fallback_covers_all_igdb_genres(self) -> None:
         service = SurveyChatbotSessionService()
@@ -821,15 +938,15 @@ class SurveyChatbotSessionServiceTest(TestCase):
         cases = (
             (
                 "보스를 잡고 장비를 맞춰서 성장하는 RPG가 좋아요.",
-                "캐릭터를 성장시켰던 장면",
+                "장비나 빌드를 준비해 강해지는 재미",
             ),
             (
                 "상대 콤보를 막고 카운터로 이기는 격투가 좋아요.",
-                "상대 패턴을 읽고 반격한 순간",
+                "상대 패턴을 읽고 반격하는 플레이",
             ),
             (
                 "숨겨진 지역을 발견하는 어드벤처 탐험이 좋아요.",
-                "숨겨진 장소를 직접 발견한 순간",
+                "숨겨진 장소를 자유롭게 찾는 탐험",
             ),
         )
         for message, expected_text in cases:
@@ -841,3 +958,5 @@ class SurveyChatbotSessionServiceTest(TestCase):
                 )
 
                 self.assertIn(expected_text, fallback_pool[0])
+                self.assertNotIn("장면", fallback_pool[0])
+                self.assertNotIn("순간", fallback_pool[0])

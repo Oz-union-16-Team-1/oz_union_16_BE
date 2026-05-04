@@ -881,9 +881,10 @@ class SurveyChatbotMessageService:
         session: SurveyChatbotSession,
         current_step: int,
     ) -> bool:
+        target_question_count = session.target_question_count or MAX_SURVEY_QUESTIONS
         if current_step >= MAX_SURVEY_QUESTIONS:
             return True
-        if current_step < MIN_SURVEY_QUESTIONS:
+        if current_step < target_question_count:
             return False
         return self.has_sufficient_recommendation_preferences(session)
 
