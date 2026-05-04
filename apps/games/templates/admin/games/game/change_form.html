@@ -66,53 +66,76 @@
     font-weight: 700;
   }
 
-  .vector-bars {
+  .reaction-chart {
     display: grid;
-    gap: 9px;
-  }
-
-  .vector-row {
-    display: grid;
-    grid-template-columns: 120px 1fr 54px;
+    grid-template-columns: 160px 1fr;
     align-items: center;
-    gap: 10px;
+    gap: 18px;
   }
 
-  .vector-track {
-    height: 8px;
-    border-radius: 99px;
-    background: var(--hairline-color);
-    overflow: hidden;
+  .donut-chart {
+    position: relative;
+    width: 150px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px var(--hairline-color);
   }
 
-  .vector-fill {
-    height: 100%;
-    min-width: 2px;
-    border-radius: 99px;
-    background: var(--link-fg);
+  .donut-chart::after {
+    content: "";
+    position: absolute;
+    inset: 36px;
+    border-radius: 50%;
+    background: var(--body-bg);
   }
 
-  .dashboard-table {
-    width: 100%;
-    border-collapse: collapse;
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    font-weight: 700;
+    line-height: 1.35;
   }
 
-  .dashboard-table th,
-  .dashboard-table td {
-    border-bottom: 1px solid var(--hairline-color);
-    padding: 9px 8px;
-    text-align: left;
-  }
-
-  .dashboard-table th {
+  .donut-center span {
+    display: block;
     color: var(--body-quiet-color);
+    font-size: 12px;
     font-weight: 600;
   }
 
-  .empty-note {
-    color: var(--body-quiet-color);
-    margin: 0;
+  .chart-legend {
+    display: grid;
+    gap: 8px;
   }
+
+  .legend-row {
+    display: grid;
+    grid-template-columns: 16px 42px minmax(96px, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+  }
+
+  .legend-color {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+  }
+
+  .reaction-summary {
+    margin-top: 14px;
+  }
+
+  @media (max-width: 700px) {
+    .reaction-chart {
+      grid-template-columns: 1fr;
+    }
+  }
+
 </style>
 {% endblock %}
 
@@ -137,7 +160,7 @@
         <div class="metric-row"><dt class="metric-label">총 좋아요 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_like_count }}</dd></div>
         <div class="metric-row"><dt class="metric-label">총 평가 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_rating_count }}</dd></div>
         <div class="metric-row"><dt class="metric-label">평균 별점</dt><dd class="metric-value">{{ dashboard.basic_info.average_star_rating|default:"-" }}</dd></div>
-        <div class="metric-row"><dt class="metric-label">블랙리스트 여부</dt><dd class="metric-value">{% if dashboard.basic_info.is_ban %}<span class="status-bad">True</span>{% else %}<span class="status-good">False</span>{% endif %}</dd></div>
+        <div class="metric-row"><dt class="metric-label">블랙리스트 여부</dt><dd class="metric-value">{% if dashboard.basic_info.is_ban %}<span class="status-bad">O</span>{% else %}<span class="status-good">X</span>{% endif %}</dd></div>
       </dl>
     </section>
 
@@ -154,79 +177,36 @@
 
     <section class="dashboard-panel">
       <h2>유저 반응 분석</h2>
-      <dl class="metric-list">
-        {% for item in dashboard.user_reaction_analysis.star_distribution_items %}
-          <div class="metric-row"><dt class="metric-label">별점 {{ item.star }}</dt><dd class="metric-value">{{ item.count }}</dd></div>
-        {% endfor %}
+      <div class="reaction-chart">
+        <div class="donut-chart" style="background: conic-gradient({{ dashboard.user_reaction_analysis.star_distribution_chart.gradient|safe }});">
+          <div class="donut-center">
+            <span>총 평가 수</span>
+            {{ dashboard.user_reaction_analysis.star_distribution_chart.total }}
+          </div>
+        </div>
+        <div class="chart-legend">
+          {% for item in dashboard.user_reaction_analysis.star_distribution_chart.items %}
+            <div class="legend-row">
+              <span class="legend-color" style="background: {{ item.color }}"></span>
+              <span>{{ item.star }}점</span>
+              <strong>{{ item.count }} ({{ item.percent }}%)</strong>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <dl class="metric-list reaction-summary">
         <div class="metric-row"><dt class="metric-label">좋아요 비율</dt><dd class="metric-value">{{ dashboard.user_reaction_analysis.like_ratio }}</dd></div>
-        <div class="metric-row"><dt class="metric-label">싫어요/제외 비율</dt><dd class="metric-value">{{ dashboard.user_reaction_analysis.dislike_or_excluded_ratio }}</dd></div>
       </dl>
     </section>
 
     <section class="dashboard-panel">
-      <h2>블랙리스트 영향</h2>
+      <h2>블랙리스트</h2>
       <dl class="metric-list">
-        <div class="metric-row"><dt class="metric-label">차단 여부</dt><dd class="metric-value">{% if dashboard.blacklist_impact.is_ban %}<span class="status-bad">True</span>{% else %}<span class="status-good">False</span>{% endif %}</dd></div>
+        <div class="metric-row"><dt class="metric-label">차단 여부</dt><dd class="metric-value">{% if dashboard.blacklist_impact.is_ban %}<span class="status-bad">O</span>{% else %}<span class="status-good">X</span>{% endif %}</dd></div>
         <div class="metric-row"><dt class="metric-label">차단 사유</dt><dd class="metric-value">{{ dashboard.blacklist_impact.ban_reason|default:"-" }}</dd></div>
-        <div class="metric-row"><dt class="metric-label">추천 가능</dt><dd class="metric-value">{% if dashboard.blacklist_impact.recommendation_available %}<span class="status-good">True</span>{% else %}<span class="status-bad">False</span>{% endif %}</dd></div>
-        <div class="metric-row"><dt class="metric-label">영향 추천 수</dt><dd class="metric-value">{{ dashboard.blacklist_impact.affected_recommendation_count }}</dd></div>
       </dl>
     </section>
   </div>
 
-  <section class="dashboard-panel">
-    <h2>장르 / 성향 벡터</h2>
-    {% if dashboard.preference_vector.exists %}
-      <div class="vector-bars">
-        {% for axis in dashboard.preference_vector.axes %}
-          <div class="vector-row">
-            <span>{{ axis.label }}</span>
-            <div class="vector-track"><div class="vector-fill" style="width: {{ axis.bar_width }}%"></div></div>
-            <strong>{{ axis.value }}</strong>
-          </div>
-        {% endfor %}
-      </div>
-    {% else %}
-      <p class="empty-note">벡터 데이터가 없습니다.</p>
-    {% endif %}
-  </section>
-
-  <section class="dashboard-panel">
-    <h2>추천 이력 연결</h2>
-    {% if dashboard.recommendation_histories %}
-      <table class="dashboard-table">
-        <thead>
-          <tr>
-            <th>유저</th>
-            <th>추천 유형</th>
-            <th>점수</th>
-            <th>날짜</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for history in dashboard.recommendation_histories %}
-            <tr>
-              <td>{{ history.user_id|default:"-" }}</td>
-              <td>{{ history.recommendation_type|default:"-" }}</td>
-              <td>{{ history.score|default:"-" }}</td>
-              <td>{{ history.created_at|date:"Y-m-d H:i"|default:"-" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% else %}
-      <p class="empty-note">추천 이력 데이터가 없습니다.</p>
-    {% endif %}
-  </section>
-
-  <section class="dashboard-panel">
-    <h2>데이터 상태 체크</h2>
-    <dl class="metric-list">
-      <div class="metric-row"><dt class="metric-label">벡터 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_preference_vector %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
-      <div class="metric-row"><dt class="metric-label">장르 매핑 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_genre_mapping %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
-      <div class="metric-row"><dt class="metric-label">이미지 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_image %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
-      <div class="metric-row"><dt class="metric-label">메타 데이터 존재 여부</dt><dd class="metric-value">{% if dashboard.data_health.has_metadata %}<span class="status-good">있음</span>{% else %}<span class="status-bad">없음</span>{% endif %}</dd></div>
-    </dl>
-  </section>
 </div>
 {% endblock %}

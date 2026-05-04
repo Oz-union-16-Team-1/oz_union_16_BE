@@ -110,17 +110,19 @@ class GameDashboardAPITest(APITestCase):
             response.data["user_reaction_analysis"]["star_distribution"]["5"],
             1,
         )
-        self.assertTrue(response.data["preference_vector"]["exists"])
-        self.assertEqual(len(response.data["preference_vector"]["axes"]), 14)
+        self.assertNotIn("preference_vector", response.data)
+        self.assertNotIn("recommendation_histories", response.data)
+        self.assertNotIn("data_health", response.data)
+        self.assertNotIn(
+            "dislike_or_excluded_ratio",
+            response.data["user_reaction_analysis"],
+        )
+        self.assertEqual(response.data["blacklist_impact"]["is_ban_mark"], "O")
         self.assertEqual(response.data["blacklist_impact"]["ban_reason"], "테스트 차단")
-        self.assertEqual(
-            response.data["data_health"],
-            {
-                "has_preference_vector": True,
-                "has_genre_mapping": True,
-                "has_image": True,
-                "has_metadata": True,
-            },
+        self.assertNotIn("recommendation_available", response.data["blacklist_impact"])
+        self.assertNotIn(
+            "affected_recommendation_count",
+            response.data["blacklist_impact"],
         )
 
     def test_non_admin_cannot_get_game_dashboard(self):
