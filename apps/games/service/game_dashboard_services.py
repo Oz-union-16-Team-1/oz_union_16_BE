@@ -8,26 +8,9 @@ from django.db.models import Avg, Count, QuerySet
 from django.utils import timezone
 
 from apps.games.models import Game
-from apps.match.constants import IGDB_GENRE_NAME_MAP, MATCH_VECTOR_INDEX
-from apps.match.models import MatchGameGenreMap, MatchGamePreference, MatchGameRating
+from apps.match.constants import IGDB_GENRE_NAME_MAP
+from apps.match.models import MatchGameRating
 from apps.users.models import UserLikeBookmark
-
-VECTOR_AXIS_LABELS: dict[str, str] = {
-    "genre_action_fight": "액션/격투",
-    "genre_adventure_platform": "어드벤처/플랫폼",
-    "genre_rpg_story": "RPG/스토리",
-    "genre_strategy_sim": "전략/시뮬",
-    "genre_sport_racing": "스포츠/레이싱",
-    "genre_brain_puzzle": "두뇌/퍼즐",
-    "genre_shooter": "슈팅",
-    "genre_music_rhythm": "음악/리듬",
-    "difficulty": "난이도",
-    "tone": "분위기",
-    "graphics": "그래픽/시점",
-    "tempo": "템포",
-    "social": "소셜",
-    "popularity": "인기도",
-}
 
 
 @dataclass(frozen=True)
@@ -72,12 +55,7 @@ class GameDashboardService:
                 ratings=ratings,
                 likes_count=likes_count,
             ),
-            "preference_vector": cls._get_preference_vector(game),
-            "recommendation_histories": cls._get_recommendation_histories(
-                recommendation_history
-            ),
             "blacklist_impact": cls._get_blacklist_impact(game, recommendation_history),
-            "data_health": cls._get_data_health(game),
         }
 
     @staticmethod
@@ -155,64 +133,12 @@ class GameDashboardService:
 
         return {
             "star_distribution": distribution,
-            "star_distribution_items": [
-                {"star": star, "count": distribution[str(star)]}
-                for star in range(5, 0, -1)
-            ],
-            "like_ratio": GameDashboardService._ratio(likes_count, reaction_total),
-            "dislike_or_excluded_ratio": GameDashboardService._ratio(
-                excluded_count, rating_count
+            "star_distribution_chart": GameDashboardService._build_star_chart(
+                distribution
             ),
+            "like_ratio": GameDashboardService._ratio(likes_count, reaction_total),
             "dislike_or_excluded_count": excluded_count,
         }
-
-    @staticmethod
-    def _get_preference_vector(game: Game) -> dict[str, Any]:
-        preference = MatchGamePreference.objects.filter(game_id=game).first()
-        if preference is None:
-            return {
-                "exists": False,
-                "axes": [],
-            }
-
-        raw_vector = list(preference.game_preference_vector or [])
-        index_to_key = {idx: key for key, idx in MATCH_VECTOR_INDEX.items()}
-        axes = []
-        for idx, value in enumerate(raw_vector):
-            key = index_to_key.get(idx, f"dim_{idx + 1}")
-            axes.append(
-                {
-                    "key": key,
-                    "label": VECTOR_AXIS_LABELS.get(key, key),
-                    "value": round(float(value), 4),
-                    "bar_width": round(min(abs(float(value)), 1.0) * 100, 2),
-                }
-            )
-
-        return {
-            "exists": True,
-            "axes": axes,
-        }
-
-    @staticmethod
-    def _get_recommendation_histories(
-        recommendation_history: QuerySet[Any] | None,
-    ) -> list[dict[str, Any]]:
-        if recommendation_history is None:
-            return []
-
-        histories = recommendation_history.order_by("-created_at")[:50]
-        return [
-            {
-                "user_id": getattr(history, "user_id", None),
-                "recommendation_type": getattr(history, "recommendation_type", None),
-                "score": GameDashboardService._round_or_none(
-                    getattr(history, "score", None)
-                ),
-                "created_at": getattr(history, "created_at", None),
-            }
-            for history in histories
-        ]
 
     @staticmethod
     def _get_blacklist_impact(
@@ -221,26 +147,8 @@ class GameDashboardService:
     ) -> dict[str, Any]:
         return {
             "is_ban": game.is_ban,
+            "is_ban_mark": "O" if game.is_ban else "X",
             "ban_reason": game.ban_reason or "",
-            "recommendation_available": not game.is_ban,
-            "affected_recommendation_count": (
-                recommendation_history.count()
-                if recommendation_history is not None
-                else 0
-            ),
-        }
-
-    @classmethod
-    def _get_data_health(cls, game: Game) -> dict[str, Any]:
-        return {
-            "has_preference_vector": MatchGamePreference.objects.filter(
-                game_id=game
-            ).exists(),
-            "has_genre_mapping": MatchGameGenreMap.objects.filter(
-                game_id=game
-            ).exists(),
-            "has_image": bool(game.cover or game.screenshots),
-            "has_metadata": cls._has_metadata(game),
         }
 
     @staticmethod
@@ -285,17 +193,49 @@ class GameDashboardService:
         return recommendation_history.count() if "impression" in event_names else 0
 
     @staticmethod
-    def _has_metadata(game: Game) -> bool:
-        return any(
-            [
-                game.summary,
-                game.storyline,
-                game.first_release_date,
-                game.rating is not None,
-                game.total_rating is not None,
-                game.genres,
-            ]
-        )
+    def _build_star_chart(distribution: dict[str, int]) -> dict[str, Any]:
+        colors = {
+            5: "rgb(111, 93, 246)",
+            4: "rgb(67, 189, 127)",
+            3: "rgb(255, 200, 87)",
+            2: "rgb(255, 143, 63)",
+            1: "rgb(255, 91, 102)",
+        }
+        total = sum(distribution.values())
+        items = []
+        gradient_parts = []
+        cursor = 0.0
+
+        for star in range(5, 0, -1):
+            count = distribution[str(star)]
+            ratio = GameDashboardService._ratio(count, total)
+            percent = round(ratio * 100, 1)
+            next_cursor = cursor + percent
+            color = colors[star]
+
+            items.append(
+                {
+                    "star": star,
+                    "count": count,
+                    "ratio": ratio,
+                    "percent": percent,
+                    "color": color,
+                }
+            )
+
+            if count > 0:
+                gradient_parts.append(f"{color} {cursor}% {next_cursor}%")
+            cursor = next_cursor
+
+        return {
+            "total": total,
+            "items": items,
+            "gradient": (
+                ", ".join(gradient_parts)
+                if gradient_parts
+                else "rgb(208, 208, 208) 0% 100%"
+            ),
+        }
 
     @staticmethod
     def _ratio(part: int, total: int) -> float:
