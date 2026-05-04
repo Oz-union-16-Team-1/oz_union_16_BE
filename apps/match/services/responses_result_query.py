@@ -24,6 +24,7 @@ from apps.match.constants import (
     MATCH_RESULT_LIKED_TOP_K,
     MATCH_RESULT_MAX_PAGE_SIZE,
     MATCH_RESULT_MAX_TOTAL_COUNT,
+    MATCH_RESULT_POP_BOOST,
     MATCH_RESULT_POP_DEFAULT,
     MATCH_RESULT_RECENCY_WINDOW_DAYS,
     MATCH_RESULT_SCORE_NORMALIZER,
@@ -922,14 +923,16 @@ class MatchResponsesResultQueryService:
         dislike_penalty: float,
     ) -> float:
         # 정규화 기준:
-        # MATCH_RESULT_SCORE_NORMALIZER(1.08) = 양의 최대 가중치 합
-        # = 0.75(sim) + 0.15(pop) + 0.10(rec) + 0.08(like_bonus)
+        # MATCH_RESULT_SCORE_NORMALIZER(1.095) = 양의 최대 가중치 합
+        # = 0.75(sim) + 0.15*1.10(pop) + 0.10(rec) + 0.08(like_bonus)
+        pop_weight = MATCH_RESULT_WEIGHT_POP * MATCH_RESULT_POP_BOOST
+
         final_raw = (
-            (sim * MATCH_RESULT_WEIGHT_SIM)
-            + (pop * MATCH_RESULT_WEIGHT_POP)
-            + (rec * MATCH_RESULT_WEIGHT_REC)
-            + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
-            - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+                (sim * MATCH_RESULT_WEIGHT_SIM)
+                + (pop * pop_weight)
+                + (rec * MATCH_RESULT_WEIGHT_REC)
+                + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
+                - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
         )
         return round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
 
