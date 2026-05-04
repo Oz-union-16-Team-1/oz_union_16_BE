@@ -304,11 +304,7 @@ class BlacklistedUserAdmin(UserAdmin):
     actions = [activate_users, reset_password]
 
     def get_queryset(self, request):
-        return (
-            super()
-            .get_queryset(request)
-            .filter(status=StatusChoices.SUSPENDED)
-        )
+        return super().get_queryset(request).filter(status=StatusChoices.SUSPENDED)
 
     def get_likes_dashboard_url(self, obj):
         return reverse("admin:users_blacklisteduser_likes", args=[obj.pk])
