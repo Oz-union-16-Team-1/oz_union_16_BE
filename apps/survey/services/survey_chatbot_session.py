@@ -21,7 +21,7 @@ from apps.survey.prompts.survey_chatbot_prompt import (
 )
 
 SURVEY_COMPLETION_MESSAGE = (
-    "설문이 종료되었습니다 추천 게임 보기 버튼을 클릭해서 추천된 게임을 확인해보세요!"
+    "설문이 종료되었습니다 아래의 버튼을 클릭해서 추천된 게임을 확인해보세요!"
 )
 
 
@@ -50,23 +50,24 @@ class SurveyChatbotSessionCreateResult:
 
 
 class SurveyChatbotSessionService:
+    QUESTION_MAX_LENGTH = 100
     SAFE_FALLBACK_QUESTIONS = (
-        "{nickname}님은 최근 가장 오래 플레이했던 게임에서 어떤 재미 때문에 계속 하게 되었는지 말씀해 주세요.",
-        "{nickname}님은 최근 몰입해서 플레이했던 게임에서는 어떤 플레이 과정이 가장 기억에 남았는지 말씀해 주세요.",
-        "{nickname}님은 혼자 몰입하는 플레이와 다른 사람과 협력하거나 경쟁하는 플레이 중 어떤 경험이 더 잘 맞는지 말씀해 주세요.",
+        "{nickname}님은 혼자 편하게 몰입하는 플레이와 다른 사람과 함께하는 플레이 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요.",
+        "{nickname}님은 빠르게 반응하는 플레이와 차근차근 계획하는 플레이 중 어느 쪽이 더 끌리는지 말씀해 주세요.",
+        "{nickname}님은 어려운 도전을 넘는 플레이와 부담 없이 즐기는 플레이 중 어느 쪽이 더 편한지 말씀해 주세요.",
     )
     SAFE_NEXT_FALLBACK_QUESTIONS = (
-        "{nickname}님이 방금 말한 경험에서 가장 결정적이었던 행동이나 판단이 무엇이었는지 말씀해 주세요.",
-        "{nickname}님은 비슷한 상황에서 빠르게 판단해 움직이는 플레이와 충분히 준비한 뒤 안정적으로 진행하는 플레이 중 어느 쪽이 더 잘 맞나요?",
-        "{nickname}님은 게임에서 실력이 늘어 이기는 성취감과 새로운 지역이나 보상을 발견하는 만족감 중 어느 쪽이 더 크게 느껴지나요?",
+        "{nickname}님은 방금 말한 취향이 빠르게 판단하는 쪽과 차근차근 준비하는 쪽 중 어디에 더 가까운지 편하게 말씀해 주세요.",
+        "{nickname}님은 비슷한 게임에서 직접 앞에서 이끄는 플레이와 상황을 보며 돕는 플레이 중 어느 쪽이 더 잘 맞나요?",
+        "{nickname}님은 실력이 늘어 이기는 재미와 새로운 요소를 발견하는 재미 중 어느 쪽이 더 크게 느껴지나요?",
     )
     SAFE_REASK_FALLBACK_QUESTIONS = (
-        "{nickname}님이 최근 플레이한 게임 중 오래 기억나는 장면이 있다면 무엇이 재미있었는지 말씀해 주세요.",
-        "{nickname}님은 게임할 때 빠르게 몰아치는 진행과 천천히 준비하며 진행하는 방식 중 어느 쪽이 더 편한지 알려주세요.",
+        "{nickname}님은 혼자 하는 플레이와 함께하는 플레이 중 어느 쪽이 더 편한지 가볍게 골라 말씀해 주세요.",
+        "{nickname}님은 빠른 진행과 느긋한 진행 중 어느 쪽이 더 편한지 편하게 알려주세요.",
     )
     SAFE_CLARIFY_FALLBACK_QUESTIONS = (
-        "쉽게 말해, {nickname}님은 게임을 할 때 전투, 성장, 탐험, 협동 중 무엇이 가장 재미있는지 말씀해 주세요.",
-        "질문을 바꿔서 물어볼게요. {nickname}님이 최근 재미있게 한 게임에서 계속 하게 만든 이유를 알려주세요.",
+        "쉽게 말해, {nickname}님은 혼자 즐기는 게임과 함께 즐기는 게임 중 어느 쪽이 더 편한지 말씀해 주세요.",
+        "질문을 바꿔서 물어볼게요. {nickname}님은 빠르게 판단하는 게임과 천천히 계획하는 게임 중 어느 쪽이 더 잘 맞나요?",
     )
     CONTEXTUAL_NEXT_FALLBACK_RULES = (
         (
@@ -192,32 +193,42 @@ class SurveyChatbotSessionService:
     )
     QUESTION_ENDINGS = (
         "?",
+        ".",
+        "요.",
         "요?",
         "나요?",
         "까요?",
         "주세요.",
-        "주세요",
         "말해주세요.",
-        "말해주세요",
-        "가요?",
         "가요",
-        "인가요?",
+        "가요?",
         "인가요",
-        "한가요?",
+        "인가요?",
         "한가요",
+        "한가요?",
     )
     FIRST_QUESTION_ENDINGS = (
+        "?",
+        ".",
+        "요.",
+        "요?",
+        "나요?",
+        "까요?",
+        "가요",
+        "가요?",
+        "인가요",
+        "인가요?",
+        "한가요",
+        "한가요?",
+        "있나요",
         "있나요?",
         "주세요.",
         "말씀해 주세요.",
     )
     YES_NO_STYLE_ENDINGS = (
         "좋아하시나요?",
-        "좋아하시나요",
         "선호하시나요?",
-        "선호하시나요",
         "즐거우신가요?",
-        "즐거우신가요",
     )
     OPEN_ENDED_QUESTION_HINTS = (
         "어떤",
@@ -230,22 +241,11 @@ class SurveyChatbotSessionService:
         "설명",
         "이야기",
         "알려",
-        "떠올렸을 때",
-    )
-    COMPARISON_QUESTION_HINTS = (
-        "중 어느",
-        "중 어떤",
-        "어느 쪽",
-        "어떤 쪽",
-        "더 선호",
-        "더 좋",
-        "비교하면",
     )
     VAGUE_QUESTION_PATTERNS = (
         r"어떤\s*점",
         r"어떤\s*부분",
         r"어떤\s*요소",
-        r"어떤\s*경험",
         r"어떤\s*게임\s*스타일",
         r"어떤\s*스타일",
         r"왜\s*좋",
@@ -488,6 +488,8 @@ class SurveyChatbotSessionService:
         question = self.normalize_generated_question(question)
         question = self.ensure_nickname_in_question(question, nickname)
         question = self.repair_yes_no_question(question)
+        question = self.repair_incomplete_question_ending(question)
+        question = self.polish_generated_question(question)
         if question and self.is_valid_survey_question(
             question=question,
             mode=mode,
@@ -523,23 +525,61 @@ class SurveyChatbotSessionService:
         return normalized or None
 
     def repair_yes_no_question(self, question: str | None) -> str | None:
+        return question
+
+    def polish_generated_question(self, question: str | None) -> str | None:
         if not question:
             return None
 
-        replacements = {
-            "좋아하시나요?": "좋아하는 이유나 기억나는 장면을 말씀해 주세요.",
-            "좋아하시나요": "좋아하는 이유나 기억나는 장면을 말씀해 주세요.",
-            "선호하시나요?": "선호하는 이유나 기억나는 장면을 말씀해 주세요.",
-            "선호하시나요": "선호하는 이유나 기억나는 장면을 말씀해 주세요.",
-            "즐거우신가요?": "즐거웠던 이유나 기억나는 장면을 말씀해 주세요.",
-            "즐거우신가요": "즐거웠던 이유나 기억나는 장면을 말씀해 주세요.",
-            "느끼시나요?": "느끼는 이유나 기억나는 장면을 말씀해 주세요.",
-            "느끼시나요": "느끼는 이유나 기억나는 장면을 말씀해 주세요.",
-        }
-        for ending, replacement in replacements.items():
-            if question.endswith(ending):
-                return f"{question[: -len(ending)].rstrip()} {replacement}"
-        return question
+        polished = question
+        replacements = (
+            (r"더\s*흥미를\s*느끼는\s*쪽인지", "더 흥미를 느끼는지"),
+            (r"흥미를\s*느끼는\s*쪽인지", "흥미를 느끼는지"),
+            (r"더\s*끌리는\s*쪽인지", "더 끌리는지"),
+            (r"끌리는\s*쪽인지", "끌리는지"),
+            (r"더\s*잘\s*맞는\s*쪽인지", "더 잘 맞는지"),
+            (r"잘\s*맞는\s*쪽인지", "잘 맞는지"),
+            (r"더\s*편한\s*쪽인지", "더 편한지"),
+            (r"편한\s*쪽인지", "편한지"),
+            (r"선호하는\s*쪽인지", "선호하는지"),
+            (r"좋아하는\s*쪽인지", "좋아하는지"),
+            (r"즐겁게\s*느끼는\s*쪽인지", "즐겁게 느끼는지"),
+            (r"느끼는\s*쪽인지", "느끼는지"),
+        )
+        for pattern, replacement in replacements:
+            polished = re.sub(pattern, replacement, polished)
+
+        polished = re.sub(r"\s+", " ", polished).strip()
+        return polished or None
+
+    def repair_incomplete_question_ending(self, question: str | None) -> str | None:
+        if not question:
+            return None
+
+        normalized = question.rstrip()
+        if normalized.endswith(self.QUESTION_ENDINGS):
+            return normalized
+        if len(normalized) < 30:
+            return normalized
+
+        dangling_patterns = (
+            r"\s*중\s*어떤\s*$",
+            r"\s*중\s*어느\s*$",
+            r"\s*중\s*어떤\s*것을\s*더\s*선(?:호)?\s*$",
+            r"\s*중\s*어떤\s*것이\s*더\s*선(?:호)?\s*$",
+            r"\s*중\s*어떤\s*것이\s*더\s*$",
+            r"\s*중\s*어떤\s*것을\s*더\s*$",
+            r"\s*중\s*어느\s*쪽이\s*더\s*$",
+        )
+        for pattern in dangling_patterns:
+            if re.search(pattern, normalized):
+                normalized = re.sub(pattern, "", normalized).rstrip(" ,，")
+                return f"{normalized} 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요."
+
+        if " 중 " in normalized or "중 " in normalized:
+            return f"{normalized} 중 어느 쪽이 더 잘 맞는지 편하게 말씀해 주세요."
+
+        return None
 
     # Gemini 응답의 여러 parts를 하나의 질문으로 결합
     def extract_text_from_gemini_response(self, data: dict) -> str | None:
@@ -558,7 +598,7 @@ class SurveyChatbotSessionService:
             return False
 
         question = question.strip()
-        return 30 <= len(question) <= 180 and question.endswith(
+        return 10 <= len(question) <= self.QUESTION_MAX_LENGTH and question.endswith(
             self.FIRST_QUESTION_ENDINGS
         )
 
@@ -573,7 +613,9 @@ class SurveyChatbotSessionService:
             return False
 
         question = question.strip()
-        return 20 <= len(question) <= 180 and question.endswith(self.QUESTION_ENDINGS)
+        return 10 <= len(question) <= self.QUESTION_MAX_LENGTH and question.endswith(
+            self.QUESTION_ENDINGS
+        )
 
     # 설문 진행을 막지 않도록 최소 조건만 검증
     def is_valid_survey_question(
@@ -584,16 +626,6 @@ class SurveyChatbotSessionService:
         latest_user_message: str = "",
     ) -> bool:
         if not self.is_complete_survey_question(question=question, mode=mode):
-            return False
-
-        assert question is not None
-        normalized = question.strip()
-        is_comparison_question = any(
-            hint in normalized for hint in self.COMPARISON_QUESTION_HINTS
-        )
-        if not is_comparison_question and normalized.endswith(
-            self.YES_NO_STYLE_ENDINGS
-        ):
             return False
 
         return True
