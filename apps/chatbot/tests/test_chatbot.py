@@ -71,6 +71,22 @@ class ChatbotAPITest(TestCase):
             "만료되었거나 유효하지 않은 session_id 입니다.",
         )
 
+    def test_message_create_fail_with_malformed_session_id_returns_404(self) -> None:
+        response = self.client.post(
+            self.messages_url,
+            data={
+                "message": "게임 추천은 어떻게 받아요?",
+                "session_id": "not-a-session-id",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(
+            response.json()["error_detail"],
+            "만료되었거나 유효하지 않은 session_id 입니다.",
+        )
+
     def test_stream_success_after_message_saved(self) -> None:
         message_response = self.client.post(
             self.messages_url,
@@ -230,6 +246,19 @@ class ChatbotAPITest(TestCase):
         self.assertEqual(
             response.json()["error_detail"],
             "스트리밍 대상 세션을 찾을 수 없습니다.",
+        )
+
+    def test_stream_fail_with_malformed_session_id_returns_400(self) -> None:
+        response = self.client.get(
+            self.stream_url,
+            data={"session_id": "not-a-session-id"},
+            HTTP_ACCEPT="text/event-stream",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error_detail"],
+            "잘못된 session_id 입니다.",
         )
 
     def test_stream_fail_when_question_not_in_cache(self) -> None:

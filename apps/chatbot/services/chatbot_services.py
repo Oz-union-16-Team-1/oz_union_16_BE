@@ -6,6 +6,7 @@ from typing import Generator, TypedDict
 from uuid import UUID
 
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -185,7 +186,7 @@ def create_chatbot_session() -> ChatbotSession:
 def get_valid_chatbot_session(session_id: UUID | str) -> ChatbotSession | None:
     try:
         session = ChatbotSession.objects.get(pk=session_id)
-    except ChatbotSession.DoesNotExist:
+    except ChatbotSession.DoesNotExist, ValidationError, ValueError:
         return None
 
     if session.is_expired:
