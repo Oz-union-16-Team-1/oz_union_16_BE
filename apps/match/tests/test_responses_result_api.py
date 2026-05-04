@@ -357,6 +357,25 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertNotIn(1003, deduped_ids)
         self.assertIn(2001, deduped_ids)
 
+    def test_result_similarity_excludes_dim14_popularity_axis(self):
+        # 같은 1~13차원, dim14만 다른 벡터
+        user_vec = [0.2] * 13 + [0.0]
+        game_vec = [0.2] * 13 + [1.0]
+
+        # 전체 14차원 코사인은 dim14 차이 영향이 있음
+        full_sim = self.service._cosine_similarity(user_vec, game_vec)
+        self.assertLess(full_sim, 1.0)
+
+        # result sim 벡터(1~13차원)로 자르면 dim14 영향이 사라져야 함
+        user_sim_vec = self.service._result_sim_vector(user_vec)
+        game_sim_vec = self.service._result_sim_vector(game_vec)
+
+        self.assertEqual(len(user_sim_vec), 13)
+        self.assertEqual(len(game_sim_vec), 13)
+
+        split_sim = self.service._cosine_similarity(user_sim_vec, game_sim_vec)
+        self.assertAlmostEqual(split_sim, 1.0, places=6)
+
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
     @classmethod
