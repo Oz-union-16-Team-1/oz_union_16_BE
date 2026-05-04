@@ -6,7 +6,13 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.chatbot.models.models import ChatbotSession
-from apps.chatbot.services.chatbot_services import build_answer, save_question_to_cache
+from apps.chatbot.services.chatbot_answer_builder_services import (
+    build_answer,
+    build_suggested_questions,
+)
+from apps.chatbot.services.chatbot_messages_services import (
+    save_question_to_cache,
+)
 
 
 def _collect_stream_chunks(content: str) -> str:
@@ -22,6 +28,19 @@ def _collect_stream_chunks(content: str) -> str:
                 chunks.append(payload["content"])
 
     return "".join(chunks)
+
+
+def _collect_suggested_questions(content: str) -> list[str]:
+    current_event: str | None = None
+
+    for line in content.splitlines():
+        if line.startswith("event: "):
+            current_event = line.replace("event: ", "", 1).strip()
+        elif line.startswith("data: ") and current_event == "suggestions":
+            payload = json.loads(line.replace("data: ", "", 1))
+            return payload["questions"]
+
+    return []
 
 
 class ChatbotAPITest(TestCase):
@@ -109,6 +128,7 @@ class ChatbotAPITest(TestCase):
 
         self.assertIn("event: start", content)
         self.assertIn("event: chunk", content)
+        self.assertIn("event: suggestions", content)
         self.assertIn("event: complete", content)
         self.assertIn("expires_at", content)
         self.assertIn("expires_in_seconds", content)
@@ -118,7 +138,7 @@ class ChatbotAPITest(TestCase):
             "별점은 게임에 대한 사용자 평가로 활용되며, 인기 TOP100 게임을 보여주는 기준에 반영됩니다.",
         )
 
-    def test_message_uses_site_knowledge_base(self) -> None:
+    def test_message_uses_chatbot_filter_rules(self) -> None:
         message_response = self.client.post(
             self.messages_url,
             data={"message": "게임 추천은 어떻게 되나요?"},
@@ -137,6 +157,15 @@ class ChatbotAPITest(TestCase):
         self.assertEqual(
             _collect_stream_chunks(content),
             "게임 추천은 설문조사 답변과 사용자의 장르, 스타일 취향을 바탕으로 어울리는 게임을 안내하는 기능입니다.",
+        )
+
+        self.assertEqual(
+            _collect_suggested_questions(content),
+            [
+                "설문조사는 어디서 하나요?",
+                "취향 분석은 어떻게 하나요?",
+                "좋아요한 게임도 추천에 반영되나요?",
+            ],
         )
 
     def test_message_blocks_out_of_scope_question(self) -> None:
@@ -158,6 +187,7 @@ class ChatbotAPITest(TestCase):
             _collect_stream_chunks(content),
             "올바른 질문이 아닙니다.",
         )
+        self.assertEqual(_collect_suggested_questions(content), [])
 
     def test_message_answers_account_question(self) -> None:
         message_response = self.client.post(
@@ -185,8 +215,58 @@ class ChatbotAPITest(TestCase):
             "아이디 찾기는 가입한 계정 정보를 확인하는 기능입니다. 화면에서 요구하는 본인 확인 절차를 진행해 주세요.",
         )
         self.assertEqual(
+            build_answer("본인 확인 절차는 어디서 해?"),
+            "본인 확인 절차는 아이디 찾기 또는 비밀번호 재설정 화면에서 안내되는 방식으로 진행합니다. 화면에 표시되는 인증 정보를 입력해 주세요.",
+        )
+        self.assertEqual(
             build_answer("비밀번호를 잊어버렸어요"),
             "비밀번호를 잊은 경우 비밀번호 찾기 또는 재설정 기능을 통해 새 비밀번호로 변경할 수 있습니다.",
+        )
+
+    def test_build_suggested_questions_returns_follow_up_questions(self) -> None:
+        self.assertEqual(
+            build_suggested_questions("아이디를 찾고 싶어요"),
+            [
+                "아이디 찾기는 어디서 하나요?",
+                "본인 확인 절차는 어디서 하나요?",
+                "비밀번호도 재설정할 수 있나요?",
+            ],
+        )
+
+    def test_combined_questions_use_specific_answers(self) -> None:
+        self.assertEqual(
+            build_answer("좋아요와 별점은 다른가요?"),
+            "좋아요는 마음에 드는 게임을 저장하는 기능이고, 별점은 게임에 대한 평가 점수입니다. 좋아요는 관심 게임 관리에 쓰이고, 별점은 인기 TOP100이나 추천 품질 판단에 활용됩니다.",
+        )
+        self.assertEqual(
+            build_answer("설문조사랑 추천은 무슨 관계인가요?"),
+            "설문조사는 사용자의 장르와 플레이 스타일 취향을 파악하는 과정이고, 추천은 그 결과를 바탕으로 어울리는 게임을 보여주는 기능입니다.",
+        )
+        self.assertEqual(
+            build_answer("인기 게임과 추천 게임은 다른가요?"),
+            "인기 게임은 많은 사용자 반응을 기준으로 보여주는 목록이고, 추천 게임은 개인의 취향에 맞춰 보여주는 목록입니다.",
+        )
+
+    def test_chatbot_filter_rules_cover_common_follow_up_questions(self) -> None:
+        cases = {
+            "추천 결과가 이상해요": "추천 결과가 어색하다면 설문을 다시 진행하거나 별점과 좋아요를 남겨 취향 정보를 더 구체화해 주세요.",
+            "설문 결과는 어디에 쓰이나요?": "설문 결과는 사용자의 장르와 플레이 스타일 취향을 분석하고, 맞춤 게임 추천을 만드는 데 사용됩니다.",
+            "비밀번호 재설정 후 로그인은 어떻게 해요?": "비밀번호를 재설정한 뒤에는 로그인 화면에서 새 비밀번호로 다시 로그인하면 됩니다.",
+            "회원 정보 수정하고 싶어요": "회원 정보는 마이페이지에서 확인하거나 수정할 수 있습니다.",
+            "할인 여부 확인하고 싶어요": "올바른 질문이 아닙니다.",
+        }
+
+        for question, expected_answer in cases.items():
+            self.assertEqual(build_answer(question), expected_answer)
+
+    def test_suggested_questions_do_not_repeat_current_question(self) -> None:
+        self.assertEqual(
+            build_suggested_questions("좋아요와 별점은 다른가요?"),
+            [
+                "별점은 추천에 반영되나요?",
+                "좋아요한 게임은 어디서 보나요?",
+                "인기 TOP100 기준은 뭔가요?",
+            ],
         )
 
     def test_session_status_success(self) -> None:
