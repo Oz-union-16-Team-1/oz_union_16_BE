@@ -226,8 +226,8 @@ class GameTop100APITest(APITestCase):
 
         self.assertEqual([game.game_id for game in result], [2301])
 
-    def test_service_orders_latest_year_before_older_high_rating(self):
-        """개별 장르는 과거 고평점 게임보다 최신 연도 후보를 먼저 반환한다."""
+    def test_service_orders_final_genre_results_by_rating(self):
+        """개별 장르는 후보를 채운 뒤 최종 응답을 평점순으로 반환한다."""
         current_year = timezone.now().year
         Game.objects.create(
             game_id=2310,
@@ -248,10 +248,12 @@ class GameTop100APITest(APITestCase):
 
         result = GameTop100Service.get_top_100_games(genre_id=13)
 
-        self.assertEqual([game.game_id for game in result[:2]], [2311, 2310])
+        self.assertEqual([game.game_id for game in result[:2]], [2310, 2311])
 
-    def test_service_genre_prioritizes_current_year_lower_threshold(self):
-        """개별 장르는 같은 최신 연도의 30개 이상 후보를 이전 연도 50개 이상 후보보다 먼저 반환한다."""
+    def test_service_genre_keeps_bucket_selection_and_sorts_final_results_by_rating(
+        self,
+    ):
+        """최신 연도/리뷰 수 기준으로 후보를 채우되 최종 응답은 평점순으로 반환한다."""
         current_year = timezone.now().year
         Game.objects.create(
             game_id=2320,
@@ -272,7 +274,7 @@ class GameTop100APITest(APITestCase):
 
         result = GameTop100Service.get_top_100_games(genre_id=13)
 
-        self.assertEqual([game.game_id for game in result[:2]], [2320, 2321])
+        self.assertEqual([game.game_id for game in result[:2]], [2321, 2320])
 
     def test_service_global_uses_review_50_and_2020_lower_bound(self):
         """전체 장르는 평가 수 50개 이상만 2020년까지 보충한다."""
