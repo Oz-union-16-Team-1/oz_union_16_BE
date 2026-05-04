@@ -11,6 +11,7 @@ class S3Handler:
             aws_access_key_id=settings.AWS_S3_ACCESS_KEY_ID,
             aws_secret_access_key=settings.AWS_S3_SECRET_ACCESS_KEY,
             config=Config(signature_version="s3v4"),
+            s3={"addressing_style": "virtual"},
         )
         self.bucket_name = settings.AWS_S3_BUCKET_NAME
         self.region = settings.AWS_S3_REGION
