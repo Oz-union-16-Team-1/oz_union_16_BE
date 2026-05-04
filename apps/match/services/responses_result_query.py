@@ -32,7 +32,6 @@ from apps.match.constants import (
     MATCH_RESULT_SIM_VECTOR_DIM,
     MATCH_RESULT_SIM_GENRE_WEIGHT,
     MATCH_RESULT_SIM_MOOD_WEIGHT,
-    MATCH_RESULT_SIM_VECTOR_WEIGHTS,
     MATCH_RESULT_TAU_FINAL_STEPS,
     MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
     MATCH_RESULT_WEIGHT_LIKE_BONUS,
@@ -836,40 +835,11 @@ class MatchResponsesResultQueryService:
             return 0.0
 
         sim = (
-                      (genre_sim * MATCH_RESULT_SIM_GENRE_WEIGHT)
-                      + (mood_sim * MATCH_RESULT_SIM_MOOD_WEIGHT)
-              ) / weight_sum
+            (genre_sim * MATCH_RESULT_SIM_GENRE_WEIGHT)
+            + (mood_sim * MATCH_RESULT_SIM_MOOD_WEIGHT)
+        ) / weight_sum
 
         return max(-1.0, min(1.0, sim))
-
-    def _result_weighted_cosine_similarity(self, a: list[float], b: list[float]) -> float:
-        if not a or not b or len(a) != len(b):
-            return 0.0
-
-        weights = self._result_sim_weights(len(a))
-
-        dot = 0.0
-        norm_a_sq = 0.0
-        norm_b_sq = 0.0
-
-        for idx, (x, y) in enumerate(zip(a, b)):
-            w = weights[idx]
-            dot += w * x * y
-            norm_a_sq += w * x * x
-            norm_b_sq += w * y * y
-
-        if norm_a_sq <= 0.0 or norm_b_sq <= 0.0:
-            return 0.0
-
-        sim = dot / (math.sqrt(norm_a_sq) * math.sqrt(norm_b_sq))
-        return max(-1.0, min(1.0, sim))
-
-
-    def _result_sim_weights(self, dim: int) -> list[float]:
-        base = list(MATCH_RESULT_SIM_VECTOR_WEIGHTS)
-        if dim <= len(base):
-            return base[:dim]
-        return base + [base[-1]] * (dim - len(base))
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         if not a or not b or len(a) != len(b):
