@@ -29,6 +29,8 @@ from apps.match.constants import (
     MATCH_RESULT_SCORE_NORMALIZER,
     MATCH_RESULT_SIM_FLOOR,
     MATCH_RESULT_SIM_VECTOR_DIM,
+    MATCH_RESULT_SIM_GENRE_WEIGHT,
+    MATCH_RESULT_SIM_MOOD_WEIGHT,
     MATCH_RESULT_SIM_VECTOR_WEIGHTS,
     MATCH_RESULT_TAU_FINAL_STEPS,
     MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
@@ -302,7 +304,7 @@ class MatchResponsesResultQueryService:
             if not sim_game_vector:
                 continue
 
-            sim = self._result_weighted_cosine_similarity(sim_game_vector, sim_user_vector)
+            sim = self._result_split_similarity(sim_game_vector, sim_user_vector)
             sim = max(0.0, min(1.0, sim))
             if sim < sim_floor:
                 continue
@@ -359,13 +361,13 @@ class MatchResponsesResultQueryService:
             like_bonus = 0.0
             if liked_mean_sim_vector:
                 like_bonus = max(
-                    0.0, self._result_weighted_cosine_similarity(game_sim_vec, liked_mean_sim_vector)
+                    0.0, self._result_split_similarity(game_sim_vec, liked_mean_sim_vector)
                 )
 
             dislike_penalty = 0.0
             if disliked_mean_sim_vector:
                 dislike_penalty = max(
-                    0.0, self._result_weighted_cosine_similarity(game_sim_vec, disliked_mean_sim_vector)
+                    0.0, self._result_split_similarity(game_sim_vec, disliked_mean_sim_vector)
                 )
 
             final_score = self._compose_final_score(
@@ -818,6 +820,26 @@ class MatchResponsesResultQueryService:
         if len(out) < MATCH_RESULT_SIM_VECTOR_DIM:
             out.extend([0.0] * (MATCH_RESULT_SIM_VECTOR_DIM - len(out)))
         return out
+
+    def _result_split_similarity(self, a: list[float], b: list[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+
+        # dim1~8: 장르축
+        genre_sim = self._cosine_similarity(a[:8], b[:8])
+        # dim9~13: 분위기/성향축
+        mood_sim = self._cosine_similarity(a[8:13], b[8:13])
+
+        weight_sum = MATCH_RESULT_SIM_GENRE_WEIGHT + MATCH_RESULT_SIM_MOOD_WEIGHT
+        if weight_sum <= 0.0:
+            return 0.0
+
+        sim = (
+                      (genre_sim * MATCH_RESULT_SIM_GENRE_WEIGHT)
+                      + (mood_sim * MATCH_RESULT_SIM_MOOD_WEIGHT)
+              ) / weight_sum
+
+        return max(-1.0, min(1.0, sim))
 
     def _result_weighted_cosine_similarity(self, a: list[float], b: list[float]) -> float:
         if not a or not b or len(a) != len(b):
