@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from django.http import JsonResponse, StreamingHttpResponse
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -34,7 +36,7 @@ from apps.chatbot.services.chatbot_services import (
 
 class EventStreamRenderer(BaseRenderer):
     media_type = "text/event-stream"
-    format = "event-stream"
+    format = "json"
     charset = "utf-8"
 
     def render(self, data, accepted_media_type=None, renderer_context=None):
@@ -179,13 +181,6 @@ class ChatbotStreamAPIView(APIView):
         ),
         parameters=[
             OpenApiParameter(
-                name="Accept",
-                type=str,
-                location=OpenApiParameter.HEADER,
-                required=False,
-                description="text/event-stream",
-            ),
-            OpenApiParameter(
                 name="session_id",
                 type=str,
                 location=OpenApiParameter.QUERY,
@@ -250,6 +245,15 @@ class ChatbotStreamAPIView(APIView):
         if not session_id:
             return JsonResponse(
                 {"error_detail": "session_id는 필수 입력값입니다."},
+                status=400,
+                json_dumps_params={"ensure_ascii": False},
+            )
+
+        try:
+            UUID(str(session_id))
+        except ValueError:
+            return JsonResponse(
+                {"error_detail": "잘못된 session_id 입니다."},
                 status=400,
                 json_dumps_params={"ensure_ascii": False},
             )
