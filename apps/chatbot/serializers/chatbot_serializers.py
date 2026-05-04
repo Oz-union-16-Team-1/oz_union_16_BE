@@ -35,6 +35,14 @@ class ChatbotMessageResponseSerializer(serializers.Serializer):
     session_ttl_seconds = serializers.IntegerField()
 
 
+class ChatbotMessageSchemaResponseSerializer(serializers.Serializer):
+    session_id = serializers.UUIDField()
+
+
+class ChatbotErrorResponseSerializer(serializers.Serializer):
+    error_detail = serializers.CharField()
+
+
 class ChatbotSessionStatusResponseSerializer(serializers.Serializer):
     session_id = serializers.UUIDField()
     is_expired = serializers.BooleanField()
