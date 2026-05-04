@@ -14,8 +14,6 @@ from apps.match.models import MatchCandidateRetryState, MatchGameGenreMap
 from apps.match.services.candidates_selector import MatchCandidatesSelectorService
 from apps.users.models import UserLikeBookmark
 
-DESCRIPTION_MAX_CHARS = 200  # PC 카드 기준 2~3줄 목표
-
 
 class MatchCandidatesDataUnavailable(APIException):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
@@ -130,16 +128,7 @@ class MatchCandidatesQueryService:
 
     def _normalize_description(self, summary: object, storyline: object) -> str:
         base = str(summary or "").strip() or str(storyline or "").strip()
-        text = re.sub(r"\s+", " ", base).strip()
-
-        if len(text) <= DESCRIPTION_MAX_CHARS:
-            return text
-
-        cut = text[: DESCRIPTION_MAX_CHARS + 1]
-        if " " in cut:
-            cut = cut.rsplit(" ", 1)[0]
-
-        return f"{cut.rstrip()}…"
+        return re.sub(r"\s+", " ", base).strip()
 
     def _normalize_rating(self, rating: object) -> float:
         if rating is None:
