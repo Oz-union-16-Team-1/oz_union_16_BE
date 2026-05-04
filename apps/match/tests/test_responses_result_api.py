@@ -10,6 +10,17 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.games.models import Game
+from apps.match.constants import (
+    MATCH_RESULT_POP_BOOST,
+    MATCH_RESULT_SCORE_NORMALIZER,
+    MATCH_RESULT_SIM_GENRE_WEIGHT,
+    MATCH_RESULT_SIM_MOOD_WEIGHT,
+    MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
+    MATCH_RESULT_WEIGHT_LIKE_BONUS,
+    MATCH_RESULT_WEIGHT_POP,
+    MATCH_RESULT_WEIGHT_REC,
+    MATCH_RESULT_WEIGHT_SIM,
+)
 from apps.match.models import MatchGameGenreMap, MatchGamePreference, MatchGameRating
 from apps.match.services.responses_result_query import (
     MatchResponsesResultDataUnavailable,
@@ -376,14 +387,21 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         split_sim = self.service._cosine_similarity(user_sim_vec, game_sim_vec)
         self.assertAlmostEqual(split_sim, 1.0, places=6)
 
-    def test_result_weighted_cosine_applies_axis_weights(self):
-        # dim1~8(장르)=0.6, dim9~13(분위기/성향)=1.6 가중치가 적용되는지 확인
-        weights = self.service._result_sim_weights(13)
-        self.assertEqual(len(weights), 13)
-        self.assertEqual(weights[:8], [0.6] * 8)
-        self.assertEqual(weights[8:], [1.6] * 5)
+    def test_result_split_similarity_applies_genre_mood_weights(self):
+        # genre_sim=1.0, mood_sim=-1.0 이 되도록 구성
+        a = [1.0] * 8 + [1.0] * 5
+        b = [1.0] * 8 + [-1.0] * 5
 
-    def test_result_weighted_cosine_can_change_ranking(self):
+        sim = self.service._result_split_similarity(a, b)
+
+        expected = (
+            (1.0 * MATCH_RESULT_SIM_GENRE_WEIGHT)
+            + (-1.0 * MATCH_RESULT_SIM_MOOD_WEIGHT)
+        ) / (MATCH_RESULT_SIM_GENRE_WEIGHT + MATCH_RESULT_SIM_MOOD_WEIGHT)
+
+        self.assertAlmostEqual(sim, expected, places=6)
+
+    def test_result_split_similarity_can_change_ranking(self):
         # user: 장르/분위기 모두 높은 선호
         user_vec = [0.8] * 8 + [0.9] * 5
 
@@ -410,10 +428,36 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         unweighted_b = self.service._cosine_similarity(user_vec, cand_b)
         self.assertGreater(unweighted_a, unweighted_b)
 
-        # 가중 코사인(목표 정책)
-        weighted_a = self.service._result_weighted_cosine_similarity(user_vec, cand_a)
-        weighted_b = self.service._result_weighted_cosine_similarity(user_vec, cand_b)
-        self.assertGreater(weighted_b, weighted_a)
+        # 분리식 sim(목표 정책)
+        split_a = self.service._result_split_similarity(user_vec, cand_a)
+        split_b = self.service._result_split_similarity(user_vec, cand_b)
+        self.assertGreater(split_b, split_a)
+
+    def test_compose_final_score_applies_pop_boost_110(self):
+        sim = 0.5
+        pop = 0.9
+        rec = 0.5
+        like_bonus = 0.2
+        dislike_penalty = 0.1
+
+        score = self.service._compose_final_score(
+            sim=sim,
+            pop=pop,
+            rec=rec,
+            like_bonus=like_bonus,
+            dislike_penalty=dislike_penalty,
+        )
+
+        expected_raw = (
+            (sim * MATCH_RESULT_WEIGHT_SIM)
+            + (pop * MATCH_RESULT_WEIGHT_POP * MATCH_RESULT_POP_BOOST)
+            + (rec * MATCH_RESULT_WEIGHT_REC)
+            + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
+            - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+        )
+        expected = round(max(0.0, expected_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
+
+        self.assertEqual(score, expected)
 
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
