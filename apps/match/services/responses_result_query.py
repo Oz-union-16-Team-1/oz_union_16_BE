@@ -29,12 +29,14 @@ from apps.match.constants import (
     MATCH_RESULT_SCORE_NORMALIZER,
     MATCH_RESULT_SIM_FLOOR,
     MATCH_RESULT_SIM_VECTOR_DIM,
+    MATCH_RESULT_SIM_VECTOR_WEIGHTS,
     MATCH_RESULT_TAU_FINAL_STEPS,
     MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
     MATCH_RESULT_WEIGHT_LIKE_BONUS,
     MATCH_RESULT_WEIGHT_POP,
     MATCH_RESULT_WEIGHT_REC,
     MATCH_RESULT_WEIGHT_SIM,
+
 )
 from apps.match.models import MatchGameGenreMap, MatchGamePreference, MatchGameRating
 from apps.users.models import UserLikeBookmark, UserPreference
@@ -300,7 +302,7 @@ class MatchResponsesResultQueryService:
             if not sim_game_vector:
                 continue
 
-            sim = self._cosine_similarity(sim_game_vector, sim_user_vector)
+            sim = self._result_weighted_cosine_similarity(sim_game_vector, sim_user_vector)
             sim = max(0.0, min(1.0, sim))
             if sim < sim_floor:
                 continue
@@ -357,13 +359,13 @@ class MatchResponsesResultQueryService:
             like_bonus = 0.0
             if liked_mean_sim_vector:
                 like_bonus = max(
-                    0.0, self._cosine_similarity(game_sim_vec, liked_mean_sim_vector)
+                    0.0, self._result_weighted_cosine_similarity(game_sim_vec, liked_mean_sim_vector)
                 )
 
             dislike_penalty = 0.0
             if disliked_mean_sim_vector:
                 dislike_penalty = max(
-                    0.0, self._cosine_similarity(game_sim_vec, disliked_mean_sim_vector)
+                    0.0, self._result_weighted_cosine_similarity(game_sim_vec, disliked_mean_sim_vector)
                 )
 
             final_score = self._compose_final_score(
@@ -816,6 +818,35 @@ class MatchResponsesResultQueryService:
         if len(out) < MATCH_RESULT_SIM_VECTOR_DIM:
             out.extend([0.0] * (MATCH_RESULT_SIM_VECTOR_DIM - len(out)))
         return out
+
+    def _result_weighted_cosine_similarity(self, a: list[float], b: list[float]) -> float:
+        if not a or not b or len(a) != len(b):
+            return 0.0
+
+        weights = self._result_sim_weights(len(a))
+
+        dot = 0.0
+        norm_a_sq = 0.0
+        norm_b_sq = 0.0
+
+        for idx, (x, y) in enumerate(zip(a, b)):
+            w = weights[idx]
+            dot += w * x * y
+            norm_a_sq += w * x * x
+            norm_b_sq += w * y * y
+
+        if norm_a_sq <= 0.0 or norm_b_sq <= 0.0:
+            return 0.0
+
+        sim = dot / (math.sqrt(norm_a_sq) * math.sqrt(norm_b_sq))
+        return max(-1.0, min(1.0, sim))
+
+
+    def _result_sim_weights(self, dim: int) -> list[float]:
+        base = list(MATCH_RESULT_SIM_VECTOR_WEIGHTS)
+        if dim <= len(base):
+            return base[:dim]
+        return base + [base[-1]] * (dim - len(base))
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:
         if not a or not b or len(a) != len(b):
