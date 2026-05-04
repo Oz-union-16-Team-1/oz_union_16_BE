@@ -376,6 +376,45 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         split_sim = self.service._cosine_similarity(user_sim_vec, game_sim_vec)
         self.assertAlmostEqual(split_sim, 1.0, places=6)
 
+    def test_result_weighted_cosine_applies_axis_weights(self):
+        # dim1~8(장르)=0.6, dim9~13(분위기/성향)=1.6 가중치가 적용되는지 확인
+        weights = self.service._result_sim_weights(13)
+        self.assertEqual(len(weights), 13)
+        self.assertEqual(weights[:8], [0.6] * 8)
+        self.assertEqual(weights[8:], [1.6] * 5)
+
+    def test_result_weighted_cosine_can_change_ranking(self):
+        # user: 장르/분위기 모두 높은 선호
+        user_vec = [0.8] * 8 + [0.9] * 5
+
+        # A: 장르축이 상대적으로 유리, 분위기축 일부 약함
+        cand_a = [
+            0.9888577985863465, 0.394227938329771, 0.6310651114170431,
+            0.5632984196964456, 0.9080130881770461, 0.9074032673590061,
+            0.8409676478246163, 0.6225467217716928, 0.6422815588981324,
+            0.21218425489136972, 0.10128960738923942, 0.8527728370158154,
+            0.5005894505851264,
+        ]
+
+        # B: 장르 일부 약하지만 분위기/성향축이 더 맞음
+        cand_b = [
+            0.06854450205579687, 0.2883592827942677, 0.9305031449685998,
+            0.7381716557116453, 0.3289245241923653, 0.8732205961998928,
+            0.12128305283711271, 0.8071425851507292, 0.404598428838434,
+            0.9408717058741171, 0.5018505343199596, 0.7755175526898117,
+            0.47798429169201584,
+        ]
+
+        # 비가중 코사인(기준 비교)
+        unweighted_a = self.service._cosine_similarity(user_vec, cand_a)
+        unweighted_b = self.service._cosine_similarity(user_vec, cand_b)
+        self.assertGreater(unweighted_a, unweighted_b)
+
+        # 가중 코사인(목표 정책)
+        weighted_a = self.service._result_weighted_cosine_similarity(user_vec, cand_a)
+        weighted_b = self.service._result_weighted_cosine_similarity(user_vec, cand_b)
+        self.assertGreater(weighted_b, weighted_a)
+
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
     @classmethod
