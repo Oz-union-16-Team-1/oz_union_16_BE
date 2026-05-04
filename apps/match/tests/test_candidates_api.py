@@ -260,9 +260,25 @@ class MatchCandidatesServiceHelperTest(MatchCandidatesFixtureMixin, TestCase):
         self.assertEqual(svc._normalize_vector(123), [])
         self.assertEqual(svc._normalize_vector([1, "2", 3.5]), [1.0, 2.0, 3.5])
 
-        self.assertEqual(svc._cosine_distance([], [1.0]), 1.0)
-        self.assertEqual(svc._cosine_distance([0.0, 0.0], [1.0, 1.0]), 1.0)
-        self.assertAlmostEqual(svc._cosine_distance([1.0, 0.0], [1.0, 0.0]), 0.0)
+        self.assertEqual(svc._weighted_cosine_distance([], [1.0]), 1.0)
+        self.assertEqual(svc._weighted_cosine_distance([0.0, 0.0], [1.0, 1.0]), 1.0)
+        self.assertAlmostEqual(
+            svc._weighted_cosine_distance([1.0, 0.0], [1.0, 0.0]),
+            0.0,
+            places=6,
+        )
+
+        # candidates 전용 가중치: dim14(인기도)는 약가중
+        weights = svc._candidate_weights(14)
+        self.assertEqual(len(weights), 14)
+        self.assertLess(weights[-1], weights[0])  # dim14 < dim1
+
+        # dim14 차이만 있을 때 거리 영향은 존재하되 과도하지 않아야 함
+        a = [1.0] + [0.0] * 12 + [1.0]
+        b = [1.0] + [0.0] * 12 + [0.0]
+        dist = svc._weighted_cosine_distance(a, b)
+        self.assertGreater(dist, 0.0)
+        self.assertLess(dist, 0.2)
 
         self.assertEqual(svc._safe_retry_no(-1), 0)
         self.assertEqual(svc._safe_retry_no("x"), 0)

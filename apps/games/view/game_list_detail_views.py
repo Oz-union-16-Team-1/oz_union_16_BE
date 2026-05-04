@@ -44,7 +44,7 @@ class GameListDetailView(APIView):
                         value={
                             "game_id": 501,
                             "title": "엘든 링: 황금 나무의 그림자 (Elden Ring: Shadow of the Erdtree)",
-                            "genres": ["액션", "역할수행(RPG)"],
+                            "genres": ["액션", "RPG"],
                             "release_date": "2024-06-21",
                             "developer": "FromSoftware",
                             "publisher": "Bandai Namco",

@@ -1,0 +1,39 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .actions > label {
+    display: none;
+  }
+</style>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".actions").forEach(function (actions) {
+      var select = actions.querySelector('select[name="action"]');
+      var runButton = actions.querySelector('button[type="submit"], input[type="submit"]');
+
+      if (select) {
+        var deleteOption = select.querySelector('option[value="delete_selected"]');
+        if (deleteOption) {
+          deleteOption.textContent = "선택된 회원을 삭제합니다";
+          select.value = "delete_selected";
+        }
+
+        var emptyOption = select.querySelector('option[value=""]');
+        if (emptyOption) {
+          emptyOption.remove();
+        }
+      }
+
+      if (runButton) {
+        if (runButton.tagName === "INPUT") {
+          runButton.value = "확인";
+        } else {
+          runButton.textContent = "확인";
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

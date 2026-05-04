@@ -19,7 +19,7 @@ class IGDB:
         9: "퍼즐",
         10: "레이싱",
         11: "실시간 전략",
-        12: "역할수행(RPG)",
+        12: "RPG",
         13: "시뮬레이션",
         14: "스포츠",
         15: "전략",
@@ -44,7 +44,7 @@ class IGDB:
             "Authorization": f"Bearer {settings.IGDB_ACCESS_TOKEN}",
         }
         self.genre_mapping = {
-            1: [25, 33],
+            1: [5, 25, 33],
             2: [31, 2],
             3: [12],
             4: [5],

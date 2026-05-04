@@ -28,6 +28,7 @@ from apps.match.constants import (
     MATCH_RESULT_RECENCY_WINDOW_DAYS,
     MATCH_RESULT_SCORE_NORMALIZER,
     MATCH_RESULT_SIM_FLOOR,
+    MATCH_RESULT_SIM_VECTOR_DIM,
     MATCH_RESULT_TAU_FINAL_STEPS,
     MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
     MATCH_RESULT_WEIGHT_LIKE_BONUS,
@@ -266,9 +267,15 @@ class MatchResponsesResultQueryService:
         liked_mean_vector: list[float] | None,
         disliked_mean_vector: list[float] | None,
     ) -> list[RankedGame]:
+        # result sim은 dim1~13만 사용 (dim14 인기도 제외)
+        sim_user_vector = self._result_sim_vector(user_vector)
+        if not sim_user_vector:
+            return []
+
+        # DB distance는 스캔 순서 최적화용, 실제 sim floor/점수 계산은 앱 레벨(13차원)에서 적용
         qs = MatchGamePreference.objects.annotate(
             distance=CosineDistance("game_preference_vector", user_vector)
-        ).filter(distance__lte=(1.0 - sim_floor))
+        )
 
         rows = list(
             qs.order_by("distance", "game_id_id").values_list(
@@ -283,15 +290,23 @@ class MatchResponsesResultQueryService:
         vectors_by_game: dict[int, list[float]] = {}
         sim_by_game: dict[int, float] = {}
 
-        for game_id, raw_vector, distance in rows:
+        for game_id, raw_vector, _distance in rows:
             game_id_int = int(game_id)
             parsed_vec = self._to_vector(raw_vector)
             if not parsed_vec:
                 continue
 
+            sim_game_vector = self._result_sim_vector(parsed_vec)
+            if not sim_game_vector:
+                continue
+
+            sim = self._cosine_similarity(sim_game_vector, sim_user_vector)
+            sim = max(0.0, min(1.0, sim))
+            if sim < sim_floor:
+                continue
+
             vectors_by_game[game_id_int] = parsed_vec
-            sim = 1.0 - float(distance)
-            sim_by_game[game_id_int] = max(0.0, min(1.0, sim))
+            sim_by_game[game_id_int] = sim
 
         if not vectors_by_game:
             return []
@@ -316,10 +331,23 @@ class MatchResponsesResultQueryService:
         genre_map = self._genres_by_game(set(vectors_by_game.keys()))
         ranked: list[RankedGame] = []
 
+        liked_mean_sim_vector = (
+            self._result_sim_vector(liked_mean_vector) if liked_mean_vector else None
+        )
+        disliked_mean_sim_vector = (
+            self._result_sim_vector(disliked_mean_vector)
+            if disliked_mean_vector
+            else None
+        )
+
         for row in game_rows:
             game_id = int(row["game_id"])
             game_vec = vectors_by_game.get(game_id)
             if game_vec is None:
+                continue
+
+            game_sim_vec = self._result_sim_vector(game_vec)
+            if not game_sim_vec:
                 continue
 
             sim = sim_by_game.get(game_id, 0.0)
@@ -327,15 +355,15 @@ class MatchResponsesResultQueryService:
             rec = self._to_rec_score(row.get("first_release_date"))
 
             like_bonus = 0.0
-            if liked_mean_vector:
+            if liked_mean_sim_vector:
                 like_bonus = max(
-                    0.0, self._cosine_similarity(game_vec, liked_mean_vector)
+                    0.0, self._cosine_similarity(game_sim_vec, liked_mean_sim_vector)
                 )
 
             dislike_penalty = 0.0
-            if disliked_mean_vector:
+            if disliked_mean_sim_vector:
                 dislike_penalty = max(
-                    0.0, self._cosine_similarity(game_vec, disliked_mean_vector)
+                    0.0, self._cosine_similarity(game_sim_vec, disliked_mean_sim_vector)
                 )
 
             final_score = self._compose_final_score(
@@ -778,6 +806,15 @@ class MatchResponsesResultQueryService:
                 return []
             except ValueError:
                 return []
+        return out
+
+    def _result_sim_vector(self, vec: list[float] | None) -> list[float]:
+        if not vec:
+            return []
+
+        out = list(vec[:MATCH_RESULT_SIM_VECTOR_DIM])
+        if len(out) < MATCH_RESULT_SIM_VECTOR_DIM:
+            out.extend([0.0] * (MATCH_RESULT_SIM_VECTOR_DIM - len(out)))
         return out
 
     def _cosine_similarity(self, a: list[float], b: list[float]) -> float:

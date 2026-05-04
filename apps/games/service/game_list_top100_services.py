@@ -9,7 +9,7 @@ from apps.games.models import Game
 
 class GameTop100Service:
     GENRE_MAPPING = {
-        1: [25, 33],
+        1: [5, 25, 33],
         2: [31, 2],
         3: [12],
         4: [5],
@@ -26,9 +26,17 @@ class GameTop100Service:
     }
     CANDIDATE_LIMIT = 500
     RESULT_LIMIT = 100
-    REVIEW_COUNT_THRESHOLDS = (50, 30, 10)
+    REVIEW_COUNT_THRESHOLDS = (50, 30, 10, 5)
+    GLOBAL_REVIEW_COUNT_THRESHOLD = 50
+    GLOBAL_INITIAL_YEAR_SPAN = 3
+    GLOBAL_MIN_RELEASE_YEAR = 2020
     MIN_RELEASE_YEAR = 1980
     MIN_RELEASE_DATE = datetime(MIN_RELEASE_YEAR, 1, 1, tzinfo=dt_timezone.utc)
+    EXCLUDED_SERVICE_STATUSES = (
+        5,  # offline
+        6,  # cancelled
+        8,  # delisted
+    )
 
     @staticmethod
     def get_top_100_games(
@@ -41,7 +49,7 @@ class GameTop100Service:
             total_rating__isnull=False,
             parent_game__isnull=True,
             is_ban=False,
-        )
+        ).exclude(status__in=GameTop100Service.EXCLUDED_SERVICE_STATUSES)
 
         base_queryset = GameTop100Service._apply_search_filter(
             queryset=base_queryset,
@@ -56,64 +64,116 @@ class GameTop100Service:
         if base_queryset is None:
             return []
 
-        ordering = ("-first_release_date", "-game_id")
+        if genre_id == 0:
+            return GameTop100Service._collect_global_top100(
+                base_queryset=base_queryset,
+                start_year=now.year,
+            )
 
+        return GameTop100Service._collect_genre_top100(
+            base_queryset=base_queryset,
+            start_year=now.year,
+        )
+
+    @staticmethod
+    def _collect_global_top100(*, base_queryset, start_year: int) -> list[Game]:
+        initial_end_year = max(
+            start_year - GameTop100Service.GLOBAL_INITIAL_YEAR_SPAN + 1,
+            GameTop100Service.GLOBAL_MIN_RELEASE_YEAR,
+        )
+        year_ranges = [(start_year, initial_end_year)]
+        year_ranges.extend(
+            (year, year)
+            for year in range(
+                initial_end_year - 1,
+                GameTop100Service.GLOBAL_MIN_RELEASE_YEAR - 1,
+                -1,
+            )
+        )
+
+        querysets = [
+            GameTop100Service._filter_year_range(
+                base_queryset,
+                start_year=range_start,
+                end_year=range_end,
+            ).filter(
+                total_rating_count__gte=GameTop100Service.GLOBAL_REVIEW_COUNT_THRESHOLD
+            )
+            for range_start, range_end in year_ranges
+        ]
+        return GameTop100Service._collect_from_rank_buckets(querysets)
+
+    @staticmethod
+    def _collect_genre_top100(*, base_queryset, start_year: int) -> list[Game]:
+        querysets = []
+        for year in range(start_year, GameTop100Service.MIN_RELEASE_YEAR - 1, -1):
+            year_queryset = GameTop100Service._filter_year(base_queryset, year)
+            for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
+                querysets.append(
+                    year_queryset.filter(total_rating_count__gte=review_count)
+                )
+
+        return GameTop100Service._collect_from_rank_buckets(querysets)
+
+    @staticmethod
+    def _collect_from_rank_buckets(querysets: list) -> list[Game]:
         selected: list[Game] = []
         selected_ids: set[int] = set()
+        ordering = GameTop100Service._ranking_ordering()
 
-        for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
-            for year in GameTop100Service._target_release_years(now.year):
+        for queryset in querysets:
+            if len(selected) >= GameTop100Service.RESULT_LIMIT:
+                break
+
+            candidates = queryset.exclude(game_id__in=selected_ids).order_by(*ordering)[
+                : GameTop100Service.CANDIDATE_LIMIT
+            ]
+            selected = GameTop100Service._append_unique_games(
+                selected=selected,
+                candidates=candidates,
+                selected_ids=selected_ids,
+            )
+
+        if len(selected) < GameTop100Service.RESULT_LIMIT:
+            for queryset in querysets:
                 if len(selected) >= GameTop100Service.RESULT_LIMIT:
                     break
 
-                candidates = (
-                    GameTop100Service._filter_by_release_year(
-                        queryset=base_queryset,
-                        year=year,
-                    )
-                    .filter(total_rating_count__gte=review_count)
-                    .exclude(game_id__in=selected_ids)
-                    .order_by(*ordering)[: GameTop100Service.CANDIDATE_LIMIT]
-                )
-                selected = GameTop100Service._append_unique_games(
+                candidates = queryset.exclude(game_id__in=selected_ids).order_by(
+                    *ordering
+                )[: GameTop100Service.CANDIDATE_LIMIT]
+                selected = GameTop100Service._append_games(
                     selected=selected,
                     candidates=candidates,
                     selected_ids=selected_ids,
                 )
 
-        if len(selected) < GameTop100Service.RESULT_LIMIT:
-            for review_count in GameTop100Service.REVIEW_COUNT_THRESHOLDS:
-                for year in GameTop100Service._target_release_years(now.year):
-                    if len(selected) >= GameTop100Service.RESULT_LIMIT:
-                        break
-
-                    candidates = (
-                        GameTop100Service._filter_by_release_year(
-                            queryset=base_queryset,
-                            year=year,
-                        )
-                        .filter(total_rating_count__gte=review_count)
-                        .exclude(game_id__in=selected_ids)
-                        .order_by(*ordering)[: GameTop100Service.CANDIDATE_LIMIT]
-                    )
-                    selected = GameTop100Service._append_games(
-                        selected=selected,
-                        candidates=candidates,
-                        selected_ids=selected_ids,
-                    )
-
         return selected[: GameTop100Service.RESULT_LIMIT]
 
     @staticmethod
-    def _target_release_years(current_year: int) -> list[int]:
-        return list(range(current_year, GameTop100Service.MIN_RELEASE_YEAR - 1, -1))
+    def _filter_year(queryset, year: int):
+        return GameTop100Service._filter_year_range(
+            queryset,
+            start_year=year,
+            end_year=year,
+        )
 
     @staticmethod
-    def _filter_by_release_year(queryset, year: int):
-        start = datetime(year, 1, 1, tzinfo=dt_timezone.utc)
-        end = datetime(year + 1, 1, 1, tzinfo=dt_timezone.utc)
+    def _filter_year_range(queryset, *, start_year: int, end_year: int):
+        start_date = datetime(end_year, 1, 1, tzinfo=dt_timezone.utc)
+        end_date = datetime(start_year + 1, 1, 1, tzinfo=dt_timezone.utc)
         return queryset.filter(
-            first_release_date__gte=start, first_release_date__lt=end
+            first_release_date__gte=start_date,
+            first_release_date__lt=end_date,
+        )
+
+    @staticmethod
+    def _ranking_ordering() -> tuple[str, str, str, str]:
+        return (
+            "-total_rating",
+            "-total_rating_count",
+            "-first_release_date",
+            "-game_id",
         )
 
     @staticmethod

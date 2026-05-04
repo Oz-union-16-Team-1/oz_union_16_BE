@@ -1,0 +1,276 @@
+{% extends "admin/base_site.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+  .preference-page {
+    display: grid;
+    gap: 20px;
+  }
+
+  .preference-hero,
+  .preference-card,
+  .liked-games {
+    background: var(--body-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 18px;
+  }
+
+  .preference-hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .user-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: #d9d3ff;
+    color: #342879;
+    font-weight: 700;
+  }
+
+  .user-title {
+    margin: 0 0 4px;
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .user-meta {
+    margin: 0;
+    color: var(--body-quiet-color);
+  }
+
+  .summary-grid,
+  .dashboard-grid {
+    display: grid;
+    gap: 12px;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .metric-title,
+  .card-title {
+    margin: 0 0 10px;
+    color: var(--body-quiet-color);
+    font-weight: 700;
+  }
+
+  .metric-value {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .bar-row {
+    display: grid;
+    grid-template-columns: 120px minmax(80px, 1fr) 44px;
+    align-items: center;
+    gap: 10px;
+    margin: 9px 0;
+  }
+
+  .mood-row {
+    grid-template-columns: 76px minmax(80px, 1fr) 76px;
+  }
+
+  .bar-track {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--darkened-bg);
+  }
+
+  .bar-fill {
+    height: 100%;
+    min-width: 3px;
+    border-radius: inherit;
+    background: var(--link-fg);
+  }
+
+  .radar-card {
+    grid-column: 1 / -1;
+  }
+
+  .radar-wrap {
+    display: flex;
+    justify-content: center;
+    min-height: 330px;
+  }
+
+  .radar-grid {
+    fill: none;
+    stroke: var(--border-color);
+    stroke-width: 1;
+  }
+
+  .radar-axis {
+    stroke: var(--border-color);
+    stroke-width: 1;
+  }
+
+  .radar-shape {
+    fill: color-mix(in srgb, var(--link-fg) 28%, transparent);
+    stroke: var(--link-fg);
+    stroke-width: 2;
+  }
+
+  .radar-label {
+    fill: var(--body-quiet-color);
+    font-size: 12px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  .game-table {
+    width: 100%;
+  }
+
+  .empty-message {
+    margin: 0;
+    color: var(--body-quiet-color);
+  }
+
+  @media (max-width: 900px) {
+    .summary-grid,
+    .dashboard-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .preference-hero {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">홈</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">회원 관리</a>
+  &rsaquo; <a href="{% url 'admin:users_user_changelist' %}">회원</a>
+  &rsaquo; <a href="{% url 'admin:users_user_change' user_obj.pk %}">{{ user_obj.login_id }}</a>
+  &rsaquo; 좋아요 및 취향
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="preference-page">
+  <section class="preference-hero">
+    <div class="user-summary">
+      <div class="avatar">{{ user_obj.nickname|default:user_obj.login_id|slice:":2"|upper }}</div>
+      <div>
+        <p class="user-title">{{ user_obj.name }} <span class="small quiet">{{ user_obj.get_status_display }}</span></p>
+        <p class="user-meta">user_id: {{ user_obj.id }} · 가입유형 {{ signup_type }} · 로그인아이디 {{ user_obj.login_id }}</p>
+      </div>
+    </div>
+    <a class="button" href="{% url 'admin:users_user_change' user_obj.pk %}">회원 상세</a>
+  </section>
+
+  <section class="summary-grid">
+    <div class="preference-card">
+      <p class="metric-title">좋아요 게임 수</p>
+      <div class="metric-value">{{ like_count }}개</div>
+    </div>
+    <div class="preference-card">
+      <p class="metric-title">주요 취향</p>
+      <div class="metric-value">{{ primary_genre }}</div>
+    </div>
+    <div class="preference-card">
+      <p class="metric-title">가입유형</p>
+      <div class="metric-value">{{ signup_type }}</div>
+    </div>
+    <div class="preference-card">
+      <p class="metric-title">벡터 갱신일</p>
+      <div class="metric-value">
+        {% if preference %}{{ preference.updated_at|date:"m-d" }}{% else %}-{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="dashboard-grid">
+    <div class="preference-card">
+      <h2 class="card-title">장르 취향 (DIM 1~8)</h2>
+      {% for score in genre_scores %}
+      <div class="bar-row">
+        <span>{{ score.label }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%"></span></span>
+        <span>{{ score.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="preference-card">
+      <h2 class="card-title">분위기 / 성향 (DIM 9~14)</h2>
+      {% for score in mood_scores %}
+      <div class="bar-row mood-row">
+        <span>{{ score.left }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%"></span></span>
+        <span>{{ score.right }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="preference-card radar-card">
+      <h2 class="card-title">취향 레이더 차트</h2>
+      <div class="radar-wrap">
+        <svg width="360" height="330" viewBox="0 0 300 300" role="img" aria-label="취향 레이더 차트">
+          {% for polygon in radar.grid %}
+          <polygon class="radar-grid" points="{{ polygon }}"></polygon>
+          {% endfor %}
+          {% for label in radar.labels %}
+          <line class="radar-axis" x1="{{ radar.center }}" y1="{{ radar.center }}" x2="{{ label.x }}" y2="{{ label.y }}"></line>
+          <text class="radar-label" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+          {% endfor %}
+          <polygon class="radar-shape" points="{{ radar.points }}"></polygon>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="liked-games">
+    <h2 class="card-title">좋아요 누른 게임</h2>
+    {% if likes %}
+    <table class="game-table">
+      <thead>
+        <tr>
+          <th scope="col">게임 ID</th>
+          <th scope="col">게임 이름</th>
+          <th scope="col">게임 좋아요 수</th>
+          <th scope="col">등록일</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for like in likes %}
+        <tr>
+          <td>{{ like.game.game_id }}</td>
+          <td>{{ like.game.name }}</td>
+          <td>{{ like.game.like_count }}</td>
+          <td>{{ like.created_at|date:"Y-m-d H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty-message">좋아요를 누른 게임이 없습니다.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

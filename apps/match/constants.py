@@ -84,6 +84,25 @@ MATCH_INGEST_MIN_RELEASE_TS: int = 946684800  # 2000-01-01 UTC
 MATCH_CANDIDATE_POOL_SIZE: int = 50
 MATCH_CANDIDATE_MAX_COUNT: int = 5
 
+# 후보 선출용 유사도 가중치(14차원)
+# dim14(인기도): 약가중 0.35
+MATCH_CANDIDATE_VECTOR_WEIGHTS: tuple[float, ...] = (
+    1.0,  # 1 액션/격투
+    1.0,  # 2 어드벤처/플랫폼
+    1.0,  # 3 RPG/스토리
+    1.0,  # 4 전략/시뮬
+    1.0,  # 5 스포츠/레이싱
+    1.0,  # 6 두뇌/퍼즐
+    1.0,  # 7 슈팅
+    1.0,  # 8 음악/리듬
+    1.0,  # 9 난이도
+    1.0,  # 10 톤
+    1.0,  # 11 그래픽
+    1.0,  # 12 템포
+    1.0,  # 13 사회성
+    0.35,  # 14 인기도
+)
+
 # 매칭 응답 제출(POST /match/responses) 상수
 MATCH_RESPONSE_MIN_STAR: int = 1
 MATCH_RESPONSE_MAX_STAR: int = 5
@@ -109,6 +128,8 @@ MATCH_RESULT_POP_DEFAULT: float = 0.5
 MATCH_RESULT_RECENCY_WINDOW_DAYS: int = 3650  # 10년
 MATCH_RESULT_LIKED_TOP_K: int = 5
 MATCH_RESULT_LIKED_RATIO_CAP: float = 0.30  # liked 보충 최대 30%
+
+MATCH_RESULT_SIM_VECTOR_DIM: int = 13  # sim 계산은 dim1~13만 사용(dim14 제외)
 
 # =========================
 # MATCH 벡터 매핑 상수 (14D)
