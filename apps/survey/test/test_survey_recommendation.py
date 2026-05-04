@@ -308,8 +308,17 @@ class SurveyRecommendationServiceTest(TestCase):
         no_cover = create_game(game_id=214, cover="")
         no_description = create_game(game_id=215, summary=" ", storyline=" ")
         self.assertFalse(self.embedding_service.has_required_fields(no_genres))
-        self.assertFalse(self.embedding_service.has_required_fields(no_cover))
+        self.assertTrue(self.embedding_service.has_required_fields(no_cover))
         self.assertFalse(self.embedding_service.has_required_fields(no_description))
+
+        game_type_valid_game = create_game(game_id=221, category=5, game_type=0)
+        game_type_invalid_game = create_game(game_id=222, category=0, game_type=5)
+        self.assertTrue(
+            self.embedding_service.is_category_eligible(game_type_valid_game)
+        )
+        self.assertFalse(
+            self.embedding_service.is_category_eligible(game_type_invalid_game)
+        )
 
     def test_release_date_and_quality_branches(self) -> None:
         no_release_date = create_game(game_id=216, first_release_date=None)
@@ -324,12 +333,21 @@ class SurveyRecommendationServiceTest(TestCase):
             aggregated_rating=70.0,
             aggregated_rating_count=5,
         )
-        critic_fail_game = create_game(
+        low_critic_with_good_user_game = create_game(
             game_id=219,
             rating=80.0,
             rating_count=30,
             aggregated_rating=55.0,
             aggregated_rating_count=5,
+        )
+        all_rating_fail_game = create_game(
+            game_id=223,
+            rating=40.0,
+            rating_count=30,
+            aggregated_rating=55.0,
+            aggregated_rating_count=5,
+            total_rating=45.0,
+            total_rating_count=30,
         )
         no_rating_game = create_game(
             game_id=250,
@@ -348,7 +366,12 @@ class SurveyRecommendationServiceTest(TestCase):
             self.embedding_service.is_release_date_eligible(old_release_date)
         )
         self.assertTrue(self.embedding_service.is_quality_eligible(critic_only_game))
-        self.assertFalse(self.embedding_service.is_quality_eligible(critic_fail_game))
+        self.assertTrue(
+            self.embedding_service.is_quality_eligible(low_critic_with_good_user_game)
+        )
+        self.assertFalse(
+            self.embedding_service.is_quality_eligible(all_rating_fail_game)
+        )
         self.assertTrue(self.embedding_service.is_quality_eligible(no_rating_game))
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")

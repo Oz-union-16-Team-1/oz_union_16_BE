@@ -71,6 +71,7 @@ class SurveyGameEmbeddingService:
         "franchises",
         "parent_game",
         "is_ban",
+        "game_type",
     )
     SUMMARY_MAX_LENGTH = 1200
     STORYLINE_MAX_LENGTH = 700
@@ -154,20 +155,20 @@ class SurveyGameEmbeddingService:
         total_ok_q = Q(total_rating_count__gte=20, total_rating__gte=50)
         no_rating_data_q = ~user_available_q & ~critic_available_q & ~total_available_q
 
-        available_rating_q = user_available_q | critic_available_q | total_available_q
-        quality_q = no_rating_data_q | (
-            available_rating_q
-            & (~user_available_q | user_ok_q)
-            & (~critic_available_q | critic_ok_q)
-            & (~total_available_q | total_ok_q)
-        )
-
-        return (
-            Q(is_ban=False)
+        quality_q = no_rating_data_q | user_ok_q | critic_ok_q | total_ok_q
+        category_q = Q(
+            game_type__isnull=False, game_type__in=SURVEY_ALLOWED_GAME_CATEGORIES
+        ) | (
+            Q(game_type__isnull=True)
             & (
                 Q(category__isnull=True)
                 | Q(category__in=SURVEY_ALLOWED_GAME_CATEGORIES)
             )
+        )
+
+        return (
+            Q(is_ban=False)
+            & category_q
             & (Q(status__isnull=True) | Q(status=0))
             & Q(parent_game__isnull=True)
             & quality_q
@@ -175,8 +176,6 @@ class SurveyGameEmbeddingService:
             & Q(first_release_date__year__gte=SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR)
             & Q(genres__isnull=False)
             & ~Q(genres=[])
-            & Q(cover__isnull=False)
-            & ~Q(cover="")
             & (
                 (Q(summary__isnull=False) & ~Q(summary=""))
                 | (Q(storyline__isnull=False) & ~Q(storyline=""))
@@ -193,6 +192,8 @@ class SurveyGameEmbeddingService:
         )
 
     def is_category_eligible(self, game: Game) -> bool:
+        if game.game_type is not None:
+            return int(game.game_type) in SURVEY_ALLOWED_GAME_CATEGORIES
         if game.category is None:
             return True
         return int(game.category) in SURVEY_ALLOWED_GAME_CATEGORIES
@@ -212,26 +213,30 @@ class SurveyGameEmbeddingService:
             game.total_rating is not None and game.total_rating_count is not None
         )
 
+        if not user_available and not critic_available and not total_available:
+            return True
+
         return (
-            (not user_available or (game.rating_count >= 20 and game.rating >= 50))
-            and (
-                not critic_available
-                or (game.aggregated_rating_count >= 3 and game.aggregated_rating >= 60)
+            (user_available and game.rating_count >= 20 and game.rating >= 50)
+            or (
+                critic_available
+                and game.aggregated_rating_count >= 3
+                and game.aggregated_rating >= 60
             )
-            and (
-                not total_available
-                or (game.total_rating_count >= 20 and game.total_rating >= 50)
+            or (
+                total_available
+                and game.total_rating_count >= 20
+                and game.total_rating >= 50
             )
         )
 
     def has_required_fields(self, game: Game) -> bool:
         has_genres = bool(game.genres)
         has_release_date = game.first_release_date is not None
-        has_cover = bool(game.cover)
         has_description = bool(
             (game.summary or "").strip() or (game.storyline or "").strip()
         )
-        return has_genres and has_release_date and has_cover and has_description
+        return has_genres and has_release_date and has_description
 
     def is_release_date_eligible(self, game: Game) -> bool:
         if game.first_release_date is None:
