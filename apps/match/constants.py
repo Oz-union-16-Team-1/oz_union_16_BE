@@ -100,7 +100,7 @@ MATCH_CANDIDATE_VECTOR_WEIGHTS: tuple[float, ...] = (
     1.0,  # 11 그래픽
     1.0,  # 12 템포
     1.0,  # 13 사회성
-    0.35, # 14 인기도
+    0.35,  # 14 인기도
 )
 
 # 매칭 응답 제출(POST /match/responses) 상수

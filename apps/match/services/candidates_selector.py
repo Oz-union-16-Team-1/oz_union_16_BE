@@ -249,7 +249,6 @@ class MatchCandidatesSelectorService:
         cosine_similarity = max(-1.0, min(1.0, cosine_similarity))
         return 1.0 - cosine_similarity
 
-
     def _candidate_weights(self, dim: int) -> list[float]:
         base = list(MATCH_CANDIDATE_VECTOR_WEIGHTS)
 
