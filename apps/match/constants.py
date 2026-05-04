@@ -129,6 +129,8 @@ MATCH_RESULT_RECENCY_WINDOW_DAYS: int = 3650  # 10년
 MATCH_RESULT_LIKED_TOP_K: int = 5
 MATCH_RESULT_LIKED_RATIO_CAP: float = 0.30  # liked 보충 최대 30%
 
+MATCH_RESULT_SIM_VECTOR_DIM: int = 13  # sim 계산은 dim1~13만 사용(dim14 제외)
+
 # =========================
 # MATCH 벡터 매핑 상수 (14D)
 # =========================
