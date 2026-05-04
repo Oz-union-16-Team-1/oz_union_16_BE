@@ -29,16 +29,15 @@ from apps.match.constants import (
     MATCH_RESULT_RECENCY_WINDOW_DAYS,
     MATCH_RESULT_SCORE_NORMALIZER,
     MATCH_RESULT_SIM_FLOOR,
-    MATCH_RESULT_SIM_VECTOR_DIM,
     MATCH_RESULT_SIM_GENRE_WEIGHT,
     MATCH_RESULT_SIM_MOOD_WEIGHT,
+    MATCH_RESULT_SIM_VECTOR_DIM,
     MATCH_RESULT_TAU_FINAL_STEPS,
     MATCH_RESULT_WEIGHT_DISLIKE_PENALTY,
     MATCH_RESULT_WEIGHT_LIKE_BONUS,
     MATCH_RESULT_WEIGHT_POP,
     MATCH_RESULT_WEIGHT_REC,
     MATCH_RESULT_WEIGHT_SIM,
-
 )
 from apps.match.models import MatchGameGenreMap, MatchGamePreference, MatchGameRating
 from apps.users.models import UserLikeBookmark, UserPreference
@@ -361,13 +360,17 @@ class MatchResponsesResultQueryService:
             like_bonus = 0.0
             if liked_mean_sim_vector:
                 like_bonus = max(
-                    0.0, self._result_split_similarity(game_sim_vec, liked_mean_sim_vector)
+                    0.0,
+                    self._result_split_similarity(game_sim_vec, liked_mean_sim_vector),
                 )
 
             dislike_penalty = 0.0
             if disliked_mean_sim_vector:
                 dislike_penalty = max(
-                    0.0, self._result_split_similarity(game_sim_vec, disliked_mean_sim_vector)
+                    0.0,
+                    self._result_split_similarity(
+                        game_sim_vec, disliked_mean_sim_vector
+                    ),
                 )
 
             final_score = self._compose_final_score(
@@ -898,11 +901,11 @@ class MatchResponsesResultQueryService:
         pop_weight = MATCH_RESULT_WEIGHT_POP * MATCH_RESULT_POP_BOOST
 
         final_raw = (
-                (sim * MATCH_RESULT_WEIGHT_SIM)
-                + (pop * pop_weight)
-                + (rec * MATCH_RESULT_WEIGHT_REC)
-                + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
-                - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
+            (sim * MATCH_RESULT_WEIGHT_SIM)
+            + (pop * pop_weight)
+            + (rec * MATCH_RESULT_WEIGHT_REC)
+            + (like_bonus * MATCH_RESULT_WEIGHT_LIKE_BONUS)
+            - (dislike_penalty * MATCH_RESULT_WEIGHT_DISLIKE_PENALTY)
         )
         return round(max(0.0, final_raw) / MATCH_RESULT_SCORE_NORMALIZER, 6)
 
