@@ -15,7 +15,7 @@ from apps.users.models import UserLikeBookmark
 
 @dataclass(frozen=True)
 class RecommendationHistoryAdapter:
-    model: type | None
+    model: Any | None
 
     @classmethod
     def load(cls) -> "RecommendationHistoryAdapter":

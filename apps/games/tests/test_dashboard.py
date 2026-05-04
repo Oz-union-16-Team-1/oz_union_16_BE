@@ -39,7 +39,7 @@ class GameDashboardAPITest(APITestCase):
             game_id=901,
             name="Dashboard Game",
             slug="dashboard-game",
-            genres=[12, {"id": 5}, 999],
+            genres=[3, {"id": 5}, 999],
             cover="cover-id",
             summary="summary",
             like_count=3,
