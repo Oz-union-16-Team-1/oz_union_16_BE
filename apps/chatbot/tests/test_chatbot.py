@@ -208,6 +208,18 @@ class ChatbotAPITest(TestCase):
             "session_id는 필수 입력값입니다.",
         )
 
+    def test_stream_accepts_event_stream_header(self) -> None:
+        response = self.client.get(
+            self.stream_url,
+            HTTP_ACCEPT="text/event-stream",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json()["error_detail"],
+            "session_id는 필수 입력값입니다.",
+        )
+
     def test_stream_fail_when_session_not_found(self) -> None:
         response = self.client.get(
             self.stream_url,

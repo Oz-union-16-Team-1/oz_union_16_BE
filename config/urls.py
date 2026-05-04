@@ -15,7 +15,6 @@ urlpatterns = [
         name="swagger-ui",
     ),
     path("admin/", admin.site.urls),
-    path("chatbot/", include("apps.chatbot.urls")),
     path("api/v1/games/", include("apps.games.urls")),
     path("api/v1/match/", include("apps.match.urls")),
     path("api/v1/survey/", include("apps.survey.urls")),
