@@ -1,13 +1,19 @@
 from django.contrib import admin
+from django.apps import apps
 
 from apps.games.models import Game
+
+apps.get_app_config("games").verbose_name = "게임 관리"
+
+Game._meta.verbose_name = "게임"
+Game._meta.verbose_name_plural = "게임"
 
 
 class GameBlacklist(Game):
     class Meta:
         proxy = True
-        verbose_name = "게임 블랙리스트"
-        verbose_name_plural = "게임 블랙리스트"
+        verbose_name = "블랙리스트 게임"
+        verbose_name_plural = "블랙리스트 게임"
 
 
 @admin.action(description="선택한 게임 블랙리스트 등록")
@@ -22,6 +28,7 @@ def unban_games(modeladmin, request, queryset):
 
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
+    change_list_template = "admin/games/game/change_list.html"
     list_display = (
         "game_id",
         "name",
