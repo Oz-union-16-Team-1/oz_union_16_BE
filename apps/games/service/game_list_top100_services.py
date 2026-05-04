@@ -148,7 +148,9 @@ class GameTop100Service:
                     selected_ids=selected_ids,
                 )
 
-        return selected[: GameTop100Service.RESULT_LIMIT]
+        return GameTop100Service._sort_ranked_games(selected)[
+            : GameTop100Service.RESULT_LIMIT
+        ]
 
     @staticmethod
     def _filter_year(queryset, year: int):
@@ -174,6 +176,19 @@ class GameTop100Service:
             "-total_rating_count",
             "-first_release_date",
             "-game_id",
+        )
+
+    @staticmethod
+    def _sort_ranked_games(games: list[Game]) -> list[Game]:
+        return sorted(
+            games,
+            key=lambda game: (
+                game.total_rating or 0,
+                game.total_rating_count or 0,
+                game.first_release_date or GameTop100Service.MIN_RELEASE_DATE,
+                game.game_id,
+            ),
+            reverse=True,
         )
 
     @staticmethod

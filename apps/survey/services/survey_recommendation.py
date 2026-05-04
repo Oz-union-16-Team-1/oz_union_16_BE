@@ -24,6 +24,7 @@ from apps.core.igdb import IGDB
 from apps.games.models import Game
 from apps.survey.constants import (
     SURVEY_ALLOWED_GAME_CATEGORIES,
+    SURVEY_RECOMMENDATION_MAX_RESULTS,
     SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR,
 )
 from apps.survey.models import SurveyChatbotSession, SurveyGameVector
@@ -410,16 +411,18 @@ class SurveyRecommendationService:
             .order_by("distance", "game_id")
         )
 
-        total_count = vector_queryset.count()
+        ranked_items = list(vector_queryset[:SURVEY_RECOMMENDATION_MAX_RESULTS])
+        total_count = len(ranked_items)
         cursor_position = self.decode_cursor(cursor)
         if cursor_position:
             cursor_distance, cursor_game_id = cursor_position
-            vector_queryset = vector_queryset.filter(
-                Q(distance__gt=cursor_distance)
-                | Q(distance=cursor_distance, game_id__gt=cursor_game_id)
-            )
+            ranked_items = [
+                item
+                for item in ranked_items
+                if self.is_after_cursor(item, cursor_distance, cursor_game_id)
+            ]
 
-        page = list(vector_queryset[: page_size + 1])
+        page = ranked_items[: page_size + 1]
         has_next = len(page) > page_size
         page = page[:page_size]
         next_cursor = self.encode_cursor(page[-1]) if has_next and page else None
@@ -463,6 +466,17 @@ class SurveyRecommendationService:
             "next": next_cursor,
             "results": results,
         }
+
+    def is_after_cursor(
+        self,
+        item: SurveyGameVector,
+        cursor_distance: float,
+        cursor_game_id: int,
+    ) -> bool:
+        return float(item.distance) > cursor_distance or (
+            float(item.distance) == cursor_distance
+            and int(item.game_id) > cursor_game_id
+        )
 
     def encode_cursor(self, item: SurveyGameVector) -> str:
         payload = {

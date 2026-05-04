@@ -1,0 +1,212 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .game-dashboard {
+    display: grid;
+    gap: 18px;
+  }
+
+  .dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+  }
+
+  .dashboard-panel {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--body-bg);
+    padding: 16px;
+  }
+
+  .dashboard-panel h2 {
+    margin: 0 0 14px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .metric-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--hairline-color);
+    padding-bottom: 8px;
+  }
+
+  .metric-row:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .metric-label {
+    color: var(--body-quiet-color);
+  }
+
+  .metric-value {
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .status-good {
+    color: #11803b;
+    font-weight: 700;
+  }
+
+  .status-bad {
+    color: #ba2121;
+    font-weight: 700;
+  }
+
+  .reaction-chart {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .donut-chart {
+    position: relative;
+    width: 150px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px var(--hairline-color);
+  }
+
+  .donut-chart::after {
+    content: "";
+    position: absolute;
+    inset: 36px;
+    border-radius: 50%;
+    background: var(--body-bg);
+  }
+
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-content: center;
+    text-align: center;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .donut-center span {
+    display: block;
+    color: var(--body-quiet-color);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .chart-legend {
+    display: grid;
+    gap: 8px;
+  }
+
+  .legend-row {
+    display: grid;
+    grid-template-columns: 16px 42px minmax(96px, 1fr);
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+  }
+
+  .legend-color {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+  }
+
+  .reaction-summary {
+    margin-top: 14px;
+  }
+
+  @media (max-width: 700px) {
+    .reaction-chart {
+      grid-template-columns: 1fr;
+    }
+  }
+
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+  &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+  &rsaquo; {{ dashboard.basic_info.game_name }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="game-dashboard">
+  <div class="dashboard-grid">
+    <section class="dashboard-panel">
+      <h2>기본 정보</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">게임명</dt><dd class="metric-value">{{ dashboard.basic_info.game_name }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">게임 ID</dt><dd class="metric-value">{{ dashboard.basic_info.game_id }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">장르</dt><dd class="metric-value">{{ dashboard.basic_info.genres|join:", "|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">총 좋아요 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_like_count }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">총 평가 수</dt><dd class="metric-value">{{ dashboard.basic_info.total_rating_count }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">평균 별점</dt><dd class="metric-value">{{ dashboard.basic_info.average_star_rating|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">블랙리스트 여부</dt><dd class="metric-value">{% if dashboard.basic_info.is_ban %}<span class="status-bad">O</span>{% else %}<span class="status-good">X</span>{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>인기/성능 지표</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">추천 노출 횟수</dt><dd class="metric-value">{{ dashboard.performance_metrics.recommendation_impressions }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">추천 클릭/선택 횟수</dt><dd class="metric-value">{{ dashboard.performance_metrics.recommendation_clicks }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">유저 평균 점수</dt><dd class="metric-value">{{ dashboard.performance_metrics.user_average_score|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">최근 7일</dt><dd class="metric-value">{{ dashboard.performance_metrics.trend_7d.rating_count }}건 / {{ dashboard.performance_metrics.trend_7d.average_star_rating|default:"-" }}</dd></div>
+        <div class="metric-row"><dt class="metric-label">최근 30일</dt><dd class="metric-value">{{ dashboard.performance_metrics.trend_30d.rating_count }}건 / {{ dashboard.performance_metrics.trend_30d.average_star_rating|default:"-" }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>유저 반응 분석</h2>
+      <div class="reaction-chart">
+        <div class="donut-chart" style="background: conic-gradient({{ dashboard.user_reaction_analysis.star_distribution_chart.gradient|safe }});">
+          <div class="donut-center">
+            <span>총 평가 수</span>
+            {{ dashboard.user_reaction_analysis.star_distribution_chart.total }}
+          </div>
+        </div>
+        <div class="chart-legend">
+          {% for item in dashboard.user_reaction_analysis.star_distribution_chart.items %}
+            <div class="legend-row">
+              <span class="legend-color" style="background: {{ item.color }}"></span>
+              <span>{{ item.star }}점</span>
+              <strong>{{ item.count }} ({{ item.percent }}%)</strong>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      <dl class="metric-list reaction-summary">
+        <div class="metric-row"><dt class="metric-label">좋아요 비율</dt><dd class="metric-value">{{ dashboard.user_reaction_analysis.like_ratio }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="dashboard-panel">
+      <h2>블랙리스트</h2>
+      <dl class="metric-list">
+        <div class="metric-row"><dt class="metric-label">차단 여부</dt><dd class="metric-value">{% if dashboard.blacklist_impact.is_ban %}<span class="status-bad">O</span>{% else %}<span class="status-good">X</span>{% endif %}</dd></div>
+        <div class="metric-row"><dt class="metric-label">차단 사유</dt><dd class="metric-value">{{ dashboard.blacklist_impact.ban_reason|default:"-" }}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+</div>
+{% endblock %}

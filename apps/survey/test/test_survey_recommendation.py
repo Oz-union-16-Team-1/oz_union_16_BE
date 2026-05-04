@@ -577,6 +577,33 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertIn(embedded_game.game_id, result_ids)
         self.assertNotIn(non_embedded_game.game_id, result_ids)
 
+    def test_recommendations_are_capped_to_top_fifteen_games(self) -> None:
+        for index in range(17):
+            game = create_game(
+                game_id=3000 + index,
+                name=f"추천 후보 {index}",
+                slug=f"recommendation-candidate-{index}",
+            )
+            SurveyGameVector.objects.create(
+                game_id=game.game_id,
+                embedding=[1.0] + ([0.0] * 1535),
+            )
+
+        result = self.service.get_recommendations(
+            user=self.user,
+            session_id=str(self.session.id),
+            cursor=None,
+            page_size=15,
+        )
+
+        self.assertEqual(result["count"], 15)
+        self.assertIsNone(result["next"])
+        self.assertEqual(len(result["results"]), 15)
+        self.assertNotIn(
+            3015,
+            [item["game_id"] for item in result["results"]],
+        )
+
     def test_cursor_encoding_roundtrip(self) -> None:
         item = SurveyGameVector.objects.create(
             game_id=999999,

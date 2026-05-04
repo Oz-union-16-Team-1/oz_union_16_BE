@@ -9,7 +9,6 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.games.models import Game
 from apps.survey.choices import SurveyRoleChoices, SurveyStatusChoices
 from apps.survey.models import (
     SurveyChatbotMessage,
@@ -323,8 +322,32 @@ class SurveyChatbotMessageAPITest(TestCase):
 
     def test_final_answer_creates_summary_and_closes_session(self) -> None:
         self.authenticate()
-        self.session.target_question_count = 1
+        self.session.target_question_count = 3
         self.session.save(update_fields=["target_question_count"])
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="팀원과 전략을 맞춰 경쟁하는 게임이 좋아요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=3,
+            message=TEST_NEXT_QUESTION,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=4,
+            message="보스 공략과 캐릭터 성장이 좋아요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=5,
+            message=TEST_NEXT_QUESTION,
+        )
         summary_payload = {
             "survey_answer": "전투와 성장의 손맛이 좋고 어두운 분위기의 액션 RPG를 선호합니다.",
             "excluded_keywords": ["엘든링"],
@@ -340,6 +363,10 @@ class SurveyChatbotMessageAPITest(TestCase):
                     summary_payload["survey_answer"],
                     summary_payload["excluded_keywords"],
                 ),
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.has_sufficient_recommendation_preferences",
+                return_value=True,
             ),
             patch(
                 "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.generate_survey_embedding",
@@ -377,8 +404,32 @@ class SurveyChatbotMessageAPITest(TestCase):
 
     def test_final_answer_closes_session_even_when_embedding_fails(self) -> None:
         self.authenticate()
-        self.session.target_question_count = 1
+        self.session.target_question_count = 3
         self.session.save(update_fields=["target_question_count"])
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="경쟁 게임에서 전략을 맞추는 플레이가 좋아요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=3,
+            message=TEST_NEXT_QUESTION,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=4,
+            message="짧게 여러 판 하는 템포가 좋아요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=5,
+            message=TEST_NEXT_QUESTION,
+        )
         summary_payload = {
             "survey_answer": "보스전과 어두운 분위기를 선호합니다.",
             "excluded_keywords": ["엘든링"],
@@ -394,6 +445,10 @@ class SurveyChatbotMessageAPITest(TestCase):
                     summary_payload["survey_answer"],
                     summary_payload["excluded_keywords"],
                 ),
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.has_sufficient_recommendation_preferences",
+                return_value=True,
             ),
             patch(
                 "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.generate_survey_embedding",
@@ -422,6 +477,115 @@ class SurveyChatbotMessageAPITest(TestCase):
         preference = UserPreference.objects.get(user=self.user)
         self.assertIsNone(preference.survey_vector)
 
+    def test_third_answer_continues_when_recommendation_slots_are_insufficient(
+        self,
+    ) -> None:
+        self.authenticate()
+        self.session.target_question_count = 3
+        self.session.save(update_fields=["target_question_count"])
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="격투 게임이 좋아요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=3,
+            message=TEST_NEXT_QUESTION,
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=4,
+            message="전투가 재미있어요.",
+        )
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.AI,
+            sequence=5,
+            message=TEST_NEXT_QUESTION,
+        )
+
+        with (
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.classify_user_message_intent",
+                return_value="NORMAL",
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.has_sufficient_recommendation_preferences",
+                return_value=False,
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.generate_next_question",
+                return_value=TEST_NEXT_QUESTION,
+            ),
+        ):
+            response = self.client.post(
+                self.url,
+                {"message": "피지컬로 이기는 게 좋아요."},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], SurveyStatusChoices.IN_PROGRESS)
+        self.assertEqual(response.data["progress"]["current_step"], 3)
+        self.assertEqual(response.data["progress"]["total_steps"], 4)
+        self.assertFalse(response.data["recommendation_ready"])
+
+    def test_fifth_answer_closes_even_when_recommendation_slots_are_insufficient(
+        self,
+    ) -> None:
+        self.authenticate()
+        self.session.target_question_count = 5
+        self.session.save(update_fields=["target_question_count"])
+        for sequence, role, message in (
+            (2, SurveyRoleChoices.USER, "격투 게임이 좋아요."),
+            (3, SurveyRoleChoices.AI, TEST_NEXT_QUESTION),
+            (4, SurveyRoleChoices.USER, "전투가 재미있어요."),
+            (5, SurveyRoleChoices.AI, TEST_NEXT_QUESTION),
+            (6, SurveyRoleChoices.USER, "피지컬로 이기는 게 좋아요."),
+            (7, SurveyRoleChoices.AI, TEST_NEXT_QUESTION),
+            (8, SurveyRoleChoices.USER, "빠른 게임이 좋아요."),
+            (9, SurveyRoleChoices.AI, TEST_NEXT_QUESTION),
+        ):
+            SurveyChatbotMessage.objects.create(
+                session=self.session,
+                role=role,
+                sequence=sequence,
+                message=message,
+            )
+
+        with (
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.classify_user_message_intent",
+                return_value="NORMAL",
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.has_sufficient_recommendation_preferences",
+                return_value=False,
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.summarize_session",
+                return_value=("빠른 전투와 피지컬 중심 게임을 선호합니다.", []),
+            ),
+            patch(
+                "apps.survey.services.survey_chatbot_message.SurveyChatbotMessageService.generate_survey_embedding",
+                return_value=[0.1] * 1536,
+            ),
+        ):
+            response = self.client.post(
+                self.url,
+                {"message": "짧은 판이 좋아요."},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], SurveyStatusChoices.CLOSED)
+        self.assertTrue(response.data["recommendation_ready"])
+        self.assertEqual(response.data["progress"]["current_step"], 5)
+
 
 class SurveyChatbotMessageServiceTest(TestCase):
     def setUp(self) -> None:
@@ -435,7 +599,7 @@ class SurveyChatbotMessageServiceTest(TestCase):
             SURVEY_CHATBOT_QUESTION_GENERATION_PROMPT,
         )
         self.assertIn(
-            "첫 정상 답변에서 드러난 취향 앵커를 기준으로 추천 품질에 필요한 추가 취향 정보를 자연스럽게 확장",
+            "사용자의 답변을 추천에 필요한 취향 슬롯으로 빠르게 구조화합니다.",
             SURVEY_CHATBOT_QUESTION_GENERATION_PROMPT,
         )
 
@@ -788,11 +952,11 @@ class SurveyChatbotMessageServiceTest(TestCase):
         self.assertIn("다크소울처럼 어둡고 보스전이 많은 게임이 좋아요.", prompt)
         self.assertIn("취향 앵커 축:", prompt)
         self.assertIn("난이도 성향", prompt)
-        self.assertIn("전투 스타일", prompt)
+        self.assertIn("핵심 재미 포인트", prompt)
         self.assertIn("전체 대화:", prompt)
-        self.assertIn("앵커와 가까운 인접 축으로만 확장합니다.", prompt)
+        self.assertIn("다음에 채울 슬롯", prompt)
         self.assertIn(
-            "플레이 방식",
+            "PvP/PvE 성향",
             prompt,
         )
         self.assertIn("확보된 취향:", prompt)
@@ -835,6 +999,69 @@ class SurveyChatbotMessageServiceTest(TestCase):
 
         self.assertNotIn("난이도 성향", confirmed_preferences)
         self.assertIn("난이도 성향", uncertain_preferences)
+
+    def test_preference_slot_state_tracks_recommendation_slots(self) -> None:
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message=(
+                "FPS 경쟁전에서 팀원과 전술을 맞추고 빠르게 피지컬로 "
+                "이기는 플레이가 좋아요."
+            ),
+        )
+
+        slot_state = self.service.build_preference_slot_state(self.session)
+
+        self.assertEqual(slot_state["genre_game_type"], "confirmed")
+        self.assertEqual(slot_state["pvp_pve"], "confirmed")
+        self.assertEqual(slot_state["social_preference"], "confirmed")
+        self.assertEqual(slot_state["fun_factor"], "confirmed")
+        self.assertEqual(slot_state["tempo"], "confirmed")
+
+    def test_recommendation_sufficiency_requires_core_slot_groups(self) -> None:
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message=(
+                "FPS 경쟁전에서 팀원과 전술을 맞추고 빠른 템포로 "
+                "피지컬을 발휘하는 게임이 좋아요."
+            ),
+        )
+
+        self.assertTrue(
+            self.service.has_sufficient_recommendation_preferences(self.session)
+        )
+
+    def test_recommendation_sufficiency_fails_without_play_style_slot(self) -> None:
+        SurveyChatbotMessage.objects.create(
+            session=self.session,
+            role=SurveyRoleChoices.USER,
+            sequence=2,
+            message="RPG에서 성장과 스토리, 어려운 난이도가 좋아요.",
+        )
+
+        self.assertFalse(
+            self.service.has_sufficient_recommendation_preferences(self.session)
+        )
+
+    def test_should_complete_session_uses_minimum_sufficiency_and_max_cap(self) -> None:
+        with patch.object(
+            self.service,
+            "has_sufficient_recommendation_preferences",
+            return_value=True,
+        ):
+            self.assertFalse(self.service.should_complete_session(self.session, 2))
+            self.assertTrue(self.service.should_complete_session(self.session, 3))
+
+        with patch.object(
+            self.service,
+            "has_sufficient_recommendation_preferences",
+            return_value=False,
+        ):
+            self.assertFalse(self.service.should_complete_session(self.session, 4))
+            self.assertTrue(self.service.should_complete_session(self.session, 5))
 
     def test_detect_active_genre_context_from_recent_messages(self) -> None:
         SurveyChatbotMessage.objects.create(
@@ -990,7 +1217,8 @@ class SurveyChatbotMessageServiceTest(TestCase):
                 self.session
             )
 
-        self.assertIn("보스 공략과 캐릭터 성장이 좋아요", survey_answer)
+        self.assertIn("PvE", survey_answer)
+        self.assertIn("성장", survey_answer)
         self.assertEqual(excluded_keywords, [])
 
     def test_summarize_session_raises_without_user_messages(self) -> None:
@@ -1019,7 +1247,8 @@ class SurveyChatbotMessageServiceTest(TestCase):
                 self.session
             )
 
-        self.assertIn("어두운 분위기와 어려운 보스전을 선호해요", survey_answer)
+        self.assertIn("PvE", survey_answer)
+        self.assertIn("난이도", survey_answer)
         self.assertEqual(excluded_keywords, [])
 
     def test_summarize_session_retries_when_summary_is_incomplete(self) -> None:
@@ -1037,13 +1266,14 @@ class SurveyChatbotMessageServiceTest(TestCase):
                 '{"survey_answer":"사용자는 보스 패턴을 익히는 전략적인 전투를"',
                 '{"survey_answer":"사용자는 보스를 공략하고 얻은 재화로 캐릭터를 성장시키는 과정에서 큰 보람을 느끼며, 이러한 성장 요소를 선호"',
                 '{"survey_answer":"사용자는 보스 패턴을 익히는 전략적인 전투를 선호합니다.","excluded_keywords":[]}',
+                "다크소울",
             ],
         ) as mock_generate:
             survey_answer, excluded_keywords = self.service.summarize_session(
                 self.session
             )
 
-        self.assertEqual(mock_generate.call_count, 3)
+        self.assertEqual(mock_generate.call_count, 4)
         self.assertEqual(
             survey_answer,
             "사용자는 보스 패턴을 익히는 전략적인 전투를 선호합니다.",
@@ -1053,7 +1283,6 @@ class SurveyChatbotMessageServiceTest(TestCase):
     def test_summarize_session_retries_when_summary_has_repeated_sentences(
         self,
     ) -> None:
-        Game.objects.create(game_id=903, name="로스트아크", slug="lost-ark")
         SurveyChatbotMessage.objects.create(
             session=self.session,
             role=SurveyRoleChoices.USER,
@@ -1075,13 +1304,14 @@ class SurveyChatbotMessageServiceTest(TestCase):
             side_effect=[
                 f'{{"survey_answer":"{repeated_summary}","excluded_keywords":[]}}',
                 f'{{"survey_answer":"{compact_summary}","excluded_keywords":[]}}',
+                "로스트아크",
             ],
         ) as mock_generate:
             survey_answer, excluded_keywords = self.service.summarize_session(
                 self.session
             )
 
-        self.assertEqual(mock_generate.call_count, 2)
+        self.assertEqual(mock_generate.call_count, 3)
         self.assertEqual(survey_answer, compact_summary)
         self.assertEqual(excluded_keywords, ["로스트아크"])
 
@@ -1153,16 +1383,28 @@ class SurveyChatbotMessageServiceTest(TestCase):
         self.assertIsNone(self.service.clean_direct_game_keyword("게임"))
         self.assertIsNone(self.service.clean_direct_game_keyword("a"))
 
-    def test_build_fallback_summary_truncates_long_message(self) -> None:
-        summary = self.service.build_fallback_summary(["보스 전투가 좋아요. " * 80])
+    def test_build_fallback_summary_uses_preference_slots_instead_of_raw_join(
+        self,
+    ) -> None:
+        summary = self.service.build_fallback_summary(
+            [
+                "발로란트에서 에이스 할 때 fps를 많이 좋아하는 거 같아 "
+                "다른 플레이어들과 싸우는 게 좋아 AI들과 싸우면 큰 재미를 못 느껴 "
+                "팀원들과 함께 전략을 짜고 협력하는 플레이를 더 좋아해 "
+                "편안하고 쉽게 즐길 수 있는 게임이 좋아."
+            ]
+        )
 
         self.assertIsNotNone(summary)
         assert summary is not None
         self.assertFalse(
             summary.startswith("사용자는 설문 답변에서 다음 취향을 직접 언급했습니다:")
         )
-        self.assertTrue(summary.startswith("보스 전투가 좋아요"))
-        self.assertLessEqual(len(summary), 560)
+        self.assertNotIn("발로란트에서 에이스 할 때", summary)
+        self.assertIn("FPS", summary)
+        self.assertIn("PvP", summary)
+        self.assertIn("팀원과 전략", summary)
+        self.assertIn("편안하고 쉽게", summary)
 
     def test_extract_survey_answer_from_broken_json_returns_none_without_match(
         self,
@@ -1171,19 +1413,40 @@ class SurveyChatbotMessageServiceTest(TestCase):
             self.service.extract_survey_answer_from_broken_json("broken response")
         )
 
-    def test_extract_direct_game_keywords_normalizes_direct_mentions(self) -> None:
-        Game.objects.create(game_id=901, name="엘든링", slug="elden-ring")
-        Game.objects.create(game_id=902, name="철권", slug="tekken")
+    def test_generate_excluded_keywords_with_llm_extracts_game_names_from_messages(
+        self,
+    ) -> None:
+        with patch.object(
+            self.service.session_service,
+            "generate_question_with_llm",
+            return_value="발로란트",
+        ) as mock_generate:
+            keywords = self.service.generate_excluded_keywords_with_llm(
+                user_messages=[
+                    "발로란트에서 에이스 할 때 fps를 많이 좋아하는 거 같아.",
+                ],
+                nickname=self.user.nickname,
+            )
 
-        keywords = self.service.extract_direct_game_keywords(
-            [
-                "엘든링이랑 다크소울처럼 보스전이 어려운 게임을 좋아해요.",
-                "철권을 좋아하고 스킬은 제외 키워드가 아니어야 해요.",
-                "발로란트 할 때 에이스하는 순간이 좋아요.",
-            ]
+        self.assertEqual(keywords, ["발로란트"])
+        _, kwargs = mock_generate.call_args
+        self.assertIn("일반 텍스트", kwargs["system_prompt"])
+
+    def test_parse_excluded_keywords_response_parses_plain_text_response(self) -> None:
+        self.assertEqual(
+            self.service.parse_excluded_keywords_response("없음"),
+            [],
         )
-
-        self.assertEqual(keywords, ["다크소울", "발로란트", "엘든링", "철권"])
+        self.assertEqual(
+            self.service.parse_excluded_keywords_response(
+                "발로란트\n철권\n발로란트\n에이스"
+            ),
+            ["발로란트", "철권"],
+        )
+        self.assertEqual(
+            self.service.parse_excluded_keywords_response("발로란트, 철권"),
+            ["발로란트", "철권"],
+        )
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")
     @patch("apps.survey.services.survey_chatbot_message.requests.post")

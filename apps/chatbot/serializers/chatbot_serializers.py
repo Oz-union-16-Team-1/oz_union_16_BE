@@ -13,11 +13,14 @@ class ChatbotMessageRequestSerializer(serializers.Serializer):
             "invalid": "메시지 형식이 올바르지 않습니다.",
         },
     )
-    session_id = serializers.UUIDField(
+    session_id = serializers.CharField(
         required=False,
+        allow_blank=False,
+        trim_whitespace=True,
         error_messages={
-            "invalid": "session_id 형식이 올바르지 않습니다.",
+            "blank": "session_id 형식이 올바르지 않습니다.",
             "null": "session_id 형식이 올바르지 않습니다.",
+            "invalid": "session_id 형식이 올바르지 않습니다.",
         },
     )
 
@@ -33,6 +36,14 @@ class ChatbotMessageResponseSerializer(serializers.Serializer):
     expires_at = serializers.DateTimeField()
     expires_in_seconds = serializers.IntegerField()
     session_ttl_seconds = serializers.IntegerField()
+
+
+class ChatbotMessageSchemaResponseSerializer(serializers.Serializer):
+    session_id = serializers.UUIDField()
+
+
+class ChatbotErrorResponseSerializer(serializers.Serializer):
+    error_detail = serializers.CharField()
 
 
 class ChatbotSessionStatusResponseSerializer(serializers.Serializer):
