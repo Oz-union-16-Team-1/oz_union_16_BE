@@ -131,6 +131,11 @@ MATCH_RESULT_LIKED_RATIO_CAP: float = 0.30  # liked 보충 최대 30%
 
 MATCH_RESULT_SIM_VECTOR_DIM: int = 13  # sim 계산은 dim1~13만 사용(dim14 제외)
 
+# responses/result sim 분리식 가중치
+# dim1~8(장르) + dim9~13(분위기/성향)
+MATCH_RESULT_SIM_GENRE_WEIGHT: float = 0.35
+MATCH_RESULT_SIM_MOOD_WEIGHT: float = 0.65
+
 # responses/result 유사도 가중치 (dim1~13 전용, dim14 제외)
 # 장르축(1~8): 0.6, 분위기/성향축(9~13): 1.6
 MATCH_RESULT_SIM_VECTOR_WEIGHTS: tuple[float, ...] = (
