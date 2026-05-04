@@ -181,8 +181,7 @@ class MatchCandidatesAPITest(MatchCandidatesFixtureMixin, TestCase):
         self.assertEqual(item["game_id"], self.genre8_game.game_id)
         self.assertEqual(item["rating"], 0.0)
         self.assertEqual(item["trailer_url"], "https://www.youtube.com/watch?v=xyz123")
-        self.assertLessEqual(len(item["description"]), 201)
-        self.assertTrue(item["description"].endswith("…"))
+        self.assertEqual(item["description"], self.genre8_game.summary)
 
     def test_get_candidates_not_found_when_no_candidates(self):
         response = self.client.get(self.url, {"genre_id": 7, "retry_no": 0})
@@ -239,7 +238,7 @@ class MatchCandidatesServiceHelperTest(MatchCandidatesFixtureMixin, TestCase):
         self.assertEqual(svc._normalize_rating("82.37"), 82.4)
 
         long_text = "word " * 80
-        self.assertTrue(svc._normalize_description(long_text, "").endswith("…"))
+        self.assertEqual(svc._normalize_description(long_text, ""), long_text.strip())
         self.assertEqual(svc._normalize_description("", "story"), "story")
 
         self.assertEqual(svc._to_trailer_url([]), "")
