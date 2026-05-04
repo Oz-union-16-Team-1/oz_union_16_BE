@@ -1047,6 +1047,7 @@ class SurveyChatbotMessageServiceTest(TestCase):
         )
 
     def test_should_complete_session_uses_minimum_sufficiency_and_max_cap(self) -> None:
+        self.session.target_question_count = 3
         with patch.object(
             self.service,
             "has_sufficient_recommendation_preferences",
@@ -1054,6 +1055,15 @@ class SurveyChatbotMessageServiceTest(TestCase):
         ):
             self.assertFalse(self.service.should_complete_session(self.session, 2))
             self.assertTrue(self.service.should_complete_session(self.session, 3))
+
+        self.session.target_question_count = 5
+        with patch.object(
+            self.service,
+            "has_sufficient_recommendation_preferences",
+            return_value=True,
+        ):
+            self.assertFalse(self.service.should_complete_session(self.session, 3))
+            self.assertTrue(self.service.should_complete_session(self.session, 5))
 
         with patch.object(
             self.service,
