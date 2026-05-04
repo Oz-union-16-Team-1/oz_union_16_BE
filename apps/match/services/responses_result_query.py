@@ -259,13 +259,13 @@ class MatchResponsesResultQueryService:
         return vec if vec else None
 
     def _score_personalized_once(
-            self,
-            *,
-            user_vector: list[float],
-            sim_floor: float,
-            liked_ids: set[int],
-            liked_mean_vector: list[float] | None,
-            disliked_mean_vector: list[float] | None,
+        self,
+        *,
+        user_vector: list[float],
+        sim_floor: float,
+        liked_ids: set[int],
+        liked_mean_vector: list[float] | None,
+        disliked_mean_vector: list[float] | None,
     ) -> list[RankedGame]:
         # result sim은 dim1~13만 사용 (dim14 인기도 제외)
         sim_user_vector = self._result_sim_vector(user_vector)
@@ -335,7 +335,9 @@ class MatchResponsesResultQueryService:
             self._result_sim_vector(liked_mean_vector) if liked_mean_vector else None
         )
         disliked_mean_sim_vector = (
-            self._result_sim_vector(disliked_mean_vector) if disliked_mean_vector else None
+            self._result_sim_vector(disliked_mean_vector)
+            if disliked_mean_vector
+            else None
         )
 
         for row in game_rows:
