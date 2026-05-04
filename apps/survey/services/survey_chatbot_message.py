@@ -215,18 +215,6 @@ INCOMPLETE_SUMMARY_ENDINGS = (
     "즐기",
     "중요",
 )
-DIRECT_GAME_KEYWORD_PATTERNS = (
-    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:이랑|랑|하고|와|과)\s",
-    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:을|를|은|는|이|가)\s*(?:좋|재밌|즐겨|선호|해봤|했)",
-    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:에서|으로)\s",
-)
-DIRECT_GAME_SUFFIX_PATTERN = (
-    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:처럼|같은|같이)"
-)
-DIRECT_GAME_CONTEXT_PATTERNS = (
-    r"(?P<keyword>[가-힣A-Za-z0-9][가-힣A-Za-z0-9 .:'’+\-]{1,40}?)(?:\s*할\s*때|\s*할때|\s*하면서|\s*하면)",
-)
-DIRECT_GAME_CONNECTORS = r"(?:이랑|랑|하고|와|과|,|/)"
 DIRECT_GAME_KEYWORD_STOPWORDS = {
     "게임",
     "장르",
@@ -234,6 +222,11 @@ DIRECT_GAME_KEYWORD_STOPWORDS = {
     "전투",
     "탐험",
     "성장",
+    "승리",
+    "에이스",
+    "상대",
+    "플레이어",
+    "ai",
     "보스",
     "보스 몬스터",
     "스토리",
@@ -243,6 +236,229 @@ DIRECT_GAME_KEYWORD_STOPWORDS = {
     "영역",
     "플레이",
 }
+EXCLUDED_KEYWORDS_SYSTEM_PROMPT = """
+당신은 게임 취향 설문 대화에서 사용자가 직접 언급한 게임명을 추출하는 분석 도우미입니다.
+
+당신의 역할은
+추천 결과에서 제외해야 할 게임명을 찾아
+일반 텍스트로만 출력하는 것입니다.
+
+---
+
+## 1. 역할 및 목표
+
+사용자가 설문 답변에서 직접 언급한 게임 제목을 추출합니다.
+추출된 게임명은 추천 결과 제외 키워드로 사용됩니다.
+
+---
+
+## 2. 추출 기준
+
+- 사용자가 실제로 언급한 게임 제목만 포함합니다.
+- 시리즈명이나 게임명으로 볼 수 있는 고유명사만 포함합니다.
+- 행동, 장르, 감정, 역할, 상황, 플레이 방식은 포함하지 않습니다.
+- 예: `발로란트에서 에이스 할 때`가 있으면 `발로란트`만 출력합니다.
+- 게임명이 없으면 `없음`만 출력합니다.
+
+---
+
+## 3. 금지 사항
+
+- 게임명이 아닌 행동을 출력하지 않습니다.
+- 장르명, 감정 표현, 플레이 방식, 역할명을 출력하지 않습니다.
+- 설명, 마크다운, 코드블록을 출력하지 않습니다.
+
+---
+
+## 4. 출력 규칙
+
+- 게임명만 출력합니다.
+- 게임명이 여러 개면 한 줄에 하나씩 출력합니다.
+- 쉼표로 나열해도 됩니다.
+"""
+EXCLUDED_KEYWORDS_USER_PROMPT = """
+게임명 추출 요청입니다.
+
+---
+
+## 1. 작업 대상
+
+아래 설문 대화에서 사용자가 직접 언급한 게임명만 일반 텍스트로 출력하세요.
+
+---
+
+## 2. 사용자 답변
+
+{nickname}님 답변:
+{user_messages}
+
+---
+
+## 3. 최종 출력
+
+게임명이 있으면 게임명만 출력합니다.
+게임명이 없으면 `없음`만 출력합니다.
+"""
+MIN_SURVEY_QUESTIONS = 3
+MAX_SURVEY_QUESTIONS = 5
+PREFERENCE_SLOT_REQUIRED_COUNT = 4
+PREFERENCE_FUN_FACTOR_SLOTS = {"fun_factor"}
+PREFERENCE_PLAY_STYLE_SLOTS = {"pvp_pve", "social_preference"}
+PREFERENCE_CONSTRAINT_SLOTS = {
+    "difficulty",
+    "tempo",
+    "session_length",
+    "dislike",
+}
+
+
+@dataclass(frozen=True)
+class PreferenceSlotDefinition:
+    key: str
+    label: str
+    keywords: tuple[str, ...]
+
+
+PREFERENCE_SLOT_DEFINITIONS = (
+    PreferenceSlotDefinition(
+        key="genre_game_type",
+        label="선호 장르/게임 타입",
+        keywords=(
+            "장르",
+            "종류",
+            "액션",
+            "rpg",
+            "fps",
+            "슈팅",
+            "퍼즐",
+            "전략",
+            "시뮬",
+            "레이싱",
+            "스포츠",
+            "격투",
+            "공포",
+            "생존",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="pvp_pve",
+        label="PvP/PvE 성향",
+        keywords=(
+            "pvp",
+            "pve",
+            "대전",
+            "경쟁전",
+            "상대",
+            "유저",
+            "보스",
+            "몬스터",
+            "레이드",
+            "던전",
+            "컴퓨터",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="social_preference",
+        label="경쟁/협동/솔로 성향",
+        keywords=(
+            "경쟁",
+            "협동",
+            "협력",
+            "팀",
+            "팀원",
+            "친구",
+            "혼자",
+            "솔로",
+            "역할",
+            "전술",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="fun_factor",
+        label="핵심 재미 포인트",
+        keywords=(
+            "피지컬",
+            "전략",
+            "성장",
+            "스토리",
+            "탐험",
+            "전투",
+            "공략",
+            "운영",
+            "수집",
+            "빌드",
+            "몰입",
+            "성취감",
+            "쾌감",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="difficulty",
+        label="난이도 성향",
+        keywords=(
+            "난이도",
+            "어렵",
+            "어려운",
+            "쉬운",
+            "쉽게",
+            "편안",
+            "하드",
+            "도전",
+            "압박",
+            "긴장",
+            "패턴",
+            "빡센",
+            "캐주얼",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="tempo",
+        label="진행 템포",
+        keywords=(
+            "빠른",
+            "빠르게",
+            "천천히",
+            "템포",
+            "속도",
+            "즉각",
+            "준비",
+            "반응",
+            "차근차근",
+            "느긋",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="session_length",
+        label="세션 길이",
+        keywords=(
+            "짧게",
+            "짧은",
+            "오래",
+            "길게",
+            "긴 시간",
+            "한 판",
+            "몇 판",
+            "몰아서",
+            "접속",
+        ),
+    ),
+    PreferenceSlotDefinition(
+        key="dislike",
+        label="비선호 요소",
+        keywords=(
+            "싫",
+            "별로",
+            "피곤",
+            "지루",
+            "반복",
+            "노가다",
+            "스트레스",
+            "압박감은",
+            "안 좋아",
+            "안맞",
+        ),
+    ),
+)
 
 
 class SurveyChatbotSessionClosed(APIException):
@@ -354,7 +570,10 @@ class SurveyChatbotMessageService:
 
             current_step = session.messages.filter(role=SurveyRoleChoices.USER).count()
 
-            if current_step >= session.target_question_count:
+            if self.should_complete_session(
+                session=session,
+                current_step=current_step,
+            ):
                 survey_answer, excluded_keywords = self.summarize_session(session)
                 recommendation_ready = True
                 warning_message = None
@@ -394,6 +613,10 @@ class SurveyChatbotMessageService:
                     warning_message=warning_message,
                 )
 
+            self.extend_target_question_count_if_needed(
+                session=session,
+                current_step=current_step,
+            )
             next_question = self.generate_next_question(session=session)
             self.save_ai_message(session=session, message=next_question)
             session.status = SurveyStatusChoices.IN_PROGRESS
@@ -638,7 +861,12 @@ class SurveyChatbotMessageService:
         return "NORMAL"
 
     def decide_target_question_count(self, user_message: str) -> int:
-        return self.fallback_target_question_count(user_message)
+        return min(
+            MAX_SURVEY_QUESTIONS,
+            max(
+                MIN_SURVEY_QUESTIONS, self.fallback_target_question_count(user_message)
+            ),
+        )
 
     def fallback_target_question_count(self, user_message: str) -> int:
         normalized = user_message.strip()
@@ -647,6 +875,29 @@ class SurveyChatbotMessageService:
         if len(normalized) >= 40 or normalized.count(" ") >= 6:
             return 4
         return 5
+
+    def should_complete_session(
+        self,
+        session: SurveyChatbotSession,
+        current_step: int,
+    ) -> bool:
+        if current_step >= MAX_SURVEY_QUESTIONS:
+            return True
+        if current_step < MIN_SURVEY_QUESTIONS:
+            return False
+        return self.has_sufficient_recommendation_preferences(session)
+
+    def extend_target_question_count_if_needed(
+        self,
+        session: SurveyChatbotSession,
+        current_step: int,
+    ) -> None:
+        target_question_count = session.target_question_count or MAX_SURVEY_QUESTIONS
+        if current_step >= target_question_count:
+            session.target_question_count = min(
+                MAX_SURVEY_QUESTIONS,
+                current_step + 1,
+            )
 
     def generate_next_question(self, session: SurveyChatbotSession) -> str:
         system_prompt, prompt = self.build_next_question_prompts(session)
@@ -712,6 +963,7 @@ class SurveyChatbotMessageService:
         confirmed_preferences, uncertain_preferences = self.build_preference_state(
             session
         )
+        next_preference_slot = self.get_next_preference_slot_label(session)
         active_genre_context = self.detect_active_genre_context(session)
         anchor_answer = self.get_anchor_answer(session)
         anchor_topics = self.build_anchor_topics(anchor_answer)
@@ -726,6 +978,7 @@ class SurveyChatbotMessageService:
             "anchor_topics": anchor_topics,
             "confirmed_preferences": confirmed_preferences,
             "uncertain_preferences": uncertain_preferences,
+            "next_preference_slot": next_preference_slot,
             "active_genre_context": active_genre_context,
             "current_question": current_question,
             "latest_user_message": latest_user_message,
@@ -782,43 +1035,77 @@ class SurveyChatbotMessageService:
         )
 
     def build_preference_state(self, session: SurveyChatbotSession) -> tuple[str, str]:
-        topic_labels = {
-            "genre": "선호 장르",
-            "difficulty": "난이도 성향",
-            "coop_competition": "경쟁/협동 성향",
-            "story": "스토리 몰입",
-            "combat": "전투 스타일",
-            "exploration": "탐험 성향",
-            "growth": "성장 방식",
-            "tempo": "플레이 템포",
-            "reward": "보상 구조",
-            "mastery": "숙련/캐릭터 운용",
-        }
+        slot_state = self.build_preference_slot_state(session)
+        confirmed_preferences = [
+            slot.label
+            for slot in PREFERENCE_SLOT_DEFINITIONS
+            if slot_state[slot.key] == "confirmed"
+        ]
+        uncertain_preferences = [
+            slot.label
+            for slot in PREFERENCE_SLOT_DEFINITIONS
+            if slot_state[slot.key] != "confirmed"
+        ]
+        return (
+            ", ".join(confirmed_preferences) if confirmed_preferences else "없음",
+            ", ".join(uncertain_preferences) if uncertain_preferences else "없음",
+        )
+
+    def build_preference_slot_state(
+        self,
+        session: SurveyChatbotSession,
+    ) -> dict[str, str]:
         confirmed_keys = set()
         uncertain_keys = set()
         for message in session.messages.filter(role=SurveyRoleChoices.USER).values_list(
             "message", flat=True
         ):
-            message_topics = self.session_service.detect_question_topics(message)
+            message_slots = self.detect_preference_slots(message)
             if self.is_uncertain_preference_answer(message.strip().lower()):
-                uncertain_keys.update(message_topics)
+                uncertain_keys.update(message_slots)
                 continue
-            confirmed_keys.update(message_topics)
+            confirmed_keys.update(message_slots)
 
         asked_text = "\n".join(self.get_previous_ai_questions(session))
-        asked_keys = self.session_service.detect_question_topics(asked_text)
-        uncertain_keys.update(asked_keys - confirmed_keys)
-        uncertain_keys.update(set(topic_labels) - confirmed_keys - uncertain_keys)
+        uncertain_keys.update(self.detect_preference_slots(asked_text) - confirmed_keys)
 
-        confirmed_preferences = [
-            label for key, label in topic_labels.items() if key in confirmed_keys
-        ]
-        uncertain_preferences = [
-            label for key, label in topic_labels.items() if key in uncertain_keys
-        ]
+        return {
+            slot.key: (
+                "confirmed"
+                if slot.key in confirmed_keys
+                else "uncertain" if slot.key in uncertain_keys else "missing"
+            )
+            for slot in PREFERENCE_SLOT_DEFINITIONS
+        }
+
+    def detect_preference_slots(self, text: str) -> set[str]:
+        normalized_text = text.lower()
+        return {
+            slot.key
+            for slot in PREFERENCE_SLOT_DEFINITIONS
+            if any(keyword.lower() in normalized_text for keyword in slot.keywords)
+        }
+
+    def get_next_preference_slot_label(self, session: SurveyChatbotSession) -> str:
+        slot_state = self.build_preference_slot_state(session)
+        for slot in PREFERENCE_SLOT_DEFINITIONS:
+            if slot_state[slot.key] != "confirmed":
+                return slot.label
+        return "없음"
+
+    def has_sufficient_recommendation_preferences(
+        self,
+        session: SurveyChatbotSession,
+    ) -> bool:
+        slot_state = self.build_preference_slot_state(session)
+        confirmed_keys = {
+            key for key, state in slot_state.items() if state == "confirmed"
+        }
         return (
-            ", ".join(confirmed_preferences) if confirmed_preferences else "없음",
-            ", ".join(uncertain_preferences) if uncertain_preferences else "없음",
+            len(confirmed_keys) >= PREFERENCE_SLOT_REQUIRED_COUNT
+            and bool(confirmed_keys & PREFERENCE_FUN_FACTOR_SLOTS)
+            and bool(confirmed_keys & PREFERENCE_PLAY_STYLE_SLOTS)
+            and bool(confirmed_keys & PREFERENCE_CONSTRAINT_SLOTS)
         )
 
     def detect_active_genre_context(self, session: SurveyChatbotSession) -> str:
@@ -894,15 +1181,15 @@ class SurveyChatbotMessageService:
                 "message", flat=True
             )
         )
+        nickname = self.session_service.get_user_nickname(session.user)
         prompt_values = {
-            "nickname": self.session_service.get_user_nickname(session.user),
+            "nickname": nickname,
             "user_messages": "\n".join(f"- {message}" for message in user_messages),
         }
         system_prompt = SURVEY_CHATBOT_SUMMARY_SYSTEM_PROMPT.strip().format(
             **prompt_values
         )
         prompt = SURVEY_CHATBOT_SUMMARY_USER_PROMPT.strip().format(**prompt_values)
-        direct_keywords = self.extract_direct_game_keywords(user_messages)
 
         for _ in range(SUMMARY_GENERATION_MAX_ATTEMPTS):
             response = self.session_service.generate_question_with_llm(
@@ -916,11 +1203,17 @@ class SurveyChatbotMessageService:
             if self.is_complete_summary_answer(
                 survey_answer
             ) and not self.has_repeated_summary_sentences(survey_answer):
-                return survey_answer or "", direct_keywords
+                return survey_answer or "", self.generate_excluded_keywords_with_llm(
+                    user_messages=user_messages,
+                    nickname=nickname,
+                )
 
         fallback_summary = self.build_fallback_summary(user_messages)
         if fallback_summary:
-            return fallback_summary, direct_keywords
+            return fallback_summary, self.generate_excluded_keywords_with_llm(
+                user_messages=user_messages,
+                nickname=nickname,
+            )
 
         raise SurveySummaryGenerationUnavailable()
 
@@ -1031,10 +1324,100 @@ class SurveyChatbotMessageService:
             return None
 
         joined = " ".join(cleaned_messages)
-        if len(joined) > FALLBACK_SUMMARY_MAX_LENGTH:
-            joined = joined[:FALLBACK_SUMMARY_MAX_LENGTH].rstrip()
+        sentences = self.build_slot_based_fallback_summary_sentences(joined)
+        if sentences:
+            return " ".join(sentences)
 
-        return joined if joined.endswith(".") else f"{joined}."
+        return "게임 취향과 관련된 답변을 제공했지만 구체적인 추천 기준은 충분히 정리되지 않았습니다."
+
+    def build_slot_based_fallback_summary_sentences(self, text: str) -> list[str]:
+        sentences = []
+        normalized_text = text.lower()
+
+        genre_label = self.extract_fallback_genre_label(normalized_text)
+        if genre_label:
+            sentences.append(f"{genre_label} 장르나 게임 유형에 관심을 보입니다.")
+
+        if any(keyword in normalized_text for keyword in ("ai", "컴퓨터")) and any(
+            keyword in normalized_text
+            for keyword in ("못 느껴", "재미를 못", "큰 재미")
+        ):
+            sentences.append(
+                "AI 상대보다 다른 플레이어와 겨루는 PvP 플레이에서 더 큰 재미를 느끼는 편입니다."
+            )
+        elif any(
+            keyword in normalized_text
+            for keyword in ("pvp", "대전", "경쟁전", "상대", "플레이어", "유저")
+        ):
+            sentences.append("다른 플레이어와 겨루는 PvP 플레이를 선호합니다.")
+        elif any(
+            keyword in normalized_text
+            for keyword in ("pve", "보스", "몬스터", "레이드", "던전")
+        ):
+            sentences.append("보스나 몬스터를 공략하는 PvE 플레이에 관심이 있습니다.")
+
+        if any(
+            keyword in normalized_text
+            for keyword in ("팀", "팀원", "협력", "협동", "전략을 짜", "전술")
+        ):
+            sentences.append("팀원과 전략을 짜고 협력하는 플레이를 선호합니다.")
+        elif any(keyword in normalized_text for keyword in ("혼자", "솔로")):
+            sentences.append("혼자 몰입해서 진행하는 플레이를 선호합니다.")
+
+        fun_factors = self.extract_fallback_fun_factor_labels(normalized_text)
+        if fun_factors:
+            sentences.append(
+                f"{', '.join(fun_factors)} 중심의 재미 요소를 중요하게 여깁니다."
+            )
+
+        if any(keyword in normalized_text for keyword in ("편안", "쉽게", "쉬운")):
+            sentences.append("편안하고 쉽게 즐길 수 있는 난이도를 선호합니다.")
+        elif any(
+            keyword in normalized_text
+            for keyword in ("어렵", "어려운", "하드", "도전", "긴장", "압박", "빡센")
+        ):
+            sentences.append("도전적이거나 긴장감 있는 난이도에도 흥미를 보입니다.")
+
+        return sentences
+
+    def extract_fallback_genre_label(self, normalized_text: str) -> str | None:
+        genre_keywords = (
+            ("fps", "FPS"),
+            ("슈팅", "슈팅"),
+            ("rpg", "RPG"),
+            ("격투", "격투"),
+            ("액션", "액션"),
+            ("전략", "전략"),
+            ("퍼즐", "퍼즐"),
+            ("레이싱", "레이싱"),
+            ("스포츠", "스포츠"),
+            ("시뮬", "시뮬레이션"),
+        )
+        for keyword, label in genre_keywords:
+            if keyword in normalized_text:
+                return label
+        return None
+
+    def extract_fallback_fun_factor_labels(self, normalized_text: str) -> list[str]:
+        factor_keywords = (
+            ("피지컬", "피지컬"),
+            ("전략", "전략"),
+            ("성장", "성장"),
+            ("스토리", "스토리"),
+            ("탐험", "탐험"),
+            ("전투", "전투"),
+            ("공략", "공략"),
+            ("에이스", "실력 발휘"),
+            ("쾌감", "성취감"),
+            ("성취감", "성취감"),
+        )
+        labels = []
+        seen_labels = set()
+        for keyword, label in factor_keywords:
+            if keyword in normalized_text and label not in seen_labels:
+                seen_labels.add(label)
+                labels.append(label)
+        return labels[:3]
 
     def clean_summary_source_message(self, message: str) -> str:
         cleaned = re.sub(r"\s+", " ", message).strip()
@@ -1086,6 +1469,53 @@ class SurveyChatbotMessageService:
             return "공략"
         return normalized
 
+    def generate_excluded_keywords_with_llm(
+        self,
+        *,
+        user_messages: list[str],
+        nickname: str,
+    ) -> list[str]:
+        if not any(message.strip() for message in user_messages):
+            return []
+
+        prompt_values = {
+            "nickname": nickname,
+            "user_messages": "\n".join(f"- {message}" for message in user_messages),
+        }
+        response = self.session_service.generate_question_with_llm(
+            EXCLUDED_KEYWORDS_USER_PROMPT.strip().format(**prompt_values),
+            system_prompt=EXCLUDED_KEYWORDS_SYSTEM_PROMPT.strip(),
+            temperature=0.1,
+        )
+        if not response:
+            return []
+
+        return self.parse_excluded_keywords_response(response)
+
+    def parse_excluded_keywords_response(self, response: str) -> list[str]:
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            cleaned = cleaned.replace("text\n", "", 1).strip()
+
+        if not cleaned or cleaned.lower() in {"none", "null"} or cleaned == "없음":
+            return []
+        if cleaned.startswith(("{", "[")):
+            return []
+
+        keywords: list[str] = []
+        for line in cleaned.splitlines():
+            normalized_line = re.sub(r"^[-*\d.)\s]+", "", line).strip()
+            if not normalized_line:
+                continue
+            keywords.extend(
+                keyword.strip()
+                for keyword in re.split(r"[,，/]", normalized_line)
+                if keyword.strip()
+            )
+
+        return self.normalize_excluded_keywords(keywords)
+
     def normalize_excluded_keywords(self, keywords: list[Any]) -> list[str]:
         normalized_keywords = []
         seen_keywords = set()
@@ -1096,45 +1526,6 @@ class SurveyChatbotMessageService:
             seen_keywords.add(normalized)
             normalized_keywords.append(normalized)
         return normalized_keywords
-
-    def extract_direct_game_keywords(self, user_messages: list[str]) -> list[str]:
-        suffix_keywords: list[str] = []
-        db_checked_keywords: list[str] = []
-        for message in user_messages:
-            for pattern in DIRECT_GAME_CONTEXT_PATTERNS:
-                for match in re.finditer(pattern, message, flags=re.IGNORECASE):
-                    suffix_keywords.append(match.group("keyword"))
-
-            for segment in re.split(DIRECT_GAME_CONNECTORS, message):
-                for match in re.finditer(
-                    DIRECT_GAME_SUFFIX_PATTERN,
-                    segment,
-                    flags=re.IGNORECASE,
-                ):
-                    suffix_keywords.append(match.group("keyword"))
-
-            for pattern in DIRECT_GAME_KEYWORD_PATTERNS:
-                for match in re.finditer(pattern, message, flags=re.IGNORECASE):
-                    db_checked_keywords.append(match.group("keyword"))
-
-        return self.normalize_excluded_keywords(
-            [
-                *suffix_keywords,
-                *self.filter_known_game_keywords(db_checked_keywords),
-            ]
-        )
-
-    def filter_known_game_keywords(self, keywords: list[str]) -> list[str]:
-        candidates = self.normalize_excluded_keywords(keywords)
-        if not candidates:
-            return []
-
-        from apps.games.models import Game
-
-        known_names = set(
-            Game.objects.filter(name__in=candidates).values_list("name", flat=True)
-        )
-        return [keyword for keyword in candidates if keyword in known_names]
 
     def clean_direct_game_keyword(self, keyword: str) -> str | None:
         cleaned = keyword.strip(" \n\t.,!?\"'“”‘’()[]{}")
