@@ -540,8 +540,9 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertNotIn(1003, deduped_ids)
         self.assertIn(2001, deduped_ids)
 
-
-    def test_internal_series_dedupe_does_not_merge_similar_titles_of_different_series(self):
+    def test_internal_series_dedupe_does_not_merge_similar_titles_of_different_series(
+        self,
+    ):
         service = MatchResponsesResultQueryService()
 
         items = [
@@ -580,7 +581,6 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
         self.assertIn(3002, deduped_ids)
         self.assertEqual(len(deduped_ids), 2)
 
-
     def test_get_results_keeps_15_after_dedupe_fill_and_preserves_final_sort(self):
         def _mk(game_id: int, score: float, parent: int | None = None) -> RankedGame:
             return RankedGame(
@@ -606,14 +606,22 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
 
         allowed_ids = {item.game_id for item in ranked_pool}
 
-        with patch.object(self.service, "_liked_ids", return_value=set()), \
-                patch.object(self.service, "_allowed_game_ids_by_genre", return_value=allowed_ids), \
-                patch.object(self.service, "_load_user_vector", return_value=[0.1] * 14), \
-                patch.object(self.service, "_load_liked_mean_vector", return_value=None), \
-                patch.object(self.service, "_load_disliked_mean_vector", return_value=None), \
-                patch.object(self.service, "_score_personalized_once", return_value=ranked_pool), \
-                patch.object(self.service, "_fallback_popular", return_value=[]), \
-                patch.object(self.service, "_paginate", wraps=self.service._paginate) as paginate_spy:
+        with (
+            patch.object(self.service, "_liked_ids", return_value=set()),
+            patch.object(
+                self.service, "_allowed_game_ids_by_genre", return_value=allowed_ids
+            ),
+            patch.object(self.service, "_load_user_vector", return_value=[0.1] * 14),
+            patch.object(self.service, "_load_liked_mean_vector", return_value=None),
+            patch.object(self.service, "_load_disliked_mean_vector", return_value=None),
+            patch.object(
+                self.service, "_score_personalized_once", return_value=ranked_pool
+            ),
+            patch.object(self.service, "_fallback_popular", return_value=[]),
+            patch.object(
+                self.service, "_paginate", wraps=self.service._paginate
+            ) as paginate_spy,
+        ):
 
             result = self.service.get_results(
                 user_id=self.user.id,
@@ -640,7 +648,9 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             [item.game_id for item in expected],
         )
 
-    def test_internal_series_dedupe_strips_edition_suffix_without_parent_collection(self):
+    def test_internal_series_dedupe_strips_edition_suffix_without_parent_collection(
+        self,
+    ):
         service = MatchResponsesResultQueryService()
 
         items = [
