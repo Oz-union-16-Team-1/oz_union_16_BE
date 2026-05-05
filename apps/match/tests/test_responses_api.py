@@ -451,7 +451,7 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         pref = UserPreference.objects.get(user=self.user)
         self.assertEqual(len(pref.match_vector), 14)
 
-    def test_genre_axis_saturation_cap_after_50_positive_updates(self):
+    def test_genre_axis_no_hard_ceiling_after_50_positive_updates(self):
         target = [0.0] * 14
         source = [0.0] * 14
         source[0] = 1.0  # dim1 장르축
@@ -459,9 +459,8 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         for _ in range(50):
             self.service._accumulate(target, source, 1.0)
 
-        self.assertLessEqual(target[0], float(MATCH_GENRE_MAX_CAP))
-        self.assertGreaterEqual(target[0], float(MATCH_GENRE_NEAR_CAP_THRESHOLD))
-
+        # 하드 cap 제거: cap를 넘어서도 증가 가능해야 함
+        self.assertGreater(target[0], float(MATCH_GENRE_MAX_CAP))
 
     def test_genre_axis_can_decrease_from_near_cap(self):
         target = [0.0] * 14
@@ -474,6 +473,19 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
 
         self.assertLess(target[0], float(MATCH_GENRE_MAX_CAP))
 
+    def test_genre_axis_positive_delta_is_damped_near_cap(self):
+        target = [0.0] * 14
+        target[0] = float(MATCH_GENRE_MAX_CAP) + 0.01  # near-cap 이상
+        source = [0.0] * 14
+        source[0] = 1.0
+
+        before = target[0]
+        self.service._accumulate(target, source, 1.0)
+        delta = target[0] - before
+
+        # 감쇠는 유지: 증가량이 1.0보다 작아야 함
+        self.assertGreater(delta, 0.0)
+        self.assertLess(delta, 1.0)
 
     def test_saturation_damping_does_not_affect_dim9_to_dim14(self):
         base = float(MATCH_GENRE_NEAR_CAP_THRESHOLD) + 0.05
