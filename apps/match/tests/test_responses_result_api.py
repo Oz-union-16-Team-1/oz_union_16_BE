@@ -475,6 +475,171 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
 
         self.assertEqual(score, expected)
 
+    def test_internal_series_dedupe_keeps_highest_ranked_variant(self):
+        service = MatchResponsesResultQueryService()
+
+        items = [
+            RankedGame(
+                game_id=1001,
+                title="Way of the Hunter",
+                slug="way-of-the-hunter",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=80.0,
+                is_liked=False,
+                final_score=0.95,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=9000,
+            ),
+            RankedGame(
+                game_id=1002,
+                title="Way of the Hunter: Night Hunting Pack",
+                slug="way-of-the-hunter-night-hunting-pack",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=81.0,
+                is_liked=False,
+                final_score=0.94,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=9000,
+            ),
+            RankedGame(
+                game_id=1003,
+                title="Way of the Hunter: Map Pack 2",
+                slug="way-of-the-hunter-map-pack-2",
+                genres=["시뮬레이션"],
+                thumbnail_url="",
+                rating=82.0,
+                is_liked=False,
+                final_score=0.93,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=9000,
+            ),
+            RankedGame(
+                game_id=2001,
+                title="Portal 2",
+                slug="portal-2",
+                genres=["퍼즐"],
+                thumbnail_url="",
+                rating=90.0,
+                is_liked=False,
+                final_score=0.90,
+                pop_score=0.9,
+                rec_score=0.6,
+            ),
+        ]
+
+        deduped = service._dedupe_series_variants(items, limit=15)
+        deduped_ids = [x.game_id for x in deduped]
+
+        self.assertIn(1001, deduped_ids)
+        self.assertNotIn(1002, deduped_ids)
+        self.assertNotIn(1003, deduped_ids)
+        self.assertIn(2001, deduped_ids)
+
+
+    def test_internal_series_dedupe_does_not_merge_similar_titles_of_different_series(self):
+        service = MatchResponsesResultQueryService()
+
+        items = [
+            RankedGame(
+                game_id=3001,
+                title="Resident Evil 4",
+                slug="resident-evil-4",
+                genres=["액션"],
+                thumbnail_url="",
+                rating=89.0,
+                is_liked=False,
+                final_score=0.91,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=9101,
+            ),
+            RankedGame(
+                game_id=3002,
+                title="Resident Evil 4 VR",
+                slug="resident-evil-4-vr",
+                genres=["액션"],
+                thumbnail_url="",
+                rating=88.0,
+                is_liked=False,
+                final_score=0.90,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=9102,
+            ),
+        ]
+
+        deduped = service._dedupe_series_variants(items, limit=15)
+        deduped_ids = [x.game_id for x in deduped]
+
+        self.assertIn(3001, deduped_ids)
+        self.assertIn(3002, deduped_ids)
+        self.assertEqual(len(deduped_ids), 2)
+
+
+    def test_get_results_keeps_15_after_dedupe_fill_and_preserves_final_sort(self):
+        def _mk(game_id: int, score: float, parent: int | None = None) -> RankedGame:
+            return RankedGame(
+                game_id=game_id,
+                title=f"Game {game_id}",
+                slug=f"game-{game_id}",
+                genres=["어드벤처"],
+                thumbnail_url="",
+                rating=80.0,
+                is_liked=False,
+                final_score=score,
+                pop_score=0.8,
+                rec_score=0.7,
+                parent_game_id=parent,
+            )
+
+        # 상위권에 같은 시리즈(parent=5000) 다수 배치 -> dedupe 후 개수 감소 유도
+        ranked_pool = []
+        for i in range(1, 7):
+            ranked_pool.append(_mk(1000 + i, 0.99 - (i * 0.001), parent=5000))
+        for i in range(7, 25):
+            ranked_pool.append(_mk(1000 + i, 0.95 - ((i - 7) * 0.01), parent=None))
+
+        allowed_ids = {item.game_id for item in ranked_pool}
+
+        with patch.object(self.service, "_liked_ids", return_value=set()), \
+                patch.object(self.service, "_allowed_game_ids_by_genre", return_value=allowed_ids), \
+                patch.object(self.service, "_load_user_vector", return_value=[0.1] * 14), \
+                patch.object(self.service, "_load_liked_mean_vector", return_value=None), \
+                patch.object(self.service, "_load_disliked_mean_vector", return_value=None), \
+                patch.object(self.service, "_score_personalized_once", return_value=ranked_pool), \
+                patch.object(self.service, "_fallback_popular", return_value=[]), \
+                patch.object(self.service, "_paginate", wraps=self.service._paginate) as paginate_spy:
+
+            result = self.service.get_results(
+                user_id=self.user.id,
+                genre_id=2,
+                page_size=15,
+            )
+
+        self.assertEqual(result["count"], 15)
+        self.assertEqual(len(result["results"]), 15)
+
+        final_ranked = paginate_spy.call_args.kwargs["items"]
+        self.assertEqual(len(final_ranked), 15)
+
+        keys = [self.service._canonical_game_key(item) for item in final_ranked]
+        self.assertEqual(len(keys), len(set(keys)))  # dedupe key 중복 제거 유지
+
+        expected = sorted(
+            final_ranked,
+            key=lambda item: (item.final_score, item.game_id),
+            reverse=True,
+        )
+        self.assertEqual(
+            [item.game_id for item in final_ranked],
+            [item.game_id for item in expected],
+        )
+
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
     @classmethod
