@@ -493,7 +493,7 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         source = [1.0] * 14
         scale = 0.5
 
-        before_dim1 = target[0]   # dim1 (장르축, 감쇠 대상)
+        before_dim1 = target[0]  # dim1 (장르축, 감쇠 대상)
         before_dim10 = target[9]  # dim10 (분위기축, 감쇠 비대상)
 
         self.service._accumulate(target, source, scale)
@@ -538,8 +538,12 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         with_control_total = sum(with_control[:8])
 
         # 제약 OFF (responses_submit 모듈 전역 상수 patch)
-        with patch("apps.match.services.responses_submit.MATCH_GENRE_BUDGET_STRENGTH", 0.0), \
-                patch("apps.match.services.responses_submit.MATCH_GENRE_NORM_ALPHA", 0.0):
+        with (
+            patch(
+                "apps.match.services.responses_submit.MATCH_GENRE_BUDGET_STRENGTH", 0.0
+            ),
+            patch("apps.match.services.responses_submit.MATCH_GENRE_NORM_ALPHA", 0.0),
+        ):
             no_control = [0.0] * 14
             for _ in range(50):
                 self.service._accumulate(no_control, source, 1.0)
