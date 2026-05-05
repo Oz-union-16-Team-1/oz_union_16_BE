@@ -13,6 +13,9 @@ from django.utils import timezone
 
 from apps.games.models import Game
 from apps.match.constants import (
+    MATCH_GENRE_MAX_CAP,
+    MATCH_GENRE_NEAR_CAP_THRESHOLD,
+    MATCH_GENRE_SATURATION_DECAY,
     MATCH_RESPONSE_LOW_RATING_LAMBDA,
     MATCH_RESPONSE_MAX_STAR,
     MATCH_RESPONSE_MIN_ALPHA,
@@ -365,10 +368,35 @@ class MatchResponsesSubmitService:
         return 1.0
 
     def _accumulate(
-        self, target: list[float], source: list[float], scale: float
+            self, target: list[float], source: list[float], scale: float
     ) -> None:
         for idx in range(MATCH_VECTOR_DIM):
-            target[idx] += source[idx] * scale
+            delta = source[idx] * scale
+
+            # dim1~8(장르축): cap 근접 구간에서 양(+)증분만 감쇠
+            if idx < 8 and delta > 0.0:
+                delta *= self._genre_positive_damping(target[idx])
+
+            target[idx] += delta
+
+            # dim1~8은 상한 cap 적용(하강은 허용)
+            if idx < 8 and delta > 0.0 and target[idx] > float(MATCH_GENRE_MAX_CAP):
+                target[idx] = float(MATCH_GENRE_MAX_CAP)
+
+    def _genre_positive_damping(self, current_value: float) -> float:
+        threshold = float(MATCH_GENRE_NEAR_CAP_THRESHOLD)
+        cap = float(MATCH_GENRE_MAX_CAP)
+
+        if current_value < threshold:
+            return 1.0
+        if cap <= threshold:
+            return 1.0
+
+        ratio = (current_value - threshold) / (cap - threshold)
+        ratio = max(0.0, min(1.0, ratio))
+
+        # cap에 가까울수록 증분 축소
+        return max(0.0, 1.0 - (float(MATCH_GENRE_SATURATION_DECAY) * ratio))
 
     def _soft_clip(self, vector: list[float]) -> list[float]:
         out: list[float] = []
