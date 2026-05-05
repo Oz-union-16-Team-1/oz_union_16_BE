@@ -12,6 +12,10 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.games.models import Game
+from apps.match.constants import (
+    MATCH_GENRE_MAX_CAP,
+    MATCH_GENRE_NEAR_CAP_THRESHOLD,
+)
 from apps.match.models import (
     MatchCandidateRetryState,
     MatchGamePreference,
@@ -446,6 +450,49 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
 
         pref = UserPreference.objects.get(user=self.user)
         self.assertEqual(len(pref.match_vector), 14)
+
+    def test_genre_axis_saturation_cap_after_50_positive_updates(self):
+        target = [0.0] * 14
+        source = [0.0] * 14
+        source[0] = 1.0  # dim1 장르축
+
+        for _ in range(50):
+            self.service._accumulate(target, source, 1.0)
+
+        self.assertLessEqual(target[0], float(MATCH_GENRE_MAX_CAP))
+        self.assertGreaterEqual(target[0], float(MATCH_GENRE_NEAR_CAP_THRESHOLD))
+
+
+    def test_genre_axis_can_decrease_from_near_cap(self):
+        target = [0.0] * 14
+        target[0] = float(MATCH_GENRE_MAX_CAP)
+        source = [0.0] * 14
+        source[0] = 1.0
+
+        # 1~2점 케이스처럼 음수 스케일(하강)은 허용되어야 함
+        self.service._accumulate(target, source, -1.0)
+
+        self.assertLess(target[0], float(MATCH_GENRE_MAX_CAP))
+
+
+    def test_saturation_damping_does_not_affect_dim9_to_dim14(self):
+        base = float(MATCH_GENRE_NEAR_CAP_THRESHOLD) + 0.05
+        target = [base] * 14
+        source = [1.0] * 14
+        scale = 0.5
+
+        before_dim1 = target[0]   # dim1 (장르축, 감쇠 대상)
+        before_dim10 = target[9]  # dim10 (분위기축, 감쇠 비대상)
+
+        self.service._accumulate(target, source, scale)
+
+        delta_dim1 = target[0] - before_dim1
+        delta_dim10 = target[9] - before_dim10
+
+        # dim1은 감쇠되어 scale보다 작아야 함
+        self.assertLess(delta_dim1, scale)
+        # dim9~14는 감쇠 미적용 -> 그대로 scale 반영
+        self.assertAlmostEqual(delta_dim10, scale, places=6)
 
 
 class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
