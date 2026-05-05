@@ -57,6 +57,37 @@ SERIES_SUFFIX_RE = re.compile(
 )
 TITLE_NOISE_RE = re.compile(r"[\(\[\{].*?[\)\]\}]")
 
+SERIES_TRAILING_TOKEN_SET = {
+    "deluxe",
+    "ultimate",
+    "complete",
+    "definitive",
+    "gold",
+    "goty",
+    "edition",
+    "bundle",
+    "pack",
+    "collection",
+    "remaster",
+    "remastered",
+    "remake",
+    "director",
+    "directors",
+    "cut",
+    "anniversary",
+    "digital",
+    "cosmic",
+    "night",
+    "hunting",
+    "map",
+    "season",
+    "pass",
+    "expansion",
+    "dlc",
+    "vr",
+}
+SERIES_TOKEN_SPLIT_RE = re.compile(r"[-_ ]+")
+
 
 @dataclass(frozen=True)
 class RankedGame:
@@ -795,8 +826,10 @@ class MatchResponsesResultQueryService:
             return ""
 
         text = SERIES_SUFFIX_RE.sub("", text)
+        text = self._strip_series_trailing_tokens(text, joiner="-")
         text = re.sub(r"[-_]+", "-", text).strip("-")
         return text
+
 
     def _normalize_title_for_dedupe(self, title: str) -> str:
         text = (title or "").strip().lower()
@@ -807,7 +840,25 @@ class MatchResponsesResultQueryService:
         text = SERIES_SUFFIX_RE.sub("", text)
         text = re.sub(r"[^a-z0-9가-힣]+", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
+        text = self._strip_series_trailing_tokens(text, joiner=" ")
         return text
+
+
+    def _strip_series_trailing_tokens(self, text: str, *, joiner: str) -> str:
+        tokens = [t for t in SERIES_TOKEN_SPLIT_RE.split(text) if t]
+        if not tokens:
+            return ""
+
+        stripped = list(tokens)
+        # 과도 병합 방지: 최소 2토큰은 남긴다.
+        while len(stripped) > 2:
+            tail = stripped[-1]
+            if tail.isdigit() or tail in SERIES_TRAILING_TOKEN_SET:
+                stripped.pop()
+                continue
+            break
+
+        return joiner.join(stripped)
 
     def _take_by_popularity(
         self, items: list[RankedGame], limit: int
