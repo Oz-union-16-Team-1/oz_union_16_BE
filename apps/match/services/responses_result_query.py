@@ -320,6 +320,7 @@ class MatchResponsesResultQueryService:
             Game.objects.filter(
                 game_id__in=set(vectors_by_game.keys()),
                 is_ban=False,
+                parent_game__isnull=True,
             ).values(
                 "game_id",
                 "name",
@@ -436,7 +437,10 @@ class MatchResponsesResultQueryService:
         if limit <= 0:
             return []
 
-        qs = Game.objects.filter(is_ban=False).exclude(game_id__in=excluded_ids)
+        qs = Game.objects.filter(
+            is_ban=False,
+            parent_game__isnull=True,
+        ).exclude(game_id__in=excluded_ids)
         if source_ids is not None:
             if not source_ids:
                 return []
