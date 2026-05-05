@@ -70,6 +70,8 @@ class RankedGame:
     final_score: float
     pop_score: float
     rec_score: float
+    parent_game_id: int | None = None
+    collection_id: int | None = None
 
 
 class MatchResponsesResultQueryService:
@@ -326,6 +328,8 @@ class MatchResponsesResultQueryService:
                 "rating",
                 "first_release_date",
                 "rating_count",
+                "parent_game",
+                "collection",
             )
         )
         if not game_rows:
@@ -393,6 +397,8 @@ class MatchResponsesResultQueryService:
                     final_score=final_score,
                     pop_score=pop,
                     rec_score=rec,
+                    parent_game_id=int(row["parent_game"]) if row.get("parent_game") is not None else None,
+                    collection_id=int(row["collection"]) if row.get("collection") is not None else None,
                 )
             )
 
@@ -468,6 +474,8 @@ class MatchResponsesResultQueryService:
                 "rating",
                 "rating_count",
                 "first_release_date",
+                "parent_game",
+                "collection",
             )[:scan_size]
         )
         if not rows:
@@ -517,6 +525,8 @@ class MatchResponsesResultQueryService:
                     final_score=final_score,
                     pop_score=pop,
                     rec_score=rec,
+                    parent_game_id=int(row["parent_game"]) if row.get("parent_game") is not None else None,
+                    collection_id=int(row["collection"]) if row.get("collection") is not None else None,
                 )
             )
 
@@ -752,6 +762,15 @@ class MatchResponsesResultQueryService:
         return out[:limit]
 
     def _canonical_game_key(self, item: RankedGame) -> str:
+        # 1순위: parent_game
+        if item.parent_game_id is not None:
+            return f"p:{item.parent_game_id}"
+
+        # 2순위: collection
+        if item.collection_id is not None:
+            return f"c:{item.collection_id}"
+
+        # 3순위: slug/title 정규화
         slug_key = self._normalize_slug_for_dedupe(item.slug)
         if slug_key:
             return f"s:{slug_key}"
