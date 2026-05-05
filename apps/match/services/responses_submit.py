@@ -13,6 +13,10 @@ from django.utils import timezone
 
 from apps.games.models import Game
 from apps.match.constants import (
+    MATCH_GENRE_BASELINE,
+    MATCH_GENRE_BUDGET_SOFT_LIMIT,
+    MATCH_GENRE_BUDGET_STRENGTH,
+    MATCH_GENRE_NORM_ALPHA,
     MATCH_GENRE_MAX_CAP,
     MATCH_GENRE_NEAR_CAP_THRESHOLD,
     MATCH_GENRE_SATURATION_DECAY,
@@ -379,6 +383,8 @@ class MatchResponsesSubmitService:
 
             target[idx] += delta
 
+        self._postprocess_genre_axes(target)
+
     def _genre_positive_damping(self, current_value: float) -> float:
         threshold = float(MATCH_GENRE_NEAR_CAP_THRESHOLD)
         cap = float(MATCH_GENRE_MAX_CAP)
@@ -393,6 +399,39 @@ class MatchResponsesSubmitService:
 
         # cap에 가까울수록 증분 축소
         return max(0.0, 1.0 - (float(MATCH_GENRE_SATURATION_DECAY) * ratio))
+
+    def _postprocess_genre_axes(self, vector: list[float]) -> None:
+        # dim1~8만 대상. dim9~14는 절대 건드리지 않음.
+        self._apply_soft_genre_budget(vector)
+        self._apply_min_genre_normalization(vector)
+
+    def _apply_soft_genre_budget(self, vector: list[float]) -> None:
+        genre = vector[:8]
+        total = sum(genre)
+        soft_limit = float(MATCH_GENRE_BUDGET_SOFT_LIMIT)
+        strength = float(MATCH_GENRE_BUDGET_STRENGTH)
+
+        if total <= soft_limit or total <= 0.0 or strength <= 0.0:
+            return
+
+        overflow = total - soft_limit
+        shrink = overflow * strength
+
+        # 초과분만 비례 축소 (약한 제약)
+        for i in range(8):
+            ratio = genre[i] / total if total > 0.0 else 0.0
+            vector[i] -= shrink * ratio
+
+    def _apply_min_genre_normalization(self, vector: list[float]) -> None:
+        baseline = float(MATCH_GENRE_BASELINE)
+        alpha = float(MATCH_GENRE_NORM_ALPHA)
+
+        if alpha <= 0.0:
+            return
+
+        # baseline(중립값)으로 아주 약하게 수축
+        for i in range(8):
+            vector[i] = vector[i] + (baseline - vector[i]) * alpha
 
     def _soft_clip(self, vector: list[float]) -> list[float]:
         out: list[float] = []
