@@ -436,8 +436,16 @@ class MatchResponsesResultQueryService:
                     final_score=final_score,
                     pop_score=pop,
                     rec_score=rec,
-                    parent_game_id=int(row["parent_game"]) if row.get("parent_game") is not None else None,
-                    collection_id=int(row["collection"]) if row.get("collection") is not None else None,
+                    parent_game_id=(
+                        int(row["parent_game"])
+                        if row.get("parent_game") is not None
+                        else None
+                    ),
+                    collection_id=(
+                        int(row["collection"])
+                        if row.get("collection") is not None
+                        else None
+                    ),
                 )
             )
 
@@ -567,8 +575,16 @@ class MatchResponsesResultQueryService:
                     final_score=final_score,
                     pop_score=pop,
                     rec_score=rec,
-                    parent_game_id=int(row["parent_game"]) if row.get("parent_game") is not None else None,
-                    collection_id=int(row["collection"]) if row.get("collection") is not None else None,
+                    parent_game_id=(
+                        int(row["parent_game"])
+                        if row.get("parent_game") is not None
+                        else None
+                    ),
+                    collection_id=(
+                        int(row["collection"])
+                        if row.get("collection") is not None
+                        else None
+                    ),
                 )
             )
 
@@ -830,7 +846,6 @@ class MatchResponsesResultQueryService:
         text = re.sub(r"[-_]+", "-", text).strip("-")
         return text
 
-
     def _normalize_title_for_dedupe(self, title: str) -> str:
         text = (title or "").strip().lower()
         if not text:
@@ -842,7 +857,6 @@ class MatchResponsesResultQueryService:
         text = re.sub(r"\s+", " ", text).strip()
         text = self._strip_series_trailing_tokens(text, joiner=" ")
         return text
-
 
     def _strip_series_trailing_tokens(self, text: str, *, joiner: str) -> str:
         tokens = [t for t in SERIES_TOKEN_SPLIT_RE.split(text) if t]
