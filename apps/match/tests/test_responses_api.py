@@ -506,6 +506,57 @@ class MatchResponsesSubmitServiceTest(MatchResponsesFixtureMixin, TestCase):
         # dim9~14는 감쇠 미적용 -> 그대로 scale 반영
         self.assertAlmostEqual(delta_dim10, scale, places=6)
 
+    def test_soft_budget_reduces_sum_when_genre_axes_overflow(self):
+        target = [0.95] * 8 + [0.2] * 6
+        source = [0.0] * 14
+
+        before_sum = sum(target[:8])
+        self.service._accumulate(target, source, 0.0)  # 후처리만 실행
+        after_sum = sum(target[:8])
+
+        self.assertLess(after_sum, before_sum)
+
+    def test_min_normalization_weakly_pulls_toward_baseline(self):
+        target = [0.9] * 8 + [0.0] * 6
+        source = [0.0] * 14
+
+        before = target[0]
+        self.service._accumulate(target, source, 0.0)  # 후처리만 실행
+        after = target[0]
+
+        # baseline(0.5) 방향으로 약하게 당겨져야 함
+        self.assertLess(after, before)
+        self.assertGreater(after, 0.5)
+
+    def test_genre_axes_budget_caps_total_growth_after_repeated_positive_updates(self):
+        source = [1.0] * 14
+
+        # 제약 ON
+        with_control = [0.0] * 14
+        for _ in range(50):
+            self.service._accumulate(with_control, source, 1.0)
+        with_control_total = sum(with_control[:8])
+
+        # 제약 OFF (responses_submit 모듈 전역 상수 patch)
+        with patch("apps.match.services.responses_submit.MATCH_GENRE_BUDGET_STRENGTH", 0.0), \
+                patch("apps.match.services.responses_submit.MATCH_GENRE_NORM_ALPHA", 0.0):
+            no_control = [0.0] * 14
+            for _ in range(50):
+                self.service._accumulate(no_control, source, 1.0)
+            no_control_total = sum(no_control[:8])
+
+        self.assertLess(with_control_total, no_control_total)
+
+    def test_distribution_postprocess_does_not_affect_dim9_to_dim14(self):
+        target = [0.95] * 8 + [0.12, -0.34, 0.56, -0.78, 0.11, -0.22]
+        source = [0.0] * 14
+
+        before_tail = target[8:].copy()
+        self.service._accumulate(target, source, 0.0)  # 후처리만 실행
+        after_tail = target[8:]
+
+        self.assertEqual(before_tail, after_tail)
+
 
 class MatchResponsesAPITest(MatchResponsesFixtureMixin, TestCase):
     @classmethod
