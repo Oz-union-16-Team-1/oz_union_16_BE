@@ -114,6 +114,19 @@ MATCH_GENRE_SATURATION_DECAY: float = 0.55
 MATCH_GENRE_MAX_CAP: float = 0.92
 MATCH_GENRE_NEAR_CAP_THRESHOLD: float = 0.85
 
+# 장르축(dim1~8) 약한 분포 제약/최소 정규화
+# soft limit: dim1~8 합계가 이 값을 넘으면 초과분만 약하게 축소
+MATCH_GENRE_BUDGET_SOFT_LIMIT: float = 5.8
+
+# soft limit 초과분 축소 강도(0~1). 약한 제약이므로 보수적으로 설정
+MATCH_GENRE_BUDGET_STRENGTH: float = 0.15
+
+# baseline(중립값)으로 아주 약하게 수축하는 정규화 강도
+MATCH_GENRE_NORM_ALPHA: float = 0.03
+
+# 장르축 중립 기준점
+MATCH_GENRE_BASELINE: float = 0.5
+
 # 매칭 결과 조회(GET /match/responses/result) 상수
 MATCH_RESULT_DEFAULT_PAGE_SIZE: int = 5
 MATCH_RESULT_MAX_PAGE_SIZE: int = 15
