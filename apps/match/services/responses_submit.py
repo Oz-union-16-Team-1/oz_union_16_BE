@@ -16,9 +16,9 @@ from apps.match.constants import (
     MATCH_GENRE_BASELINE,
     MATCH_GENRE_BUDGET_SOFT_LIMIT,
     MATCH_GENRE_BUDGET_STRENGTH,
-    MATCH_GENRE_NORM_ALPHA,
     MATCH_GENRE_MAX_CAP,
     MATCH_GENRE_NEAR_CAP_THRESHOLD,
+    MATCH_GENRE_NORM_ALPHA,
     MATCH_GENRE_SATURATION_DECAY,
     MATCH_RESPONSE_LOW_RATING_LAMBDA,
     MATCH_RESPONSE_MAX_STAR,
@@ -372,7 +372,7 @@ class MatchResponsesSubmitService:
         return 1.0
 
     def _accumulate(
-            self, target: list[float], source: list[float], scale: float
+        self, target: list[float], source: list[float], scale: float
     ) -> None:
         for idx in range(MATCH_VECTOR_DIM):
             delta = source[idx] * scale
