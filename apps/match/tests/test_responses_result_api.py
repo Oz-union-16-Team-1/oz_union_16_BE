@@ -640,6 +640,68 @@ class MatchResponsesResultServiceTest(MatchResponsesResultFixtureMixin, TestCase
             [item.game_id for item in expected],
         )
 
+    def test_internal_series_dedupe_strips_edition_suffix_without_parent_collection(self):
+        service = MatchResponsesResultQueryService()
+
+        items = [
+            RankedGame(
+                game_id=3101,
+                title="Marvel's Guardians of the Galaxy",
+                slug="marvel-guardians-galaxy",
+                genres=["액션"],
+                thumbnail_url="",
+                rating=90.0,
+                is_liked=False,
+                final_score=0.95,
+                pop_score=0.9,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=3102,
+                title="Marvel's Guardians of the Galaxy: Digital Deluxe Edition",
+                slug="marvel-guardians-galaxy-digital-deluxe-edition",
+                genres=["액션"],
+                thumbnail_url="",
+                rating=88.0,
+                is_liked=False,
+                final_score=0.94,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=3103,
+                title="Marvel's Guardians of the Galaxy: Cosmic Deluxe Edition",
+                slug="marvel-guardians-galaxy-cosmic-deluxe-edition",
+                genres=["액션"],
+                thumbnail_url="",
+                rating=87.0,
+                is_liked=False,
+                final_score=0.93,
+                pop_score=0.8,
+                rec_score=0.7,
+            ),
+            RankedGame(
+                game_id=3201,
+                title="Portal 2",
+                slug="portal-2",
+                genres=["퍼즐"],
+                thumbnail_url="",
+                rating=92.0,
+                is_liked=False,
+                final_score=0.90,
+                pop_score=0.9,
+                rec_score=0.6,
+            ),
+        ]
+
+        deduped = service._dedupe_series_variants(items, limit=15)
+        deduped_ids = [x.game_id for x in deduped]
+
+        self.assertIn(3101, deduped_ids)
+        self.assertNotIn(3102, deduped_ids)
+        self.assertNotIn(3103, deduped_ids)
+        self.assertIn(3201, deduped_ids)
+
 
 class MatchResponsesResultAPITest(MatchResponsesResultFixtureMixin, TestCase):
     @classmethod
