@@ -373,15 +373,11 @@ class MatchResponsesSubmitService:
         for idx in range(MATCH_VECTOR_DIM):
             delta = source[idx] * scale
 
-            # dim1~8(장르축): cap 근접 구간에서 양(+)증분만 감쇠
+            # dim1~8(장르축): near-cap 구간에서 양(+)증분만 감쇠
             if idx < 8 and delta > 0.0:
                 delta *= self._genre_positive_damping(target[idx])
 
             target[idx] += delta
-
-            # dim1~8은 상한 cap 적용(하강은 허용)
-            if idx < 8 and delta > 0.0 and target[idx] > float(MATCH_GENRE_MAX_CAP):
-                target[idx] = float(MATCH_GENRE_MAX_CAP)
 
     def _genre_positive_damping(self, current_value: float) -> float:
         threshold = float(MATCH_GENRE_NEAR_CAP_THRESHOLD)
