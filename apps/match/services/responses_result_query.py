@@ -199,6 +199,13 @@ class MatchResponsesResultQueryService:
                 limit=target_count,
             )
 
+            # 보충 이후에도 최종 정렬 기준을 고정한다.
+            final_ranked = sorted(
+                final_ranked,
+                key=lambda item: (item.final_score, item.game_id),
+                reverse=True,
+            )
+
             page_items, next_cursor = self._paginate(
                 items=final_ranked,
                 cursor=cursor,
@@ -749,6 +756,9 @@ class MatchResponsesResultQueryService:
         seen_keys = {self._canonical_game_key(item) for item in out}
 
         for item in ranked_pool:
+            if len(out) >= limit:
+                break
+
             if item.game_id in seen_game_ids:
                 continue
 
@@ -759,9 +769,6 @@ class MatchResponsesResultQueryService:
             seen_game_ids.add(item.game_id)
             seen_keys.add(key)
             out.append(item)
-
-            if len(out) >= limit:
-                break
 
         return out[:limit]
 
