@@ -27,6 +27,56 @@
     margin: 0 auto;
     min-height: 420px;
   }
+    .gm-bars {
+    margin-top: 8px;
+    max-width: 880px;
+  }
+  .gm-row {
+    display: grid;
+    grid-template-columns: 170px 1fr 70px;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .gm-label {
+    color: #9ca3af;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .gm-value {
+    text-align: right;
+    font-weight: 800;
+    font-size: 18px;
+  }
+  .gm-track {
+    position: relative;
+    height: 12px;
+    border-radius: 9999px;
+    background: #1f2937;
+    border: 1px solid #334155;
+    overflow: hidden;
+  }
+  .gm-track-center {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #475569;
+  }
+  .gm-fill {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 9999px;
+  }
+  .gm-bipolar-hint {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    font-size: 12px;
+    color: #6b7280;
+  }
 </style>
 {% endblock %}
 
@@ -100,6 +150,39 @@
         });
       })();
     </script>
+  {% else %}
+    <p class="gm-vector-empty">벡터 데이터 없음</p>
+  {% endif %}
+    <h3 class="gm-vector-title" style="margin-top:22px;">차원별 벡터 값</h3>
+  {% if game_vector_rows %}
+    <div class="gm-bars">
+      {% for row in game_vector_rows %}
+        <div class="gm-row">
+          <div class="gm-label">{{ row.label }}</div>
+
+          <div>
+            <div class="gm-track">
+              {% if row.is_bipolar %}
+                <div class="gm-track-center"></div>
+              {% endif %}
+              <div
+                class="gm-fill"
+                style="left: {{ row.fill_left_pct }}%; width: {{ row.fill_width_pct }}%; background: {{ row.color }};"
+              ></div>
+            </div>
+
+            {% if row.is_bipolar %}
+              <div class="gm-bipolar-hint">
+                <span>← {{ row.left_hint }}</span>
+                <span>{{ row.right_hint }} →</span>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="gm-value" style="color: {{ row.color }};">{{ row.value_text }}</div>
+        </div>
+      {% endfor %}
+    </div>
   {% else %}
     <p class="gm-vector-empty">벡터 데이터 없음</p>
   {% endif %}
