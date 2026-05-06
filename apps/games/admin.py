@@ -1,11 +1,11 @@
+from urllib.parse import urlparse
+
 from django.contrib import admin
 from django.utils.html import format_html, format_html_join
-from urllib.parse import urlparse
 
 from apps.games.models import Game
 from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.match.models import MatchGamePreference
-
 
 MATCH_VECTOR_DIM_LABELS = (
     "액션/격투",
@@ -42,11 +42,11 @@ MATCH_VECTOR_RADAR_LABELS = (
 )
 
 MATCH_VECTOR_BIPOLAR_HINTS = {
-    9: ("캐주얼", "하드코어"),   # 난이도
-    10: ("밝음", "어두움"),     # 톤
-    11: ("2D", "3D"),           # 그래픽
-    12: ("정적", "동적"),       # 템포
-    13: ("솔로", "멀티"),       # 사회성
+    9: ("캐주얼", "하드코어"),  # 난이도
+    10: ("밝음", "어두움"),  # 톤
+    11: ("2D", "3D"),  # 그래픽
+    12: ("정적", "동적"),  # 템포
+    13: ("솔로", "멀티"),  # 사회성
 }
 
 
@@ -84,7 +84,7 @@ class MatchGenreFilter(admin.SimpleListFilter):
 
         try:
             genre_id = int(value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return queryset
 
         return queryset.filter(genre_maps__igdb_genre_id=genre_id).distinct()
@@ -255,7 +255,7 @@ class GameAdmin(admin.ModelAdmin):
 
         try:
             values = [float(v) for v in list(pref.game_preference_vector)]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
         if len(values) < len(MATCH_VECTOR_DIM_LABELS):
@@ -276,7 +276,9 @@ class GameAdmin(admin.ModelAdmin):
 
     def _build_vector_rows(self, values: list[float]) -> list[dict]:
         rows: list[dict] = []
-        for idx, (label, raw_value) in enumerate(zip(MATCH_VECTOR_DIM_LABELS, values), start=1):
+        for idx, (label, raw_value) in enumerate(
+            zip(MATCH_VECTOR_DIM_LABELS, values), start=1
+        ):
             color = self._value_color(idx, raw_value)
 
             if idx <= 8 or idx == 14:
@@ -307,7 +309,9 @@ class GameAdmin(admin.ModelAdmin):
                 fill_left = 50.0 - abs(v) * 50.0
                 fill_width = abs(v) * 50.0
 
-            left_hint, right_hint = MATCH_VECTOR_BIPOLAR_HINTS.get(idx, ("왼쪽", "오른쪽"))
+            left_hint, right_hint = MATCH_VECTOR_BIPOLAR_HINTS.get(
+                idx, ("왼쪽", "오른쪽")
+            )
 
             rows.append(
                 {
@@ -430,9 +434,7 @@ class GameAdmin(admin.ModelAdmin):
             return empty_message
 
         return format_html(
-            "<div style='display:flex;flex-direction:column;gap:6px;'>"
-            "{}"
-            "</div>",
+            "<div style='display:flex;flex-direction:column;gap:6px;'>" "{}" "</div>",
             format_html_join(
                 "",
                 "<a href='{}' target='_blank' rel='noopener noreferrer'>{}</a>",
@@ -469,9 +471,7 @@ class GameAdmin(admin.ModelAdmin):
             return "외부 링크 없음"
 
         return format_html(
-            "<div style='display:flex;flex-direction:column;gap:6px;'>"
-            "{}"
-            "</div>",
+            "<div style='display:flex;flex-direction:column;gap:6px;'>" "{}" "</div>",
             format_html_join(
                 "",
                 "<a href='{0}' target='_blank' rel='noopener noreferrer'>{1}</a>",
@@ -480,7 +480,7 @@ class GameAdmin(admin.ModelAdmin):
         )
 
     def render_change_form(
-            self, request, context, add=False, change=False, form_url="", obj=None
+        self, request, context, add=False, change=False, form_url="", obj=None
     ):
         context = dict(context)
         chart_payload = None
@@ -507,7 +507,6 @@ class GameAdmin(admin.ModelAdmin):
             form_url=form_url,
             obj=obj,
         )
-
 
     @admin.display(boolean=True, description="블랙리스트", ordering="is_ban")
     def is_ban_display(self, obj):
