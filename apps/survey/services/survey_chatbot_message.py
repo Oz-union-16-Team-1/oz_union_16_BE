@@ -58,6 +58,10 @@ OBVIOUS_UNRELATED_PATTERNS = (
     r"무슨\s*게임.*재밌",
     r"게임\s*추천",
 )
+MEANINGLESS_MESSAGE_PATTERNS = (
+    r"^[\s\W_]+$",
+    r"^[ㄱ-ㅎㅏ-ㅣ\u1100-\u11ff\u3130-\u318f]+$",
+)
 PROFANITY_PATTERNS = (
     r"존나",
     r"ㅈㄴ",
@@ -748,6 +752,15 @@ class SurveyChatbotMessageService:
             for pattern in OBVIOUS_UNRELATED_PATTERNS
         )
 
+    def is_meaningless_message(self, normalized_message: str) -> bool:
+        compact_message = re.sub(r"\s+", "", normalized_message)
+        if not compact_message:
+            return True
+        return any(
+            re.fullmatch(pattern, compact_message, flags=re.IGNORECASE)
+            for pattern in MEANINGLESS_MESSAGE_PATTERNS
+        )
+
     def contains_profanity(self, message: str) -> bool:
         return any(
             re.search(pattern, message, flags=re.IGNORECASE)
@@ -828,6 +841,8 @@ class SurveyChatbotMessageService:
         session: SurveyChatbotSession | None = None,
     ) -> str:
         normalized_message = user_message.strip().lower()
+        if self.is_meaningless_message(normalized_message):
+            return "UNRELATED"
         if self.is_obviously_unrelated(normalized_message):
             return "UNRELATED"
         if self.is_fallback_clarify_answer(normalized_message):

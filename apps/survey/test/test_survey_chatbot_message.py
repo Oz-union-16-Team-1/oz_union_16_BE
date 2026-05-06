@@ -611,6 +611,28 @@ class SurveyChatbotMessageServiceTest(TestCase):
             self.service.is_obviously_unrelated("스토리 있는 액션 게임이 좋아요")
         )
 
+    def test_meaningless_jamo_message_is_unrelated(self) -> None:
+        with patch.object(
+            self.service.session_service,
+            "generate_question_with_llm",
+        ) as mock_generate:
+            self.assertEqual(
+                self.service.classify_user_message_intent(
+                    current_question=TEST_FIRST_QUESTION,
+                    user_message="ㅇ",
+                ),
+                "UNRELATED",
+            )
+            self.assertEqual(
+                self.service.classify_user_message_intent(
+                    current_question=TEST_FIRST_QUESTION,
+                    user_message="ㅋㅋㅋ",
+                ),
+                "UNRELATED",
+            )
+
+        mock_generate.assert_not_called()
+
     def test_fallback_target_question_count_returns_three_for_detailed_answer(
         self,
     ) -> None:

@@ -1,4 +1,4 @@
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -18,32 +18,45 @@ class PasswordCheckView(APIView):
         description="회원 탈퇴 등 민감한 작업 전 비밀번호를 검증합니다.",
         request=PasswordCheckSerializer,
         responses={
-            200: CheckResponseSerializer,
-            400: ErrorResponseSerializer,
-            401: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="비밀번호 검증 성공",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (200 OK)",
+                        value={"detail": "비밀번호 확인에 성공했습니다."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="필드 누락",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {"password": ["이 필드는 필수 항목입니다."]}
+                        },
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패 또는 비밀번호 불일치",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "비밀번호 불일치",
+                        value={"error_detail": "비밀번호가 일치하지 않습니다."},
+                    ),
+                    OpenApiExample(
+                        "자격 인증 데이터 누락",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    ),
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "성공 예시 (200 OK)",
-                value={"detail": "비밀번호 확인에 성공했습니다."},
-                status_codes=["200"],
-            ),
-            OpenApiExample(
-                "인증 실패2 (401 Unauthorized)",
-                value={"error_detail": "비밀번호가 일치하지 않습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={"error_detail": {"password": ["이 필드는 필수 항목입니다."]}},
-                status_codes=["400"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request):
