@@ -1,11 +1,13 @@
 import math
 from contextlib import suppress
+from typing import ClassVar
 
 from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.models import Group
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Count
+from django.db.models import Count, Min, Value
+from django.db.models.functions import Coalesce
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 from django.utils.html import format_html
@@ -63,6 +65,26 @@ MOOD_DIMENSIONS = (
     ("낮음", "높음"),
 )
 
+GENRE_BAR_COLORS = (
+    "#ff4d4f",
+    "#ff9f1c",
+    "#f7d154",
+    "#35c759",
+    "#2f80ed",
+    "#7c5cff",
+    "#00c2c7",
+    "#ff5ec4",
+)
+
+MOOD_BAR_COLORS = (
+    "#ff6b6b",
+    "#f59e0b",
+    "#22c55e",
+    "#06b6d4",
+    "#8b5cf6",
+    "#ec4899",
+)
+
 
 class UserPreferenceDashboard(UserPreference):
     class Meta:
@@ -99,7 +121,7 @@ def reset_password(modeladmin, request, queryset):
 class UserAdmin(admin.ModelAdmin):
     change_list_template = "admin/users/user/change_list.html"
     likes_dashboard_url_name = "users_user_likes"
-    list_display = (
+    list_display: ClassVar[tuple[str, ...]] = (
         "id",
         "login_id_display",
         "nickname_display",
@@ -134,7 +156,13 @@ class UserAdmin(admin.ModelAdmin):
             super()
             .get_queryset(request)
             .prefetch_related("social_users")
-            .annotate(like_count_value=Count("like_bookmarks", distinct=True))
+            .annotate(
+                like_count_value=Count("like_bookmarks", distinct=True),
+                social_provider_sort=Coalesce(
+                    Min("social_users__provider"),
+                    Value("normal"),
+                ),
+            )
         )
 
     @admin.display(description="로그인아이디", ordering="login_id")
@@ -150,7 +178,7 @@ class UserAdmin(admin.ModelAdmin):
         url = self.get_likes_dashboard_url(obj)
         return format_html('<a href="{}">{}</a>', url, obj.like_count_value)
 
-    @admin.display(description="가입유형")
+    @admin.display(description="가입유형", ordering="social_provider_sort")
     def signup_type_display(self, obj):
         provider_labels = {
             SocialProvider.KAKAO: "카카오",
@@ -164,7 +192,7 @@ class UserAdmin(admin.ModelAdmin):
             provider_labels.get(provider, provider) for provider in providers
         )
 
-    @admin.display(boolean=True, description="로그인 가능")
+    @admin.display(boolean=True, description="로그인 가능", ordering="is_active")
     def is_active_display(self, obj):
         return obj.is_active
 
@@ -201,7 +229,11 @@ class UserAdmin(admin.ModelAdmin):
             "genre_scores": genre_scores,
             "mood_scores": mood_scores,
             "primary_genre": self.get_primary_genre(preference, genre_scores),
-            "radar": self.build_radar_context(genre_scores),
+            "primary_mood": self.get_primary_mood(preference, mood_scores),
+            "genre_radar": self.build_radar_context(genre_scores),
+            "mood_radar": self.build_radar_context(
+                self.get_mood_radar_scores(mood_scores)
+            ),
             "likes": likes,
             "like_count": likes.count(),
             "signup_type": self.signup_type_display(user),
@@ -227,7 +259,9 @@ class UserAdmin(admin.ModelAdmin):
             {
                 "label": label,
                 "value": round(vector[index], 2),
+                "display_value": f"{vector[index]:.2f}",
                 "percent": max(0, min(vector[index], 1)) * 100,
+                "color": GENRE_BAR_COLORS[index % len(GENRE_BAR_COLORS)],
             }
             for index, label in enumerate(GENRE_DIMENSIONS)
         ]
@@ -236,7 +270,9 @@ class UserAdmin(admin.ModelAdmin):
                 "left": left,
                 "right": right,
                 "value": round(vector[index + 8], 2),
+                "display_value": f"{vector[index + 8]:.2f}",
                 "percent": max(0, min(vector[index + 8], 1)) * 100,
+                "color": MOOD_BAR_COLORS[index % len(MOOD_BAR_COLORS)],
             }
             for index, (left, right) in enumerate(MOOD_DIMENSIONS)
         ]
@@ -247,14 +283,29 @@ class UserAdmin(admin.ModelAdmin):
             return "-"
         return max(genre_scores, key=lambda score: score["value"])["label"]
 
-    def build_radar_context(self, genre_scores):
+    def get_primary_mood(self, preference, mood_scores):
+        if preference is None or preference.match_vector is None:
+            return "-"
+        score = max(mood_scores, key=lambda item: item["value"])
+        return score["right"] if score["value"] >= 0.5 else score["left"]
+
+    def get_mood_radar_scores(self, mood_scores):
+        return [
+            {
+                "label": f"{score['left']}~{score['right']}",
+                "value": score["value"],
+            }
+            for score in mood_scores
+        ]
+
+    def build_radar_context(self, scores):
         center = 150
         radius = 105
         points = []
         labels = []
         grid = []
-        for score_index, score in enumerate(genre_scores):
-            angle = (math.pi * 2 * score_index / len(genre_scores)) - (math.pi / 2)
+        for score_index, score in enumerate(scores):
+            angle = (math.pi * 2 * score_index / len(scores)) - (math.pi / 2)
             value = max(0, min(score["value"], 1))
             points.append(
                 f"{center + math.cos(angle) * radius * value:.1f},"
@@ -269,8 +320,8 @@ class UserAdmin(admin.ModelAdmin):
             )
         for grid_value in (0.25, 0.5, 0.75, 1):
             polygon_points = []
-            for index in range(len(genre_scores)):
-                angle = (math.pi * 2 * index / len(genre_scores)) - (math.pi / 2)
+            for index in range(len(scores)):
+                angle = (math.pi * 2 * index / len(scores)) - (math.pi / 2)
                 polygon_points.append(
                     f"{center + math.cos(angle) * radius * grid_value:.1f},"
                     f"{center + math.sin(angle) * radius * grid_value:.1f}"
@@ -290,7 +341,7 @@ class BlacklistedUserAdmin(UserAdmin):
     change_list_template = "admin/users/blacklisteduser/change_list.html"
     likes_dashboard_url_name = "users_blacklisteduser_likes"
     readonly_fields = ("blacklisted_at_display",)
-    list_display = (
+    list_display: ClassVar[tuple[str, ...]] = (
         "id",
         "login_id_display",
         "nickname_display",
