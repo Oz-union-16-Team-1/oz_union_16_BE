@@ -1,9 +1,10 @@
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.exceptions import ErrorResponseSerializer
 from apps.users.serializers.user_bookmark_serializers import UserLikeBookmarkSerializer
 from apps.users.services.user_bookmark_services import UserLikeBookmarkService
 
@@ -39,7 +40,17 @@ class BookmarkPagination(PageNumberPagination):
         OpenApiParameter(name="page", type=int, description="페이지 번호"),
         OpenApiParameter(name="page_size", type=int, description="페이지당 항목 수"),
     ],
-    responses={200: UserLikeBookmarkSerializer(many=True)},
+    responses={
+        200: UserLikeBookmarkSerializer(many=True),
+        401: ErrorResponseSerializer,
+    },
+    examples=[
+        OpenApiExample(
+            "인증 실패 (401 Unauthorized)",
+            value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
+            status_codes=["401"],
+        )
+    ],
 )
 class UserLikeBookmarkListView(ListAPIView):
     pagination_class = BookmarkPagination

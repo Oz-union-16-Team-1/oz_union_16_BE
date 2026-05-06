@@ -8,12 +8,6 @@ from drf_spectacular.views import (
 )
 
 urlpatterns = [
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path(
-        "api/schema/swagger-ui/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="swagger-ui",
-    ),
     path("admin/", admin.site.urls),
     path("api/v1/games/", include("apps.games.urls")),
     path("api/v1/match/", include("apps.match.urls")),
@@ -21,5 +15,15 @@ urlpatterns = [
     path("api/v1/accounts/", include("apps.users.urls")),
     path("api/v1/chatbot/", include("apps.chatbot.urls.urls")),
 ]
+
+if settings.DEBUG:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path(
+            "api/docs/swagger/",
+            SpectacularSwaggerView.as_view(url_name="schema"),
+            name="swagger-ui",
+        ),
+    ]
 
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
