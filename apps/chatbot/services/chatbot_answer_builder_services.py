@@ -25,21 +25,18 @@ def build_answer(message: str) -> str:
 def build_suggested_questions(message: str) -> list[str]:
     intent = classify_intent(message)
 
-    if intent in (None, "OUT_OF_SCOPE"):
+    if intent is None or intent == "OUT_OF_SCOPE":
         return []
 
     questions = SUGGESTIONS_BY_INTENT.get(intent, DEFAULT_SUGGESTED_QUESTIONS)
     return _exclude_current_question(questions, message)
 
 
-def _exclude_current_question(
-    questions: tuple[str, ...], message: str
-) -> list[str]:
+def _exclude_current_question(questions: tuple[str, ...], message: str) -> list[str]:
     return [
         question
         for question in questions
-        if _normalize_question_text(question)
-        != _normalize_question_text(message)
+        if _normalize_question_text(question) != _normalize_question_text(message)
     ]
 
 
