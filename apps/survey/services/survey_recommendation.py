@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 import time
 from typing import Any
 
@@ -16,6 +17,7 @@ from django.db.models import (
     Window,
 )
 from django.db.models.functions import Coalesce, RowNumber
+from django.utils import timezone
 from pgvector.django import CosineDistance
 from rest_framework import status
 from rest_framework.exceptions import APIException, NotFound
@@ -68,10 +70,8 @@ class SurveyGameEmbeddingService:
         "player_perspectives",
         "cover",
         "collection",
-        "franchises",
         "parent_game",
         "is_ban",
-        "game_type",
     )
     SUMMARY_MAX_LENGTH = 1200
     STORYLINE_MAX_LENGTH = 700
@@ -85,10 +85,9 @@ class SurveyGameEmbeddingService:
         self,
         *,
         offset: int = 0,
-        limit: int = 100,
+        limit: int | None = 100,
         only_missing: bool = True,
     ) -> QuerySet[Game]:
-        # 시리즈 대표작을 먼저 확정한 뒤, 이미 임베딩된 대표작만 제외합니다.
         representative_ids = self.get_series_representative_game_ids()
         queryset = (
             Game.objects.filter(game_id__in=representative_ids)
@@ -100,12 +99,15 @@ class SurveyGameEmbeddingService:
                 game_id__in=SurveyGameVector.objects.values_list("game_id", flat=True)
             )
 
+        if limit is None:
+            return queryset[offset:]
         return queryset[offset : offset + limit]
 
     def get_series_representative_game_ids(self) -> QuerySet[Any]:
         return (
             Game.objects.filter(self.build_candidate_filter())
             .annotate(
+                rating_data_count=self.build_rating_data_count_expression(),
                 series_key=Coalesce(
                     "collection",
                     "game_id",
@@ -135,45 +137,31 @@ class SurveyGameEmbeddingService:
                     ],
                 ),
             )
-            .filter(series_rank=1)
+            .filter(rating_data_count__gte=5, series_rank=1)
             .values_list("game_id", flat=True)
+        )
+
+    def build_rating_data_count_expression(self) -> Any:
+        return (
+            Coalesce("rating_count", Value(0), output_field=IntegerField())
+            + Coalesce("aggregated_rating_count", Value(0), output_field=IntegerField())
+            + Coalesce("total_rating_count", Value(0), output_field=IntegerField())
         )
 
     # DB에서 미리 걸러낼 수 있는 조건은 최대한 queryset에서 처리합니다.
     def build_candidate_filter(self) -> Q:
-        user_available_q = Q(rating__isnull=False, rating_count__isnull=False)
-        critic_available_q = Q(
-            aggregated_rating__isnull=False,
-            aggregated_rating_count__isnull=False,
-        )
-        total_available_q = Q(
-            total_rating__isnull=False,
-            total_rating_count__isnull=False,
-        )
-        user_ok_q = Q(rating_count__gte=20, rating__gte=50)
-        critic_ok_q = Q(aggregated_rating_count__gte=3, aggregated_rating__gte=60)
-        total_ok_q = Q(total_rating_count__gte=20, total_rating__gte=50)
-        no_rating_data_q = ~user_available_q & ~critic_available_q & ~total_available_q
-
-        quality_q = no_rating_data_q | user_ok_q | critic_ok_q | total_ok_q
-        category_q = Q(
-            game_type__isnull=False, game_type__in=SURVEY_ALLOWED_GAME_CATEGORIES
-        ) | (
-            Q(game_type__isnull=True)
+        return (
+            Q(is_ban=False)
             & (
                 Q(category__isnull=True)
                 | Q(category__in=SURVEY_ALLOWED_GAME_CATEGORIES)
             )
-        )
-
-        return (
-            Q(is_ban=False)
-            & category_q
             & (Q(status__isnull=True) | Q(status=0))
             & Q(parent_game__isnull=True)
-            & quality_q
             & Q(first_release_date__isnull=False)
             & Q(first_release_date__year__gte=SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR)
+            & Q(cover__isnull=False)
+            & ~Q(cover="")
             & Q(genres__isnull=False)
             & ~Q(genres=[])
             & (
@@ -192,8 +180,6 @@ class SurveyGameEmbeddingService:
         )
 
     def is_category_eligible(self, game: Game) -> bool:
-        if game.game_type is not None:
-            return int(game.game_type) in SURVEY_ALLOWED_GAME_CATEGORIES
         if game.category is None:
             return True
         return int(game.category) in SURVEY_ALLOWED_GAME_CATEGORIES
@@ -204,39 +190,24 @@ class SurveyGameEmbeddingService:
         return int(game.status) == 0
 
     def is_quality_eligible(self, game: Game) -> bool:
-        user_available = game.rating is not None and game.rating_count is not None
-        critic_available = (
-            game.aggregated_rating is not None
-            and game.aggregated_rating_count is not None
-        )
-        total_available = (
-            game.total_rating is not None and game.total_rating_count is not None
-        )
-
-        if not user_available and not critic_available and not total_available:
-            return True
-
-        return (
-            (user_available and game.rating_count >= 20 and game.rating >= 50)
-            or (
-                critic_available
-                and game.aggregated_rating_count >= 3
-                and game.aggregated_rating >= 60
-            )
-            or (
-                total_available
-                and game.total_rating_count >= 20
-                and game.total_rating >= 50
+        rating_data_count = sum(
+            count or 0
+            for count in (
+                game.rating_count,
+                game.aggregated_rating_count,
+                game.total_rating_count,
             )
         )
+        return rating_data_count >= 5
 
     def has_required_fields(self, game: Game) -> bool:
         has_genres = bool(game.genres)
         has_release_date = game.first_release_date is not None
+        has_cover = bool((game.cover or "").strip())
         has_description = bool(
             (game.summary or "").strip() or (game.storyline or "").strip()
         )
-        return has_genres and has_release_date and has_description
+        return has_genres and has_release_date and has_cover and has_description
 
     def is_release_date_eligible(self, game: Game) -> bool:
         if game.first_release_date is None:
@@ -362,7 +333,7 @@ class SurveyGameEmbeddingService:
         self,
         *,
         offset: int = 0,
-        limit: int = 100,
+        limit: int | None = 100,
         only_missing: bool = True,
     ) -> dict[str, int]:
         queryset = self.get_candidate_games(
@@ -391,6 +362,75 @@ class SurveyGameEmbeddingService:
 class SurveyRecommendationService:
     CURSOR_DISTANCE_KEY = "s"
     CURSOR_GAME_ID_KEY = "g"
+    RERANK_POOL_SIZE = 100
+    SIMILARITY_WEIGHT = 0.55
+    PRIMARY_SLOT_WEIGHT = 0.20
+    GENRE_WEIGHT = 0.10
+    RECENCY_WEIGHT = 0.10
+    RATING_WEIGHT = 0.05
+    NEGATIVE_SLOT_PENALTY = 0.20
+    NEGATIVE_MARKERS = (
+        "싫",
+        "피로",
+        "선호하지",
+        "못 느",
+        "재미를 못",
+        "안 좋아",
+        "별로",
+    )
+    PREFERENCE_SLOT_RULES: dict[str, dict[str, tuple[str, ...]]] = {
+        "solo": {
+            "user": ("혼자", "솔로", "싱글", "혼자서"),
+            "game": ("혼자", "솔로", "싱글", "single", "single-player"),
+        },
+        "coop": {
+            "user": ("협동", "협력", "팀원", "친구와", "함께"),
+            "game": ("협동", "협력", "co-op", "coop", "cooperative", "multiplayer"),
+        },
+        "competition": {
+            "user": ("경쟁", "대결", "다른 플레이어", "pvp", "실력을 겨루"),
+            "game": ("경쟁", "대결", "pvp", "versus", "competitive", "multiplayer"),
+        },
+        "pve": {
+            "user": ("pve", "ai", "적들", "몬스터", "보스"),
+            "game": ("pve", "ai", "enemy", "enemies", "monster", "boss", "보스"),
+        },
+        "combat": {
+            "user": ("전투", "액션", "싸우", "적", "물리치", "공격", "보스"),
+            "game": (
+                "전투",
+                "액션",
+                "격투",
+                "슈팅",
+                "combat",
+                "action",
+                "fight",
+                "battle",
+                "enemy",
+                "boss",
+            ),
+        },
+        "story": {
+            "user": ("스토리", "이야기", "서사", "세계관"),
+            "game": ("스토리", "이야기", "서사", "story", "narrative", "world"),
+        },
+        "exploration": {
+            "user": ("탐험", "탐색", "발견", "모험"),
+            "game": ("탐험", "어드벤처", "exploration", "explore", "adventure"),
+        },
+        "puzzle": {
+            "user": ("퍼즐", "수수께끼", "단서", "문제"),
+            "game": ("퍼즐", "puzzle", "riddle", "clue"),
+        },
+        "strategy": {
+            "user": ("전략", "전술", "계획", "판단"),
+            "game": ("전략", "전술", "strategy", "tactical", "tactics"),
+        },
+        "growth": {
+            "user": ("성장", "레벨", "장비", "빌드", "강해"),
+            "game": ("성장", "레벨", "장비", "빌드", "rpg", "level", "build", "gear"),
+        },
+    }
 
     def __init__(self) -> None:
         self.embedding_service = SurveyGameEmbeddingService()
@@ -416,15 +456,18 @@ class SurveyRecommendationService:
             .order_by("distance", "game_id")
         )
 
-        ranked_items = list(vector_queryset[:SURVEY_RECOMMENDATION_MAX_RESULTS])
+        ranked_items = self.rank_recommendation_items(
+            items=list(vector_queryset[: self.RERANK_POOL_SIZE]),
+            survey_answer=getattr(session.results, "survey_answer", "") or "",
+        )[:SURVEY_RECOMMENDATION_MAX_RESULTS]
         total_count = len(ranked_items)
         cursor_position = self.decode_cursor(cursor)
         if cursor_position:
-            cursor_distance, cursor_game_id = cursor_position
+            cursor_score, cursor_game_id = cursor_position
             ranked_items = [
                 item
                 for item in ranked_items
-                if self.is_after_cursor(item, cursor_distance, cursor_game_id)
+                if self.is_after_cursor(item, cursor_score, cursor_game_id)
             ]
 
         page = ranked_items[: page_size + 1]
@@ -475,17 +518,17 @@ class SurveyRecommendationService:
     def is_after_cursor(
         self,
         item: SurveyGameVector,
-        cursor_distance: float,
+        cursor_score: float,
         cursor_game_id: int,
     ) -> bool:
-        return float(item.distance) > cursor_distance or (
-            float(item.distance) == cursor_distance
-            and int(item.game_id) > cursor_game_id
+        item_score = self.get_cursor_score(item)
+        return item_score < cursor_score or (
+            item_score == cursor_score and int(item.game_id) > cursor_game_id
         )
 
     def encode_cursor(self, item: SurveyGameVector) -> str:
         payload = {
-            self.CURSOR_DISTANCE_KEY: float(item.distance),
+            self.CURSOR_DISTANCE_KEY: self.get_cursor_score(item),
             self.CURSOR_GAME_ID_KEY: int(item.game_id),
         }
         encoded = base64.urlsafe_b64encode(
@@ -508,6 +551,217 @@ class SurveyRecommendationService:
             ) from exc
 
         return distance, game_id
+
+    def rank_recommendation_items(
+        self,
+        items: list[SurveyGameVector],
+        survey_answer: str = "",
+    ) -> list[SurveyGameVector]:
+        if not items:
+            return []
+
+        preference_profile = self.build_preference_profile(survey_answer)
+        game_map = {
+            int(game.game_id): game
+            for game in Game.objects.filter(
+                game_id__in=[int(item.game_id) for item in items]
+            ).only(
+                "game_id",
+                "first_release_date",
+                "total_rating",
+                "aggregated_rating",
+                "rating",
+                "name",
+                "genres",
+                "summary",
+                "storyline",
+                "themes",
+                "keywords",
+                "game_modes",
+                "player_perspectives",
+            )
+        }
+        for item in items:
+            game = game_map.get(int(item.game_id))
+            item.recommendation_score = self.calculate_recommendation_score(
+                distance=float(item.distance),
+                game=game,
+                preference_profile=preference_profile,
+            )
+
+        return sorted(
+            items,
+            key=lambda item: (-self.get_cursor_score(item), int(item.game_id)),
+        )
+
+    def calculate_recommendation_score(
+        self,
+        *,
+        distance: float,
+        game: Game | None,
+        preference_profile: dict[str, set[str]] | None = None,
+    ) -> float:
+        similarity_score = max(0.0, min(1.0, 1.0 - distance))
+        primary_slot_score = self.calculate_primary_slot_score(
+            game=game,
+            preference_profile=preference_profile,
+        )
+        genre_score = self.calculate_genre_score(
+            game=game,
+            preference_profile=preference_profile,
+        )
+        rating_score = self.calculate_rating_score(game)
+        recency_score = self.calculate_recency_score(game)
+        negative_penalty = self.calculate_negative_slot_penalty(
+            game=game,
+            preference_profile=preference_profile,
+        )
+        return (
+            self.SIMILARITY_WEIGHT * similarity_score
+            + self.PRIMARY_SLOT_WEIGHT * primary_slot_score
+            + self.GENRE_WEIGHT * genre_score
+            + self.RECENCY_WEIGHT * recency_score
+            + self.RATING_WEIGHT * rating_score
+            - self.NEGATIVE_SLOT_PENALTY * negative_penalty
+        )
+
+    def build_preference_profile(self, survey_answer: str) -> dict[str, set[str]]:
+        normalized_answer = self.normalize_match_text(survey_answer)
+        positive_slots = {
+            slot
+            for slot, rules in self.PREFERENCE_SLOT_RULES.items()
+            if self.contains_any(normalized_answer, rules["user"])
+            and not self.contains_near_negative(normalized_answer, rules["user"])
+        }
+        negative_slots = {
+            slot
+            for slot, rules in self.PREFERENCE_SLOT_RULES.items()
+            if self.contains_near_negative(normalized_answer, rules["user"])
+        }
+        preferred_genres = {
+            genre_name
+            for genre_name in IGDB.GENRE_NAME_MAP.values()
+            if genre_name.lower() in normalized_answer
+        }
+        return {
+            "positive_slots": positive_slots,
+            "negative_slots": negative_slots,
+            "preferred_genres": preferred_genres,
+        }
+
+    def calculate_primary_slot_score(
+        self,
+        *,
+        game: Game | None,
+        preference_profile: dict[str, set[str]] | None,
+    ) -> float:
+        if not game or not preference_profile:
+            return 0.0
+
+        positive_slots = preference_profile["positive_slots"]
+        if not positive_slots:
+            return 0.0
+
+        game_slots = self.detect_game_slots(game)
+        return len(positive_slots & game_slots) / len(positive_slots)
+
+    def calculate_negative_slot_penalty(
+        self,
+        *,
+        game: Game | None,
+        preference_profile: dict[str, set[str]] | None,
+    ) -> float:
+        if not game or not preference_profile:
+            return 0.0
+
+        negative_slots = preference_profile["negative_slots"]
+        if not negative_slots:
+            return 0.0
+
+        game_slots = self.detect_game_slots(game)
+        return len(negative_slots & game_slots) / len(negative_slots)
+
+    def calculate_genre_score(
+        self,
+        *,
+        game: Game | None,
+        preference_profile: dict[str, set[str]] | None,
+    ) -> float:
+        if not game or not preference_profile:
+            return 0.0
+
+        preferred_genres = preference_profile["preferred_genres"]
+        if not preferred_genres:
+            return 0.0
+
+        game_genres = set(self.embedding_service.extract_genre_names(game.genres))
+        return len(preferred_genres & game_genres) / len(preferred_genres)
+
+    def detect_game_slots(self, game: Game) -> set[str]:
+        game_text = self.build_game_match_text(game)
+        return {
+            slot
+            for slot, rules in self.PREFERENCE_SLOT_RULES.items()
+            if self.contains_any(game_text, rules["game"])
+        }
+
+    def build_game_match_text(self, game: Game) -> str:
+        parts = [
+            game.name or "",
+            " ".join(self.embedding_service.extract_genre_names(game.genres)),
+            game.summary or "",
+            game.storyline or "",
+            self.embedding_service.stringify_value_list(game.themes),
+            self.embedding_service.stringify_value_list(game.keywords),
+            self.embedding_service.stringify_value_list(game.game_modes),
+            self.embedding_service.stringify_value_list(game.player_perspectives),
+        ]
+        return self.normalize_match_text(" ".join(parts))
+
+    def normalize_match_text(self, value: str) -> str:
+        return re.sub(r"\s+", " ", value.lower()).strip()
+
+    def contains_any(self, text: str, keywords: tuple[str, ...]) -> bool:
+        return any(keyword.lower() in text for keyword in keywords)
+
+    def contains_near_negative(self, text: str, keywords: tuple[str, ...]) -> bool:
+        for keyword in keywords:
+            keyword_pattern = re.escape(keyword.lower())
+            for match in re.finditer(keyword_pattern, text):
+                start = max(0, match.start() - 20)
+                end = min(len(text), match.end() + 20)
+                window = text[start:end]
+                if self.contains_any(window, self.NEGATIVE_MARKERS):
+                    return True
+        return False
+
+    def calculate_rating_score(self, game: Game | None) -> float:
+        if not game:
+            return 0.0
+
+        rating = self.normalize_rating(game)
+        if rating is None:
+            return 0.0
+        return max(0.0, min(1.0, rating / 100.0))
+
+    def calculate_recency_score(self, game: Game | None) -> float:
+        if not game or not game.first_release_date:
+            return 0.0
+
+        release_year = game.first_release_date.year
+        current_year = timezone.now().year
+        year_range = current_year - SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR
+        if year_range <= 0:
+            return 0.0
+        recency = (release_year - SURVEY_RECOMMENDATION_MIN_RELEASE_YEAR) / year_range
+        return max(0.0, min(1.0, recency))
+
+    def get_cursor_score(self, item: SurveyGameVector) -> float:
+        score = getattr(item, "recommendation_score", None)
+        if score is not None:
+            return float(score)
+        distance = getattr(item, "distance", 0.0)
+        return float(distance or 0.0)
 
     def get_closed_session(self, *, user: Any, session_id: str) -> SurveyChatbotSession:
         try:

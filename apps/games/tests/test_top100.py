@@ -93,29 +93,37 @@ class GameTop100APITest(APITestCase):
         result = GameTop100Service.get_top_100_games(genre_id=99)
         self.assertEqual(result, [])
 
-    def test_service_search_icontains_coverage(self):
-        """일반 검색 (line 64): fuzzy=False + search 키워드"""
+    def test_service_search_matches_title_prefix(self):
+        """일반 검색은 영어 제목 앞부분 기준으로 검색한다."""
         result = GameTop100Service.get_top_100_games(
-            genre_id=0, search="Main", fuzzy=False
+            genre_id=0, search="Ma", fuzzy=False
         )
         self.assertGreater(len(result), 0)
-        self.assertTrue(all("main" in g.name.lower() for g in result))
+        self.assertTrue(all(g.name.lower().startswith("ma") for g in result))
 
-    def test_service_search_matches_korean_title(self):
-        """한글 검색어도 name_ko 기준으로 검색할 수 있다."""
+    def test_service_search_does_not_match_title_middle(self):
+        """일반 검색은 제목 중간에만 포함된 검색어는 제외한다."""
+        result = GameTop100Service.get_top_100_games(
+            genre_id=0, search="ain", fuzzy=False
+        )
+
+        self.assertEqual(result, [])
+
+    def test_service_search_matches_korean_title_prefix(self):
+        """한글 검색어도 name_ko 앞부분 기준으로 검색할 수 있다."""
         self.game_main.name_ko = "메인 게임"
         self.game_main.save(update_fields=["name_ko"])
 
         result = GameTop100Service.get_top_100_games(
-            genre_id=0, search="메인", fuzzy=False
+            genre_id=0, search="메", fuzzy=False
         )
 
         self.assertEqual([game.game_id for game in result], [self.game_main.game_id])
 
     def test_service_search_fuzzy_coverage(self):
-        """퍼지 검색 (lines 58~62): fuzzy=True + 단어 단위 OR"""
+        """퍼지 검색도 단어별 제목 앞부분 OR 조건으로 검색한다."""
         result = GameTop100Service.get_top_100_games(
-            genre_id=0, search="Main Game", fuzzy=True
+            genre_id=0, search="Ma Unknown", fuzzy=True
         )
         self.assertGreater(len(result), 0)
 

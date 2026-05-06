@@ -28,3 +28,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# 로컬 개발 시에는 편리하게 페이지를 볼 수 있도록 유지합니다.
+REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = tuple(
+    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"]
+) + ("rest_framework.renderers.BrowsableAPIRenderer",)

@@ -6,7 +6,7 @@ from apps.users.models import UserLikeBookmark
 
 class UserLikeBookmarkSerializer(serializers.ModelSerializer):
     game_id = serializers.IntegerField(source="game.game_id")
-    game_title = serializers.CharField(source="game.name")
+    game_title = serializers.CharField(source="game.name_ko")
     thumbnail_url = serializers.SerializerMethodField()
     genres = serializers.SerializerMethodField()
     liked_at = serializers.DateTimeField(source="created_at")

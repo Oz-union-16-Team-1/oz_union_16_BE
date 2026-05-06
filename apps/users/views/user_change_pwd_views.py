@@ -1,9 +1,11 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.exceptions import ErrorResponseSerializer
+from apps.users.serializers.check_duplication_serializers import CheckResponseSerializer
 from apps.users.serializers.user_change_pwd_serializers import ChangePasswordSerializer
 from apps.users.services.user_change_pwd_services import UserChangePwdService
 
@@ -15,7 +17,30 @@ class PasswordUpdateView(APIView):
         summary="비밀번호 변경",
         description="현재 비밀번호를 확인한 후 새로운 비밀번호로 변경합니다.",
         request=ChangePasswordSerializer,
-        responses={200: None},
+        responses={
+            200: CheckResponseSerializer,
+            400: ErrorResponseSerializer,
+            401: ErrorResponseSerializer,
+        },
+        examples=[
+            OpenApiExample(
+                "성공 예시 (200 OK)",
+                value={"detail": "비밀번호 변경 성공."},
+                status_codes=["200"],
+            ),
+            OpenApiExample(
+                "인증 실패 (401 Unauthorized)",
+                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
+                status_codes=["401"],
+            ),
+            OpenApiExample(
+                "필드 누락 (400 Bad Request)",
+                value={
+                    "error_detail": {"old_password": ["이 필드는 필수 항목입니다."]}
+                },
+                status_codes=["400"],
+            ),
+        ],
         tags=["accounts"],
     )
     def post(self, request):

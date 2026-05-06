@@ -1,0 +1,20 @@
+{% extends "admin/base.html" %}
+{% load i18n static %}
+
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | PGTI Admin{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'admin_custom/css/admin_theme.css' %}">
+{% endblock %}
+
+{% block branding %}
+<div class="pgti-admin-brand">
+  <img class="pgti-admin-brand__logo" src="{% static 'admin_custom/img/pgti-logo.png' %}" alt="PGTI">
+  <span class="pgti-admin-brand__text">
+    <strong id="site-name"><a href="{% url 'admin:index' %}">PGTI Admin</a></strong>
+  </span>
+</div>
+{% endblock %}
+
+{% block nav-global %}{% endblock %}
