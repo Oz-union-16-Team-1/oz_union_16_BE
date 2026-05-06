@@ -85,8 +85,52 @@ class GameAdmin(admin.ModelAdmin):
     search_fields = ("game_id", "name", "name_ko")
     list_filter = ("is_ban", "created_at")
     readonly_fields = (
+        # 시스템/집계
         "game_id",
         "created_at",
+        "like_count",
+        # 원본 식별/설명 (배치 동기화 대상)
+        "name",
+        "slug",
+        "summary",
+        "storyline",
+        # 원본 분류/상태
+        "category",
+        "status",
+        "game_type",
+        # 원본 출시/평점
+        "first_release_date",
+        "version_title",
+        "rating",
+        "rating_count",
+        "aggregated_rating",
+        "aggregated_rating_count",
+        "total_rating",
+        "total_rating_count",
+        "follows",
+        "hypes",
+        # 원본 관계/미디어
+        "collection",
+        "parent_game",
+        "cover",
+        "screenshots",
+        "videos",
+        "websites",
+        # 원본 JSON 메타
+        "genres",
+        "themes",
+        "keywords",
+        "game_modes",
+        "player_perspectives",
+        "multiplayer_modes",
+        "involved_companies",
+        "franchises",
+        "remakes",
+        "remasters",
+        "expansions",
+        "dlcs",
+        "language_supports",
+        # 벡터 시각화
         "match_vector_radar",
         "match_vector_dimensions",
     )
@@ -97,17 +141,10 @@ class GameAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (
-            "기본 정보",
+            "운영 제어",
             {
                 "fields": (
                     "game_id",
-                    "name",
-                    "name_ko",
-                    "slug",
-                    "summary",
-                    "storyline",
-                    "rating",
-                    "like_count",
                     "is_ban",
                     "ban_reason",
                     "created_at",
@@ -115,20 +152,21 @@ class GameAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "분류 정보",
+            "노출 텍스트 (원문/번역)",
             {
                 "fields": (
-                    "category",
-                    "status",
-                    "game_type",
-                    "genres",
-                    "themes",
-                    "keywords",
+                    "name",
+                    "name_ko",
+                    "slug",
+                    "summary",
+                    "summary_ko",
+                    "storyline",
+                    "storyline_ko",
                 )
             },
         ),
         (
-            "이미지/영상/링크",
+            "미디어/외부 링크",
             {
                 "fields": (
                     "cover",
@@ -139,10 +177,11 @@ class GameAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "출시/평점 정보",
+            "랭킹/추천 지표",
             {
                 "fields": (
                     "first_release_date",
+                    "rating",
                     "rating_count",
                     "aggregated_rating",
                     "aggregated_rating_count",
@@ -150,6 +189,9 @@ class GameAdmin(admin.ModelAdmin):
                     "total_rating_count",
                     "follows",
                     "hypes",
+                    "like_count",
+                    "collection",
+                    "parent_game",
                 )
             },
         ),
@@ -160,6 +202,31 @@ class GameAdmin(admin.ModelAdmin):
                     "match_vector_radar",
                     "match_vector_dimensions",
                 )
+            },
+        ),
+        (
+            "원본 JSON (참고용)",
+            {
+                "classes": ("collapse",),
+                "fields": (
+                    "category",
+                    "status",
+                    "game_type",
+                    "genres",
+                    "themes",
+                    "keywords",
+                    "game_modes",
+                    "player_perspectives",
+                    "multiplayer_modes",
+                    "involved_companies",
+                    "franchises",
+                    "remakes",
+                    "remasters",
+                    "expansions",
+                    "dlcs",
+                    "language_supports",
+                    "version_title",
+                ),
             },
         ),
     )
