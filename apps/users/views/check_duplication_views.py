@@ -1,4 +1,4 @@
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny
@@ -21,36 +21,43 @@ class CheckIdView(GenericAPIView):
         summary="아이디 중복 체크",
         description="입력받은 login_id가 데이터베이스에 존재하는지 확인합니다.",
         responses={
-            200: CheckResponseSerializer,
-            400: ErrorResponseSerializer,
-            409: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="사용 가능한 아이디",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (200 OK)",
+                        value={"detail": "사용 가능한 아이디입니다."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="필드 누락",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {"login_id": ["이 필드는 필수 항목입니다."]}
+                        },
+                    )
+                ],
+            ),
+            409: OpenApiResponse(
+                description="아이디 중복",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "중복 오류 (409 Conflict)",
+                        value={
+                            "error_detail": {
+                                "login_id": ["이미 중복된 회원가입 내역이 존재합니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "성공 예시 (200 OK)",
-                value={"detail": "사용 가능한 아이디입니다."},
-                status_codes=["200"],
-            ),
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={"error_detail": {"login_id": ["이 필드는 필수 항목입니다."]}},
-                status_codes=["400"],
-            ),
-            OpenApiExample(
-                "중복 오류 (409 Conflict)",
-                value={
-                    "error_detail": {
-                        "login_id": ["이미 중복된 회원가입 내역이 존재합니다."]
-                    }
-                },
-                status_codes=["409"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request, *args, **kwargs):
@@ -71,27 +78,43 @@ class CheckNickNameView(GenericAPIView):
         summary="닉네임 중복 체크",
         description="입력받은 nickname이 데이터베이스에 존재하는지 확인합니다.",
         responses={
-            200: CheckResponseSerializer,
-            400: ErrorResponseSerializer,
-            409: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="사용 가능한 닉네임",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (200 OK)",
+                        value={"detail": "사용 가능한 닉네임입니다."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="필드 누락",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {"nickname": ["이 필드는 필수 항목입니다."]}
+                        },
+                    )
+                ],
+            ),
+            409: OpenApiResponse(
+                description="닉네임 중복",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "중복 오류 (409 Conflict)",
+                        value={
+                            "error_detail": {
+                                "nickname": ["중복된 닉네임이 존재합니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "성공 예시 (200 OK)",
-                value={"detail": "사용 가능한 아이디입니다."},
-                status_codes=["200"],
-            ),
-            OpenApiExample(
-                "중복 오류 (409 Conflict)",
-                value={"error_detail": {"nickname": ["중복된 닉네임이 존재합니다."]}},
-                status_codes=["409"],
-            ),
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={"error_detail": {"nickname": ["이 필드는 필수 항목입니다."]}},
-                status_codes=["400"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request, *args, **kwargs):

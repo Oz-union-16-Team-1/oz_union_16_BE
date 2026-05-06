@@ -1,4 +1,9 @@
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -10,8 +15,8 @@ from apps.users.services.user_bookmark_services import UserLikeBookmarkService
 
 
 class BookmarkPagination(PageNumberPagination):
-    page_size = 10  # 기본값
-    page_size_query_param = "page_size"  # page_size 쿼리 파라미터 활성화
+    page_size = 10
+    page_size_query_param = "page_size"
     max_page_size = 100
 
     def get_paginated_response(self, data):
@@ -41,16 +46,38 @@ class BookmarkPagination(PageNumberPagination):
         OpenApiParameter(name="page_size", type=int, description="페이지당 항목 수"),
     ],
     responses={
-        200: UserLikeBookmarkSerializer(many=True),
-        401: ErrorResponseSerializer,
+        200: OpenApiResponse(
+            description="북마크 목록 조회 성공 (페이징 포함)",
+            # ListAPIView의 pagination_class에 의해 정의된 schema가 자동으로 적용됩니다.
+            response=UserLikeBookmarkSerializer(many=True),
+            examples=[
+                OpenApiExample(
+                    "성공 예시 (200 OK)",
+                    value={
+                        "count": 1,
+                        "results": [
+                            {
+                                "id": 1,
+                                "game_id": 101,
+                                "game_title": "멋진 게임",
+                                "created_at": "2024-03-21T10:00:00Z",
+                            }
+                        ],
+                    },
+                )
+            ],
+        ),
+        401: OpenApiResponse(
+            description="인증 실패",
+            response=ErrorResponseSerializer,
+            examples=[
+                OpenApiExample(
+                    "인증 실패 (401 Unauthorized)",
+                    value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
+                )
+            ],
+        ),
     },
-    examples=[
-        OpenApiExample(
-            "인증 실패 (401 Unauthorized)",
-            value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-            status_codes=["401"],
-        )
-    ],
 )
 class UserLikeBookmarkListView(ListAPIView):
     pagination_class = BookmarkPagination

@@ -1,4 +1,4 @@
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -17,14 +17,30 @@ class UserVerifySocialView(APIView):
     @extend_schema(
         summary="내 소셜 정보 조회",
         description="로그인한 계정의 소셜 정보를 조회합니다.",
-        responses={200: UserVerifySocialSerializer, 401: ErrorResponseSerializer},
-        examples=[
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            )
-        ],
+        responses={
+            200: OpenApiResponse(
+                description="소셜 정보 조회 성공",
+                response=UserVerifySocialSerializer,
+                examples=[
+                    OpenApiExample(
+                        "조회 성공 (200 OK)",
+                        value={"provider": "google", "email": "user@example.com"},
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+        },
         tags=["accounts"],
     )
     def get(self, request):
