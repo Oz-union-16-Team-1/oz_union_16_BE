@@ -11,3 +11,11 @@ htmlcov/
 media/
 static/
 staticfiles/
+
+# Django admin custom theme assets must be versioned for non-local environments.
+!apps/core/static/
+!apps/core/static/admin_custom/
+!apps/core/static/admin_custom/css/
+!apps/core/static/admin_custom/css/admin_theme.css
+!apps/core/static/admin_custom/img/
+!apps/core/static/admin_custom/img/pgti-logo.png
