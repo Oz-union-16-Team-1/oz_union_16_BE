@@ -10,12 +10,18 @@ class Command(BaseCommand):
         parser.add_argument("--offset", type=int, default=0)
         parser.add_argument("--limit", type=int, default=100)
         parser.add_argument("--all", action="store_true")
+        parser.add_argument(
+            "--all-candidates",
+            action="store_true",
+            help="설문 임베딩 조건에 맞는 모든 게임을 처리합니다.",
+        )
 
     def handle(self, *args, **options):
         service = SurveyGameEmbeddingService()
+        limit = None if options["all_candidates"] else options["limit"]
         result = service.sync_embeddings(
             offset=options["offset"],
-            limit=options["limit"],
+            limit=limit,
             only_missing=not options["all"],
         )
         self.stdout.write(
