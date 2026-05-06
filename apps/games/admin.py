@@ -131,13 +131,13 @@ class GameAdmin(admin.ModelAdmin):
         "dlcs",
         "language_supports",
         # 벡터 시각화
-        "match_vector_radar",
         "match_vector_dimensions",
     )
     actions = (ban_games, unban_games)
     date_hierarchy = "created_at"
     list_per_page = 30
     empty_value_display = "-"
+    change_form_template = "admin/games/game/change_form.html"
 
     fieldsets = (
         (
@@ -199,7 +199,6 @@ class GameAdmin(admin.ModelAdmin):
             "매칭 벡터 정보",
             {
                 "fields": (
-                    "match_vector_radar",
                     "match_vector_dimensions",
                 )
             },
@@ -231,73 +230,31 @@ class GameAdmin(admin.ModelAdmin):
         ),
     )
 
-    class Media:
-        js = (
-            "https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js",
-            "games_admin/game_vector_chart.js",
+    def render_change_form(
+            self, request, context, add=False, change=False, form_url="", obj=None
+    ):
+        context = dict(context)
+        chart_payload = None
+
+        if obj is not None:
+            values = self._get_match_vector(obj)
+            if values is not None:
+                chart_payload = {
+                    "game_id": obj.game_id,
+                    "labels": list(MATCH_VECTOR_RADAR_LABELS),
+                    "values": [round(v, 4) for v in values],
+                }
+
+        context["game_vector_chart"] = chart_payload
+        return super().render_change_form(
+            request,
+            context,
+            add=add,
+            change=change,
+            form_url=form_url,
+            obj=obj,
         )
 
-    def _get_match_vector(self, obj) -> list[float] | None:
-        pref = (
-            MatchGamePreference.objects.filter(game_id=obj)
-            .only("game_preference_vector")
-            .first()
-        )
-        if pref is None or pref.game_preference_vector is None:
-            return None
-
-        raw = pref.game_preference_vector
-        try:
-            values = [float(v) for v in list(raw)]
-        except TypeError:
-            return None
-
-        if len(values) < len(MATCH_VECTOR_DIM_LABELS):
-            values.extend([0.0] * (len(MATCH_VECTOR_DIM_LABELS) - len(values)))
-        return values[: len(MATCH_VECTOR_DIM_LABELS)]
-
-    def _clamp(self, value: float, min_value: float, max_value: float) -> float:
-        return max(min_value, min(value, max_value))
-
-    def _value_color(self, dim_index: int, value: float) -> str:
-        if dim_index == 14:
-            return "#a3e635"  # lime
-        if dim_index <= 8:
-            return "#7c6cff"  # purple
-        if dim_index == 13:
-            return "#22d3ee" if value < 0 else "#06b6d4"  # cyan
-        return "#ff7a1a" if value >= 0 else "#22d3ee"  # orange / cyan
-
-    def _render_unipolar_track(self, color: str, value: float):
-        width = self._clamp(value, 0.0, 1.0) * 100.0
-        return format_html(
-            "<div style='display:block;width:100%;height:12px;background:#1f2937;"
-            "border:1px solid #334155;border-radius:9999px;overflow:hidden;'>"
-            "<div style='display:block;height:100%;width:{}%;background:{};border-radius:9999px;'></div>"
-            "</div>",
-            f"{width:.2f}",
-            color,
-        )
-
-    def _render_bipolar_track(self, color: str, value: float):
-        v = self._clamp(value, -1.0, 1.0)
-        if v >= 0:
-            left = 50.0
-            width = v * 50.0
-        else:
-            left = 50.0 - abs(v) * 50.0
-            width = abs(v) * 50.0
-
-        return format_html(
-            "<div style='display:block;width:100%;height:12px;background:#1f2937;"
-            "border:1px solid #334155;border-radius:9999px;overflow:hidden;position:relative;'>"
-            "<div style='position:absolute;left:50%;top:0;bottom:0;width:1px;background:#475569;'></div>"
-            "<div style='position:absolute;left:{}%;top:0;height:100%;width:{}%;background:{};border-radius:9999px;'></div>"
-            "</div>",
-            f"{left:.2f}",
-            f"{width:.2f}",
-            color,
-        )
 
     @admin.display(description="벡터 별자리 맵")
     def match_vector_radar(self, obj):
