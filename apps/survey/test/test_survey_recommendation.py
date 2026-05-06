@@ -256,16 +256,16 @@ class SurveyRecommendationServiceTest(TestCase):
 
     def test_is_game_eligible(self) -> None:
         good_game = create_game(game_id=207)
-        no_rating_game = create_game(
+        low_rating_count_game = create_game(
             game_id=208,
-            rating=None,
-            rating_count=None,
+            rating=90.0,
+            rating_count=2,
             aggregated_rating=None,
-            aggregated_rating_count=None,
+            aggregated_rating_count=1,
             total_rating=None,
-            total_rating_count=None,
+            total_rating_count=1,
         )
-        bad_rating_game = create_game(
+        low_score_game = create_game(
             game_id=220,
             rating=40.0,
             rating_count=30,
@@ -276,8 +276,8 @@ class SurveyRecommendationServiceTest(TestCase):
         )
 
         self.assertTrue(self.embedding_service.is_game_eligible(good_game))
-        self.assertTrue(self.embedding_service.is_game_eligible(no_rating_game))
-        self.assertFalse(self.embedding_service.is_game_eligible(bad_rating_game))
+        self.assertFalse(self.embedding_service.is_game_eligible(low_rating_count_game))
+        self.assertTrue(self.embedding_service.is_game_eligible(low_score_game))
 
     def test_query_serializer_accepts_opaque_cursor_and_default_page_size(self) -> None:
         serializer = SurveyRecommendationQuerySerializer(data={})
@@ -308,17 +308,8 @@ class SurveyRecommendationServiceTest(TestCase):
         no_cover = create_game(game_id=214, cover="")
         no_description = create_game(game_id=215, summary=" ", storyline=" ")
         self.assertFalse(self.embedding_service.has_required_fields(no_genres))
-        self.assertTrue(self.embedding_service.has_required_fields(no_cover))
+        self.assertFalse(self.embedding_service.has_required_fields(no_cover))
         self.assertFalse(self.embedding_service.has_required_fields(no_description))
-
-        game_type_valid_game = create_game(game_id=221, category=5, game_type=0)
-        game_type_invalid_game = create_game(game_id=222, category=0, game_type=5)
-        self.assertTrue(
-            self.embedding_service.is_category_eligible(game_type_valid_game)
-        )
-        self.assertFalse(
-            self.embedding_service.is_category_eligible(game_type_invalid_game)
-        )
 
     def test_release_date_and_quality_branches(self) -> None:
         no_release_date = create_game(game_id=216, first_release_date=None)
@@ -340,7 +331,7 @@ class SurveyRecommendationServiceTest(TestCase):
             aggregated_rating=55.0,
             aggregated_rating_count=5,
         )
-        all_rating_fail_game = create_game(
+        low_score_with_enough_count_game = create_game(
             game_id=223,
             rating=40.0,
             rating_count=30,
@@ -349,14 +340,14 @@ class SurveyRecommendationServiceTest(TestCase):
             total_rating=45.0,
             total_rating_count=30,
         )
-        no_rating_game = create_game(
+        insufficient_rating_count_game = create_game(
             game_id=250,
             rating=None,
-            rating_count=None,
+            rating_count=2,
             aggregated_rating=None,
-            aggregated_rating_count=None,
+            aggregated_rating_count=1,
             total_rating=None,
-            total_rating_count=None,
+            total_rating_count=1,
         )
 
         self.assertFalse(
@@ -369,10 +360,12 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertTrue(
             self.embedding_service.is_quality_eligible(low_critic_with_good_user_game)
         )
-        self.assertFalse(
-            self.embedding_service.is_quality_eligible(all_rating_fail_game)
+        self.assertTrue(
+            self.embedding_service.is_quality_eligible(low_score_with_enough_count_game)
         )
-        self.assertTrue(self.embedding_service.is_quality_eligible(no_rating_game))
+        self.assertFalse(
+            self.embedding_service.is_quality_eligible(insufficient_rating_count_game)
+        )
 
     @override_settings(SURVEY_CHATBOT_GEMINI_API_KEY="test-key")
     @patch("apps.survey.services.survey_recommendation.requests.post")
@@ -449,6 +442,27 @@ class SurveyRecommendationServiceTest(TestCase):
         self.assertEqual(result["count"], 1)
         self.assertEqual(result["failed"], 0)
         self.assertTrue(SurveyGameVector.objects.filter(game_id=game.game_id).exists())
+
+    @patch(
+        "apps.survey.services.survey_recommendation.SurveyGameEmbeddingService.generate_game_embedding"
+    )
+    def test_sync_embeddings_without_limit_embeds_all_candidates(
+        self, mock_generate_game_embedding
+    ) -> None:
+        first_game = create_game(game_id=224)
+        second_game = create_game(game_id=225)
+        mock_generate_game_embedding.return_value = [0.1] * 1536
+
+        result = self.embedding_service.sync_embeddings(limit=None)
+
+        self.assertEqual(result["count"], 2)
+        self.assertEqual(result["failed"], 0)
+        self.assertTrue(
+            SurveyGameVector.objects.filter(game_id=first_game.game_id).exists()
+        )
+        self.assertTrue(
+            SurveyGameVector.objects.filter(game_id=second_game.game_id).exists()
+        )
 
     @patch(
         "apps.survey.services.survey_recommendation.SurveyGameEmbeddingService.generate_game_embedding"
@@ -626,6 +640,76 @@ class SurveyRecommendationServiceTest(TestCase):
             3015,
             [item["game_id"] for item in result["results"]],
         )
+
+    def test_recommendations_boost_recent_games_with_similar_vectors(self) -> None:
+        old_game = create_game(
+            game_id=4010,
+            name="오래된 유사 게임",
+            slug="old-similar-game",
+            first_release_date=datetime(2000, 1, 1, tzinfo=timezone.utc),
+            total_rating=80.0,
+        )
+        recent_game = create_game(
+            game_id=4011,
+            name="최신 유사 게임",
+            slug="recent-similar-game",
+            first_release_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            total_rating=80.0,
+        )
+        SurveyGameVector.objects.create(
+            game_id=old_game.game_id,
+            embedding=[1.0] + ([0.0] * 1535),
+        )
+        SurveyGameVector.objects.create(
+            game_id=recent_game.game_id,
+            embedding=[0.995, 0.1] + ([0.0] * 1534),
+        )
+
+        result = self.service.get_recommendations(
+            user=self.user,
+            session_id=str(self.session.id),
+            cursor=None,
+            page_size=2,
+        )
+
+        self.assertEqual(result["results"][0]["game_id"], recent_game.game_id)
+        self.assertEqual(result["results"][1]["game_id"], old_game.game_id)
+
+    def test_recommendations_use_preference_slots_to_rerank_candidates(self) -> None:
+        self.session.results.survey_answer = "qwer님은 혼자 스토리에 몰입하며 탐험하고, 적들과 싸우는 액션 전투를 선호합니다."
+        self.session.results.save(update_fields=["survey_answer"])
+        puzzle_game = create_game(
+            game_id=4020,
+            name="퍼즐 중심 게임",
+            slug="puzzle-focused-game",
+            genres=[9, 31],
+            summary="혼자 퍼즐을 풀고 단서를 찾는 어드벤처 게임",
+        )
+        action_story_game = create_game(
+            game_id=4021,
+            name="액션 스토리 게임",
+            slug="action-story-game",
+            genres=[1, 12, 31],
+            summary="혼자 적과 싸우며 스토리를 따라 탐험하는 액션 RPG",
+        )
+        SurveyGameVector.objects.create(
+            game_id=puzzle_game.game_id,
+            embedding=[1.0] + ([0.0] * 1535),
+        )
+        SurveyGameVector.objects.create(
+            game_id=action_story_game.game_id,
+            embedding=[0.995, 0.1] + ([0.0] * 1534),
+        )
+
+        result = self.service.get_recommendations(
+            user=self.user,
+            session_id=str(self.session.id),
+            cursor=None,
+            page_size=2,
+        )
+
+        self.assertEqual(result["results"][0]["game_id"], action_story_game.game_id)
+        self.assertEqual(result["results"][1]["game_id"], puzzle_game.game_id)
 
     def test_cursor_encoding_roundtrip(self) -> None:
         item = SurveyGameVector.objects.create(
