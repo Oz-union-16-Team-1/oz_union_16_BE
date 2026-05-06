@@ -204,12 +204,12 @@ class GameTop100Service:
             words = normalized_search.split()
             q = Q()
             for word in words:
-                q |= Q(name__icontains=word) | Q(name_ko__icontains=word)
+                q |= Q(name__istartswith=word) | Q(name_ko__istartswith=word)
             return queryset.filter(q)
 
         return queryset.filter(
-            Q(name__icontains=normalized_search)
-            | Q(name_ko__icontains=normalized_search)
+            Q(name__istartswith=normalized_search)
+            | Q(name_ko__istartswith=normalized_search)
         )
 
     @staticmethod
