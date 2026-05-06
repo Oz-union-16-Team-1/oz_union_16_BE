@@ -28,51 +28,70 @@ class ProfileImagePresignedUrlView(BasePresignedUrlView):
         summary="프로필 이미지 업로드용 Presigned URL 발급",
         request=PresignedUrlRequestSerializer,
         responses={
-            200: PresignedUrlResponseSerializer,
-            400: ErrorResponseSerializer,
-            401: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="Presigned URL 발급 성공",
+                response=PresignedUrlResponseSerializer,
+            ),
+            400: OpenApiResponse(
+                description="잘못된 요청",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 오류 (400 Bad Request)",
+                        value={"error_detail": "지원하지 않는 파일 형식입니다."},
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "필드 오류 (400 Bad Request)",
-                value={"error_detail": "지원하지 않는 파일 형식입니다."},
-                status_codes=["400"],
-            ),
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-        ],
     )
     def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return super().post(request, *args, **kwargs)
 
 
-@extend_schema(
-    tags=["accounts"],
-    summary="프로필 이미지 등록",
-    request=ProfileImageUpdateSerializer,
-    responses={
-        200: CheckResponseSerializer,
-        401: ErrorResponseSerializer,
-    },
-    examples=[
-        OpenApiExample(
-            "성공 예시 (200 OK)",
-            value={"detail": "프로필 사진이 등록되었습니다."},
-            status_codes=["200"],
-        ),
-        OpenApiExample(
-            "인증 실패 (401 Unauthorized)",
-            value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-            status_codes=["401"],
-        ),
-    ],
-)
 class ProfileImageUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["accounts"],
+        summary="프로필 이미지 등록",
+        request=ProfileImageUpdateSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="이미지 등록 성공",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (200 OK)",
+                        value={"detail": "프로필 사진이 등록되었습니다."},
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+        },
+    )
     def put(self, request: Request) -> Response:
         serializer = ProfileImageUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

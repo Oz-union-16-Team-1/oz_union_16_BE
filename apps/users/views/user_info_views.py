@@ -1,4 +1,4 @@
-from drf_spectacular.utils import OpenApiExample, extend_schema
+from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,14 +19,21 @@ class UserInfoView(APIView):
     @extend_schema(
         summary="내 정보 조회",
         description="로그인한 계정의 정보를 조회합니다.",
-        responses={200: UserInfoSerializer, 401: ErrorResponseSerializer},
-        examples=[
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
+        responses={
+            200: UserInfoSerializer,
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
             ),
-        ],
+        },
         tags=["accounts"],
     )
     def get(self, request):
@@ -39,22 +46,37 @@ class UserInfoView(APIView):
         description="로그인한 계정의 닉네임이나 프로필url을 수정합니다.",
         request=UserUpdateSerializer,
         responses={
-            200: UserUpdateResponseSerializer,
-            401: ErrorResponseSerializer,
-            409: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="정보 수정 성공",
+                response=UserUpdateResponseSerializer,
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+            409: OpenApiResponse(
+                description="닉네임 중복",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "중복 오류 (409 Conflict)",
+                        value={
+                            "error_detail": {
+                                "nickname": ["중복된 닉네임이 존재합니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "중복 오류 (409 Conflict)",
-                value={"error_detail": {"nickname": ["중복된 닉네임이 존재합니다."]}},
-                status_codes=["409"],
-            ),
-        ],
         tags=["accounts"],
     )
     def patch(self, request):
@@ -71,14 +93,21 @@ class UserInfoView(APIView):
     @extend_schema(
         summary="회원 탈퇴",
         description="비밀번호를 입력받아 계정을 삭제합니다.",
-        responses={204: None, 401: ErrorResponseSerializer},
-        examples=[
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
+        responses={
+            204: OpenApiResponse(description="회원 탈퇴 성공 (반환 데이터 없음)"),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
             ),
-        ],
+        },
         tags=["accounts"],
     )
     def delete(self, request):

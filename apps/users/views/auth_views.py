@@ -39,33 +39,45 @@ class SignUpView(APIView):
         description="새로운 유저를 등록합니다.",
         request=SignUpSerializer,
         responses={
-            201: CheckResponseSerializer,
-            400: ErrorResponseSerializer,
-            409: ErrorResponseSerializer,
+            201: OpenApiResponse(
+                description="회원가입 성공",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (201 CREATED)",
+                        value={"detail": "회원가입이 완료되었습니다."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="필드 누락 또는 유효성 검사 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {
+                                "password": ["비밀번호는 8자 이상이어야 합니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
+            409: OpenApiResponse(
+                description="중복된 사용자",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "중복 오류 (409 Conflict)",
+                        value={
+                            "error_detail": {
+                                "login_id": ["이미 중복된 회원가입 내역이 존재합니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "성공 예시 (201 CREATED)",
-                value={"detail": "회원가입이 완료되었습니다."},
-                status_codes=["201"],
-            ),
-            OpenApiExample(
-                "중복 오류 (409 Conflict)",
-                value={
-                    "error_detail": {
-                        "login_id": ["이미 중복된 회원가입 내역이 존재합니다."]
-                    }
-                },
-                status_codes=["409"],
-            ),
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={
-                    "error_detail": {"password": ["비밀번호는 8자 이상이어야 합니다."]}
-                },
-                status_codes=["400"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request):
@@ -91,30 +103,48 @@ class LoginView(APIView):
             200: OpenApiResponse(
                 description="access_token : JWT Access Token Value",
                 response=serializers.Serializer,
+                examples=[
+                    OpenApiExample(
+                        "로그인 성공 (200 OK)",
+                        value={"access_token": "eyJhbGciOiJIUzI1..."},
+                    )
+                ],
             ),
-            400: ErrorResponseSerializer,
-            401: ErrorResponseSerializer,
-            403: ErrorResponseSerializer,
+            400: OpenApiResponse(
+                description="필드 누락",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {"password": ["이 필드는 필수 항목입니다."]}
+                        },
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "로그인 아이디 또는 비밀번호가 올바르지 않습니다."
+                        },
+                    )
+                ],
+            ),
+            403: OpenApiResponse(
+                description="권한 없음",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "권한 없음 (403 Forbidden)",
+                        value={"error_detail": "차단된 계정입니다."},
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={
-                    "error_detail": "로그인 아이디 또는 비밀번호가 올바르지 않습니다."
-                },
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={"error_detail": {"password": ["이 필드는 필수 항목입니다."]}},
-                status_codes=["400"],
-            ),
-            OpenApiExample(
-                "권한 없음 (403 Forbidden)",
-                value={"error_detail": "차단된 계정입니다."},
-                status_codes=["403"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request):
@@ -140,27 +170,41 @@ class LogoutView(APIView):
         summary="로그아웃",
         description="쿠키의 Refresh Token을 무효화하고 로그아웃합니다.",
         responses={
-            200: CheckResponseSerializer,
-            401: ErrorResponseSerializer,
-            403: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="로그아웃 성공",
+                response=CheckResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "성공 예시 (200 OK)",
+                        value={"detail": "로그아웃 되었습니다."},
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+            403: OpenApiResponse(
+                description="권한 없음",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "권한 없음 (403 Forbidden)",
+                        value={
+                            "error_detail": "인증 정보가 유효하지 않거나 만료되었습니다."
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "성공 예시 (200 OK)",
-                value={"detail": "로그아웃 되었습니다."},
-                status_codes=["200"],
-            ),
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "권한 없음 (403 Forbidden)",
-                value={"error_detail": "인증 정보가 유효하지 않거나 만료되었습니다."},
-                status_codes=["403"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request):
@@ -181,30 +225,54 @@ class TokenRefreshView(APIView):
         summary="토큰 재발급",
         description="쿠키의 Refresh Token을 이용해 새로운 Access/Refresh Token을 발급합니다.",
         responses={
-            200: OpenApiResponse(description="access_token: JWT Access Token Value"),
-            400: ErrorResponseSerializer,
-            401: ErrorResponseSerializer,
-            403: ErrorResponseSerializer,
+            200: OpenApiResponse(
+                description="access_token: JWT Access Token Value",
+                examples=[
+                    OpenApiExample(
+                        "재발급 성공 (200 OK)",
+                        value={"access_token": "new_eyJhbGciOiJIUzI1..."},
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                description="필드 누락",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "필드 누락 (400 Bad Request)",
+                        value={
+                            "error_detail": {
+                                "refresh_token": ["이 필드는 필수 항목입니다."]
+                            }
+                        },
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                description="인증 실패",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "인증 실패 (401 Unauthorized)",
+                        value={
+                            "error_detail": "자격 인증 데이터가 제공되지 않았습니다."
+                        },
+                    )
+                ],
+            ),
+            403: OpenApiResponse(
+                description="권한 없음",
+                response=ErrorResponseSerializer,
+                examples=[
+                    OpenApiExample(
+                        "권한 없음 (403 Forbidden)",
+                        value={
+                            "error_detail": "인증 정보가 유효하지 않거나 만료되었습니다."
+                        },
+                    )
+                ],
+            ),
         },
-        examples=[
-            OpenApiExample(
-                "필드 누락 (400 Bad Request)",
-                value={
-                    "error_detail": {"refresh_token": ["이 필드는 필수 항목입니다."]}
-                },
-                status_codes=["400"],
-            ),
-            OpenApiExample(
-                "인증 실패 (401 Unauthorized)",
-                value={"error_detail": "자격 인증 데이터가 제공되지 않았습니다."},
-                status_codes=["401"],
-            ),
-            OpenApiExample(
-                "권한 없음 (403 Forbidden)",
-                value={"error_detail": "인증 정보가 유효하지 않거나 만료되었습니다."},
-                status_codes=["403"],
-            ),
-        ],
         tags=["accounts"],
     )
     def post(self, request):
