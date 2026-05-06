@@ -1,5 +1,4 @@
 from django.contrib import admin
-from django.utils.html import format_html
 
 from apps.games.models import Game
 from apps.match.models import MatchGamePreference
@@ -127,8 +126,6 @@ class GameAdmin(admin.ModelAdmin):
         "expansions",
         "dlcs",
         "language_supports",
-        # 벡터 시각화
-        "match_vector_dimensions",
     )
     actions = (ban_games, unban_games)
     date_hierarchy = "created_at"
@@ -189,14 +186,6 @@ class GameAdmin(admin.ModelAdmin):
                     "like_count",
                     "collection",
                     "parent_game",
-                )
-            },
-        ),
-        (
-            "매칭 벡터 정보",
-            {
-                "fields": (
-                    "match_vector_dimensions",
                 )
             },
         ),
@@ -336,11 +325,6 @@ class GameAdmin(admin.ModelAdmin):
             form_url=form_url,
             obj=obj,
         )
-
-
-    @admin.display(description="차원별 벡터값")
-    def match_vector_dimensions(self, obj):
-        return format_html("<span style='color:#94a3b8;'>아래 시각화를 참고하세요.</span>")
 
 
     @admin.display(boolean=True, description="블랙리스트", ordering="is_ban")
