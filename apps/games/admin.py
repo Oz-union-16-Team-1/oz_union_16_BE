@@ -3,6 +3,7 @@ from django.utils.html import format_html, format_html_join
 from urllib.parse import urlparse
 
 from apps.games.models import Game
+from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.match.models import MatchGamePreference
 
 
@@ -66,6 +67,29 @@ def unban_games(modeladmin, request, queryset):
     queryset.update(is_ban=False, ban_reason="")
 
 
+class MatchGenreFilter(admin.SimpleListFilter):
+    title = "매칭 장르"
+    parameter_name = "match_genre"
+
+    def lookups(self, request, model_admin):
+        return tuple(
+            (str(genre_id), IGDB_GENRE_NAME_MAP.get(genre_id, str(genre_id)))
+            for genre_id in range(1, 15)
+        )
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+
+        try:
+            genre_id = int(value)
+        except (TypeError, ValueError):
+            return queryset
+
+        return queryset.filter(genre_maps__igdb_genre_id=genre_id).distinct()
+
+
 @admin.register(Game)
 class GameAdmin(admin.ModelAdmin):
     list_display = (
@@ -81,7 +105,7 @@ class GameAdmin(admin.ModelAdmin):
 
     ordering = ("-created_at",)
     search_fields = ("game_id", "name", "name_ko")
-    list_filter = ("is_ban", "created_at")
+    list_filter = (MatchGenreFilter, "is_ban", "created_at")
     readonly_fields = (
         # 시스템/집계
         "game_id",
