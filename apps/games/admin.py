@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.utils.html import format_html, format_html_join
+from urllib.parse import urlparse
 
 from apps.games.models import Game
 from apps.match.models import MatchGamePreference
@@ -88,8 +90,6 @@ class GameAdmin(admin.ModelAdmin):
         # 원본 식별/설명 (배치 동기화 대상)
         "name",
         "slug",
-        "summary",
-        "storyline",
         # 원본 분류/상태
         "category",
         "status",
@@ -108,10 +108,10 @@ class GameAdmin(admin.ModelAdmin):
         # 원본 관계/미디어
         "collection",
         "parent_game",
-        "cover",
-        "screenshots",
-        "videos",
-        "websites",
+        "media_cover_links",
+        "media_screenshot_links",
+        "media_video_links",
+        "media_website_links",
         # 원본 JSON 메타
         "genres",
         "themes",
@@ -163,10 +163,10 @@ class GameAdmin(admin.ModelAdmin):
             "미디어/외부 링크",
             {
                 "fields": (
-                    "cover",
-                    "screenshots",
-                    "videos",
-                    "websites",
+                    "media_cover_links",
+                    "media_screenshot_links",
+                    "media_video_links",
+                    "media_website_links",
                 )
             },
         ),
@@ -200,6 +200,10 @@ class GameAdmin(admin.ModelAdmin):
                     "genres",
                     "themes",
                     "keywords",
+                    "cover",
+                    "screenshots",
+                    "videos",
+                    "websites",
                     "game_modes",
                     "player_perspectives",
                     "multiplayer_modes",
@@ -296,6 +300,160 @@ class GameAdmin(admin.ModelAdmin):
             )
 
         return rows
+
+    def _to_igdb_image_url(self, value: object, size: str = "t_1080p") -> str | None:
+        if not isinstance(value, str):
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+
+        if raw.startswith("//"):
+            return f"https:{raw}".replace("t_thumb", size)
+
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw.replace("t_thumb", size)
+
+        return f"https://images.igdb.com/igdb/image/upload/{size}/{raw}.jpg"
+
+    def _normalize_external_url(self, value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+
+        raw = value.strip()
+        if not raw:
+            return None
+
+        if raw.startswith("//"):
+            return f"https:{raw}"
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        if raw.startswith("www."):
+            return f"https://{raw}"
+        if "://" not in raw and "." in raw and " " not in raw:
+            return f"https://{raw}"
+        return None
+
+    def _extract_image_urls(self, raw_images: object) -> list[str]:
+        urls: list[str] = []
+        if not isinstance(raw_images, list):
+            return urls
+
+        for item in raw_images:
+            url: str | None = None
+
+            if isinstance(item, str):
+                url = self._to_igdb_image_url(item)
+            elif isinstance(item, dict):
+                direct_url = item.get("url")
+                image_id = item.get("image_id")
+                url = self._to_igdb_image_url(direct_url) or self._to_igdb_image_url(
+                    image_id
+                )
+
+            if url and url not in urls:
+                urls.append(url)
+
+        return urls
+
+    def _extract_video_urls(self, raw_videos: object) -> list[str]:
+        urls: list[str] = []
+        if not isinstance(raw_videos, list):
+            return urls
+
+        for item in raw_videos:
+            video_value: str | None = None
+            if isinstance(item, str) and item.strip():
+                video_value = item.strip()
+            elif isinstance(item, dict):
+                for key in ("video_id", "url", "id"):
+                    raw = item.get(key)
+                    if isinstance(raw, str) and raw.strip():
+                        video_value = raw.strip()
+                        break
+
+            if not video_value:
+                continue
+
+            normalized = self._normalize_external_url(video_value)
+            url = normalized or f"https://www.youtube.com/watch?v={video_value}"
+            if url not in urls:
+                urls.append(url)
+
+        return urls
+
+    def _extract_website_urls(self, raw_websites: object) -> list[str]:
+        urls: list[str] = []
+        if not isinstance(raw_websites, list):
+            return urls
+
+        for item in raw_websites:
+            raw_url: object = None
+            if isinstance(item, dict):
+                raw_url = item.get("url")
+            else:
+                raw_url = item
+
+            url = self._normalize_external_url(raw_url)
+            if url and url not in urls:
+                urls.append(url)
+
+        return urls
+
+    def _render_link_list(self, urls: list[str], *, empty_message: str):
+        if not urls:
+            return empty_message
+
+        return format_html(
+            "<div style='display:flex;flex-direction:column;gap:6px;'>"
+            "{}"
+            "</div>",
+            format_html_join(
+                "",
+                "<a href='{}' target='_blank' rel='noopener noreferrer'>{}</a>",
+                ((url, url) for url in urls),
+            ),
+        )
+
+    @admin.display(description="커버 이미지 URL")
+    def media_cover_links(self, obj: Game):
+        url = self._to_igdb_image_url(obj.cover)
+        return self._render_link_list(
+            [url] if isinstance(url, str) else [],
+            empty_message="커버 이미지 없음",
+        )
+
+    @admin.display(description="스크린샷 URL 목록")
+    def media_screenshot_links(self, obj: Game):
+        return self._render_link_list(
+            self._extract_image_urls(obj.screenshots),
+            empty_message="스크린샷 없음",
+        )
+
+    @admin.display(description="트레일러 URL 목록")
+    def media_video_links(self, obj: Game):
+        return self._render_link_list(
+            self._extract_video_urls(obj.videos),
+            empty_message="트레일러 없음",
+        )
+
+    @admin.display(description="외부 링크 목록")
+    def media_website_links(self, obj: Game):
+        website_urls = self._extract_website_urls(obj.websites)
+        if not website_urls:
+            return "외부 링크 없음"
+
+        return format_html(
+            "<div style='display:flex;flex-direction:column;gap:6px;'>"
+            "{}"
+            "</div>",
+            format_html_join(
+                "",
+                "<a href='{0}' target='_blank' rel='noopener noreferrer'>{1}</a>",
+                ((url, urlparse(url).netloc or url) for url in website_urls),
+            ),
+        )
 
     def render_change_form(
             self, request, context, add=False, change=False, form_url="", obj=None
