@@ -62,7 +62,7 @@ MOOD_DIMENSIONS = (
     ("2D", "3D"),
     ("정적", "동적"),
     ("솔로", "멀티"),
-    ("낮음", "높음"),
+    ("비인기", "인기"),
 )
 
 GENRE_BAR_COLORS = (
@@ -271,12 +271,19 @@ class UserAdmin(admin.ModelAdmin):
                 "right": right,
                 "value": round(vector[index + 8], 2),
                 "display_value": f"{vector[index + 8]:.2f}",
-                "percent": max(0, min(vector[index + 8], 1)) * 100,
+                "fill_left": self.get_bipolar_fill_left(vector[index + 8]),
+                "fill_width": abs(max(-1, min(vector[index + 8], 1))) * 50,
                 "color": MOOD_BAR_COLORS[index % len(MOOD_BAR_COLORS)],
             }
             for index, (left, right) in enumerate(MOOD_DIMENSIONS)
         ]
         return genre_scores, mood_scores
+
+    def get_bipolar_fill_left(self, value):
+        value = max(-1, min(value, 1))
+        if value < 0:
+            return 50 + value * 50
+        return 50
 
     def get_primary_genre(self, preference, genre_scores):
         if preference is None or preference.match_vector is None:
@@ -286,14 +293,14 @@ class UserAdmin(admin.ModelAdmin):
     def get_primary_mood(self, preference, mood_scores):
         if preference is None or preference.match_vector is None:
             return "-"
-        score = max(mood_scores, key=lambda item: item["value"])
-        return score["right"] if score["value"] >= 0.5 else score["left"]
+        score = max(mood_scores, key=lambda item: abs(item["value"]))
+        return score["right"] if score["value"] >= 0 else score["left"]
 
     def get_mood_radar_scores(self, mood_scores):
         return [
             {
                 "label": f"{score['left']}~{score['right']}",
-                "value": score["value"],
+                "value": (max(-1, min(score["value"], 1)) + 1) / 2,
             }
             for score in mood_scores
         ]
