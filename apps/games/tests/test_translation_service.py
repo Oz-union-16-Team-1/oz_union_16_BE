@@ -117,7 +117,7 @@ class GameTranslationServiceTest(SimpleTestCase):
         self.assertIn("모든 문장을 빠짐없이 끝까지 번역", kwargs["prompt"])
         self.assertIn("반드시 완성된 한국어 문장으로 끝내", kwargs["prompt"])
         self.assertIn("요약하거나 생략하지 말고", kwargs["prompt"])
-        self.assertEqual(kwargs["max_output_tokens"], 2048)
+        self.assertEqual(kwargs["max_output_tokens"], 4096)
         self.assertEqual(kwargs["log_label"], "game description")
 
     @patch(

@@ -54,7 +54,7 @@ class GameTranslationService:
         )
         return GameTranslationService._request_translation(
             prompt=prompt,
-            max_output_tokens=2048,
+            max_output_tokens=4096,
             log_label="game description",
         )
 
