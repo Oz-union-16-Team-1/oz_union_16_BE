@@ -51,11 +51,17 @@ class GameTop100Service:
             is_ban=False,
         ).exclude(status__in=GameTop100Service.EXCLUDED_SERVICE_STATUSES)
 
-        base_queryset = GameTop100Service._apply_search_filter(
+        search_querysets = GameTop100Service._build_search_querysets(
             queryset=base_queryset,
             search=search,
             fuzzy=fuzzy,
         )
+        if search_querysets is not None:
+            return GameTop100Service._collect_search_top100(
+                search_querysets=search_querysets,
+                genre_id=genre_id,
+                start_year=now.year,
+            )
 
         base_queryset = GameTop100Service._apply_genre_filter(
             queryset=base_queryset,
@@ -74,6 +80,46 @@ class GameTop100Service:
             base_queryset=base_queryset,
             start_year=now.year,
         )
+
+    @staticmethod
+    def _collect_search_top100(
+        *,
+        search_querysets: list,
+        genre_id: int,
+        start_year: int,
+    ) -> list[Game]:
+        selected: list[Game] = []
+        selected_ids: set[int] = set()
+
+        for search_queryset in search_querysets:
+            if len(selected) >= GameTop100Service.RESULT_LIMIT:
+                break
+
+            genre_queryset = GameTop100Service._apply_genre_filter(
+                queryset=search_queryset,
+                genre_id=genre_id,
+            )
+            if genre_queryset is None:
+                continue
+
+            if genre_id == 0:
+                candidates = GameTop100Service._collect_global_top100(
+                    base_queryset=genre_queryset,
+                    start_year=start_year,
+                )
+            else:
+                candidates = GameTop100Service._collect_genre_top100(
+                    base_queryset=genre_queryset,
+                    start_year=start_year,
+                )
+
+            selected = GameTop100Service._append_games(
+                selected=selected,
+                candidates=candidates,
+                selected_ids=selected_ids,
+            )
+
+        return selected[: GameTop100Service.RESULT_LIMIT]
 
     @staticmethod
     def _collect_global_top100(*, base_queryset, start_year: int) -> list[Game]:
@@ -192,25 +238,28 @@ class GameTop100Service:
         )
 
     @staticmethod
-    def _apply_search_filter(queryset, search: str, fuzzy: bool):
+    def _build_search_querysets(queryset, search: str, fuzzy: bool):
         if not search:
-            return queryset
+            return None
 
         normalized_search = search.strip()
         if not normalized_search:
-            return queryset
+            return None
 
+        words = [normalized_search]
         if fuzzy:
             words = normalized_search.split()
-            q = Q()
-            for word in words:
-                q |= Q(name__istartswith=word) | Q(name_ko__istartswith=word)
-            return queryset.filter(q)
 
-        return queryset.filter(
-            Q(name__istartswith=normalized_search)
-            | Q(name_ko__istartswith=normalized_search)
-        )
+        prefix_q = Q()
+        contains_q = Q()
+        for word in words:
+            prefix_q |= Q(name__istartswith=word) | Q(name_ko__istartswith=word)
+            contains_q |= Q(name__icontains=word) | Q(name_ko__icontains=word)
+
+        return [
+            queryset.filter(prefix_q),
+            queryset.filter(contains_q).exclude(prefix_q),
+        ]
 
     @staticmethod
     def _apply_genre_filter(queryset, genre_id: int):
