@@ -87,7 +87,7 @@
   }
 
   .mood-row {
-    grid-template-columns: 76px minmax(80px, 1fr) 76px 44px;
+    grid-template-columns: 76px minmax(120px, 1fr) 76px 52px;
   }
 
   .bar-track {
@@ -97,6 +97,40 @@
     background: var(--darkened-bg);
   }
 
+  .bipolar-track {
+    position: relative;
+    height: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--darkened-bg) 82%, transparent);
+  }
+
+  .bipolar-track::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    bottom: -3px;
+    width: 2px;
+    background: var(--body-fg);
+    opacity: .45;
+    transform: translateX(-1px);
+    z-index: 2;
+  }
+
+  .bipolar-track::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, #3b82f6 18%, transparent),
+      transparent 45%,
+      transparent 55%,
+      color-mix(in srgb, #ef4444 18%, transparent)
+    );
+  }
+
   .bar-fill {
     display: block;
     height: 100%;
@@ -104,6 +138,16 @@
     border-radius: inherit;
     background: var(--bar-color, var(--link-fg));
     box-shadow: 0 0 14px color-mix(in srgb, var(--bar-color, var(--link-fg)) 46%, transparent);
+  }
+
+  .bipolar-fill {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bar-color) 72%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--bar-color) 34%, transparent);
+    z-index: 1;
   }
 
   .score-value {
@@ -238,7 +282,7 @@
       {% for score in mood_scores %}
       <div class="bar-row mood-row">
         <span>{{ score.left }}</span>
-        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%; --bar-color: {{ score.color }}"></span></span>
+        <span class="bipolar-track"><span class="bipolar-fill" style="left: {{ score.fill_left }}%; width: {{ score.fill_width }}%; --bar-color: {{ score.color }}"></span></span>
         <span class="mood-right-label">{{ score.right }}</span>
         <span class="score-value">{{ score.display_value }}</span>
       </div>

@@ -1,18 +1,15 @@
 import json
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.chatbot.models.models import ChatbotSession
-from apps.chatbot.services.chatbot_answer_builder_services import (
-    build_answer,
-    build_suggested_questions,
-)
-from apps.chatbot.services.chatbot_messages_services import (
-    save_question_to_cache,
-)
+from apps.chatbot.models.models import ChatbotMessage, ChatbotSession
+from apps.chatbot.services.chatbot_llm_services import GeminiUnavailable
+from apps.chatbot.services.chatbot_messages_services import save_question_to_cache
+from apps.chatbot.services.chatbot_streaming_services import LLM_FAILURE_MESSAGE
 
 
 def _collect_stream_chunks(content: str) -> str:
@@ -30,24 +27,18 @@ def _collect_stream_chunks(content: str) -> str:
     return "".join(chunks)
 
 
-def _collect_suggested_questions(content: str) -> list[str]:
-    current_event: str | None = None
-
+def _collect_events(content: str) -> list[str]:
+    events: list[str] = []
     for line in content.splitlines():
         if line.startswith("event: "):
-            current_event = line.replace("event: ", "", 1).strip()
-        elif line.startswith("data: ") and current_event == "suggestions":
-            payload = json.loads(line.replace("data: ", "", 1))
-            return payload["questions"]
-
-    return []
+            events.append(line.replace("event: ", "", 1).strip())
+    return events
 
 
-class ChatbotAPITest(TestCase):
+class ChatbotMessagesAPITest(TestCase):
     def setUp(self) -> None:
         self.client = APIClient()
         self.messages_url = "/api/v1/chatbot/messages"
-        self.stream_url = "/api/v1/chatbot/stream"
 
     def test_message_create_success(self) -> None:
         response = self.client.post(
@@ -60,9 +51,8 @@ class ChatbotAPITest(TestCase):
         response_data = response.json()
         self.assertIn("session_id", response_data)
         self.assertIn("expires_at", response_data)
-        self.assertIn("expires_in_seconds", response_data)
-        self.assertEqual(response_data["session_ttl_seconds"], 1800)
-        self.assertGreater(response_data["expires_in_seconds"], 0)
+        self.assertNotIn("expires_in_seconds", response_data)
+        self.assertNotIn("session_ttl_seconds", response_data)
 
     def test_message_create_fail_when_message_too_short(self) -> None:
         response = self.client.post(
@@ -106,15 +96,45 @@ class ChatbotAPITest(TestCase):
             "만료되었거나 유효하지 않은 session_id 입니다.",
         )
 
-    def test_stream_success_after_message_saved(self) -> None:
+    def test_message_create_overwrites_pending_question(self) -> None:
+        first = self.client.post(
+            self.messages_url,
+            data={"message": "첫 번째 질문입니다."},
+            format="json",
+        )
+        session_id = first.json()["session_id"]
+
+        second = self.client.post(
+            self.messages_url,
+            data={"message": "덮어쓴 질문입니다.", "session_id": session_id},
+            format="json",
+        )
+
+        self.assertEqual(second.status_code, 200)
+        session = ChatbotSession.objects.get(pk=session_id)
+        self.assertEqual(session.pending_question, "덮어쓴 질문입니다.")
+
+
+class ChatbotStreamAPITest(TestCase):
+    def setUp(self) -> None:
+        self.client = APIClient()
+        self.messages_url = "/api/v1/chatbot/messages"
+        self.stream_url = "/api/v1/chatbot/stream"
+
+    def _create_session_with_question(self, question: str) -> str:
         message_response = self.client.post(
             self.messages_url,
-            data={"message": "별점은 어디에 쓰이나요?"},
+            data={"message": question},
             format="json",
         )
         self.assertEqual(message_response.status_code, 200)
+        return message_response.json()["session_id"]
 
-        session_id = message_response.json()["session_id"]
+    @patch("apps.chatbot.services.chatbot_streaming_services.stream_answer")
+    def test_stream_success_streams_llm_chunks(self, mock_stream_answer) -> None:
+        mock_stream_answer.return_value = iter(["안녕하세요. ", "도움을 ", "드릴게요."])
+
+        session_id = self._create_session_with_question("별점은 어디에 쓰이나요?")
 
         stream_response = self.client.get(
             self.stream_url,
@@ -126,174 +146,62 @@ class ChatbotAPITest(TestCase):
 
         content = b"".join(stream_response.streaming_content).decode("utf-8")
 
-        self.assertIn("event: start", content)
-        self.assertIn("event: chunk", content)
-        self.assertIn("event: suggestions", content)
-        self.assertIn("event: complete", content)
-        self.assertIn("expires_at", content)
-        self.assertIn("expires_in_seconds", content)
+        events = _collect_events(content)
+        self.assertEqual(events[0], "start")
+        self.assertEqual(events[-1], "complete")
+        self.assertIn("chunk", events)
+        self.assertNotIn("suggestions", events)
 
         self.assertEqual(
             _collect_stream_chunks(content),
-            "별점은 게임에 대한 사용자 평가로 활용되며, 인기 TOP100 게임을 보여주는 기준에 반영됩니다.",
+            "안녕하세요. 도움을 드릴게요.",
         )
 
-    def test_message_uses_chatbot_filter_rules(self) -> None:
-        message_response = self.client.post(
-            self.messages_url,
-            data={"message": "게임 추천은 어떻게 되나요?"},
-            format="json",
+        contents = mock_stream_answer.call_args.args[0]
+        self.assertEqual(
+            contents,
+            [{"role": "user", "parts": [{"text": "별점은 어디에 쓰이나요?"}]}],
         )
-        self.assertEqual(message_response.status_code, 200)
 
-        session_id = message_response.json()["session_id"]
+        session = ChatbotSession.objects.get(pk=session_id)
+        saved = list(session.messages.order_by("created_at"))
+        self.assertEqual([m.role for m in saved], ["user", "assistant"])
+        self.assertEqual(saved[0].content, "별점은 어디에 쓰이나요?")
+        self.assertEqual(saved[1].content, "안녕하세요. 도움을 드릴게요.")
+
+    @patch("apps.chatbot.services.chatbot_streaming_services.stream_answer")
+    def test_stream_falls_back_when_llm_unavailable(self, mock_stream_answer) -> None:
+        def _raising_iter():
+            raise GeminiUnavailable("upstream down")
+            yield  # pragma: no cover
+
+        mock_stream_answer.return_value = _raising_iter()
+
+        session_id = self._create_session_with_question("회원가입은 어떻게 하나요?")
+
         stream_response = self.client.get(
             self.stream_url,
             data={"session_id": session_id},
         )
 
         content = b"".join(stream_response.streaming_content).decode("utf-8")
+        self.assertEqual(_collect_stream_chunks(content), LLM_FAILURE_MESSAGE)
 
+    @patch("apps.chatbot.services.chatbot_streaming_services.stream_answer")
+    def test_stream_consumes_pending_question(self, mock_stream_answer) -> None:
+        mock_stream_answer.return_value = iter(["응답."])
+        session_id = self._create_session_with_question("질문입니다.")
+
+        first = self.client.get(self.stream_url, data={"session_id": session_id})
+        self.assertEqual(first.status_code, 200)
+        b"".join(first.streaming_content)
+
+        second = self.client.get(self.stream_url, data={"session_id": session_id})
+        self.assertEqual(second.status_code, 404)
         self.assertEqual(
-            _collect_stream_chunks(content),
-            "게임 추천은 설문조사 답변과 사용자의 장르, 스타일 취향을 바탕으로 어울리는 게임을 안내하는 기능입니다.",
+            second.json()["error_detail"],
+            "스트리밍 대상 질문이 없습니다.",
         )
-
-        self.assertEqual(
-            _collect_suggested_questions(content),
-            [
-                "설문조사는 어디서 하나요?",
-                "취향 분석은 어떻게 하나요?",
-                "좋아요한 게임도 추천에 반영되나요?",
-            ],
-        )
-
-    def test_message_blocks_out_of_scope_question(self) -> None:
-        message_response = self.client.post(
-            self.messages_url,
-            data={"message": "오늘 날씨 알려줘"},
-            format="json",
-        )
-        self.assertEqual(message_response.status_code, 200)
-
-        session_id = message_response.json()["session_id"]
-        stream_response = self.client.get(
-            self.stream_url,
-            data={"session_id": session_id},
-        )
-        content = b"".join(stream_response.streaming_content).decode("utf-8")
-
-        self.assertEqual(
-            _collect_stream_chunks(content),
-            "올바른 질문이 아닙니다.",
-        )
-        self.assertEqual(_collect_suggested_questions(content), [])
-
-    def test_message_answers_account_question(self) -> None:
-        message_response = self.client.post(
-            self.messages_url,
-            data={"message": "회원가입은 어떻게 하나요?"},
-            format="json",
-        )
-        self.assertEqual(message_response.status_code, 200)
-
-        session_id = message_response.json()["session_id"]
-        stream_response = self.client.get(
-            self.stream_url,
-            data={"session_id": session_id},
-        )
-        content = b"".join(stream_response.streaming_content).decode("utf-8")
-
-        self.assertEqual(
-            _collect_stream_chunks(content),
-            "회원가입은 아이디, 비밀번호, 이름, 닉네임, 성별 등 필수 정보를 입력해 진행할 수 있습니다.",
-        )
-
-    def test_account_knowledge_includes_id_and_password_help(self) -> None:
-        self.assertEqual(
-            build_answer("아이디 찾기는 어떻게 하나요?"),
-            "아이디 찾기는 가입한 계정 정보를 확인하는 기능입니다. 화면에서 요구하는 본인 확인 절차를 진행해 주세요.",
-        )
-        self.assertEqual(
-            build_answer("본인 확인 절차는 어디서 해?"),
-            "본인 확인 절차는 아이디 찾기 또는 비밀번호 재설정 화면에서 안내되는 방식으로 진행합니다. 화면에 표시되는 인증 정보를 입력해 주세요.",
-        )
-        self.assertEqual(
-            build_answer("비밀번호를 잊어버렸어요"),
-            "비밀번호를 잊은 경우 비밀번호 찾기 또는 재설정 기능을 통해 새 비밀번호로 변경할 수 있습니다.",
-        )
-
-    def test_build_suggested_questions_returns_follow_up_questions(self) -> None:
-        self.assertEqual(
-            build_suggested_questions("아이디를 찾고 싶어요"),
-            [
-                "아이디 찾기는 어디서 하나요?",
-                "본인 확인 절차는 어디서 하나요?",
-                "비밀번호도 재설정할 수 있나요?",
-            ],
-        )
-
-    def test_combined_questions_use_specific_answers(self) -> None:
-        self.assertEqual(
-            build_answer("좋아요와 별점은 다른가요?"),
-            "좋아요는 마음에 드는 게임을 저장하는 기능이고, 별점은 게임에 대한 평가 점수입니다. 좋아요는 관심 게임 관리에 쓰이고, 별점은 인기 TOP100이나 추천 품질 판단에 활용됩니다.",
-        )
-        self.assertEqual(
-            build_answer("설문조사랑 추천은 무슨 관계인가요?"),
-            "설문조사는 사용자의 장르와 플레이 스타일 취향을 파악하는 과정이고, 추천은 그 결과를 바탕으로 어울리는 게임을 보여주는 기능입니다.",
-        )
-        self.assertEqual(
-            build_answer("인기 게임과 추천 게임은 다른가요?"),
-            "인기 게임은 많은 사용자 반응을 기준으로 보여주는 목록이고, 추천 게임은 개인의 취향에 맞춰 보여주는 목록입니다.",
-        )
-
-    def test_chatbot_filter_rules_cover_common_follow_up_questions(self) -> None:
-        cases = {
-            "추천 결과가 이상해요": "추천 결과가 어색하다면 설문을 다시 진행하거나 별점과 좋아요를 남겨 취향 정보를 더 구체화해 주세요.",
-            "설문 결과는 어디에 쓰이나요?": "설문 결과는 사용자의 장르와 플레이 스타일 취향을 분석하고, 맞춤 게임 추천을 만드는 데 사용됩니다.",
-            "비밀번호 재설정 후 로그인은 어떻게 해요?": "비밀번호를 재설정한 뒤에는 로그인 화면에서 새 비밀번호로 다시 로그인하면 됩니다.",
-            "회원 정보 수정하고 싶어요": "회원 정보는 마이페이지에서 확인하거나 수정할 수 있습니다.",
-            "할인 여부 확인하고 싶어요": "올바른 질문이 아닙니다.",
-        }
-
-        for question, expected_answer in cases.items():
-            self.assertEqual(build_answer(question), expected_answer)
-
-    def test_suggested_questions_do_not_repeat_current_question(self) -> None:
-        self.assertEqual(
-            build_suggested_questions("좋아요와 별점은 다른가요?"),
-            [
-                "별점은 추천에 반영되나요?",
-                "좋아요한 게임은 어디서 보나요?",
-                "인기 TOP100 기준은 뭔가요?",
-            ],
-        )
-
-    def test_session_status_success(self) -> None:
-        session = ChatbotSession.objects.create(
-            expires_at=timezone.now() + timedelta(minutes=30),
-        )
-
-        response = self.client.get(f"/api/v1/chatbot/sessions/{session.pk}")
-
-        self.assertEqual(response.status_code, 200)
-        response_data = response.json()
-        self.assertEqual(response_data["session_id"], str(session.pk))
-        self.assertFalse(response_data["is_expired"])
-        self.assertIn("expires_at", response_data)
-        self.assertGreater(response_data["expires_in_seconds"], 0)
-        self.assertEqual(response_data["session_ttl_seconds"], 1800)
-
-    def test_session_status_expired(self) -> None:
-        session = ChatbotSession.objects.create(
-            expires_at=timezone.now() - timedelta(minutes=1),
-        )
-
-        response = self.client.get(f"/api/v1/chatbot/sessions/{session.pk}")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(response.json()["is_expired"])
-        self.assertEqual(response.json()["expires_in_seconds"], 0)
 
     def test_stream_fail_when_session_id_missing(self) -> None:
         response = self.client.get(self.stream_url)
@@ -373,3 +281,34 @@ class ChatbotAPITest(TestCase):
             response.json()["error_detail"],
             "스트리밍 대상 세션을 찾을 수 없습니다.",
         )
+
+
+class ChatbotSessionStatusAPITest(TestCase):
+    def setUp(self) -> None:
+        self.client = APIClient()
+
+    def test_session_status_success(self) -> None:
+        session = ChatbotSession.objects.create(
+            expires_at=timezone.now() + timedelta(minutes=30),
+        )
+
+        response = self.client.get(f"/api/v1/chatbot/sessions/{session.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        response_data = response.json()
+        self.assertEqual(response_data["session_id"], str(session.pk))
+        self.assertFalse(response_data["is_expired"])
+        self.assertIn("expires_at", response_data)
+        self.assertGreater(response_data["expires_in_seconds"], 0)
+        self.assertEqual(response_data["session_ttl_seconds"], 1800)
+
+    def test_session_status_expired(self) -> None:
+        session = ChatbotSession.objects.create(
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        response = self.client.get(f"/api/v1/chatbot/sessions/{session.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["is_expired"])
+        self.assertEqual(response.json()["expires_in_seconds"], 0)

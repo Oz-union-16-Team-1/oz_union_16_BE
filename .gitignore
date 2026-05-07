@@ -19,3 +19,5 @@ staticfiles/
 !apps/core/static/admin_custom/css/admin_theme.css
 !apps/core/static/admin_custom/img/
 !apps/core/static/admin_custom/img/pgti-logo.png
+
+.venv
