@@ -6,7 +6,7 @@ from apps.users.models import UserLikeBookmark
 
 class UserLikeBookmarkSerializer(serializers.ModelSerializer):
     game_id = serializers.IntegerField(source="game.game_id")
-    game_title = serializers.CharField(source="game.name_ko")
+    game_title = serializers.SerializerMethodField()
     thumbnail_url = serializers.SerializerMethodField()
     genres = serializers.SerializerMethodField()
     liked_at = serializers.DateTimeField(source="created_at")
@@ -14,6 +14,10 @@ class UserLikeBookmarkSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserLikeBookmark
         fields = ["game_id", "game_title", "thumbnail_url", "genres", "liked_at"]
+
+    def get_game_title(self, obj):
+        game = obj.game
+        return game.name_ko if game.name_ko else game.name
 
     def get_thumbnail_url(self, obj):
         return obj.game.cover  # cover가 url 문자열이면 그대로, 아니면 가공 필요
