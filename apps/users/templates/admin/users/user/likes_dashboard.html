@@ -87,7 +87,7 @@
   }
 
   .mood-row {
-    grid-template-columns: 76px minmax(80px, 1fr) 76px;
+    grid-template-columns: 76px minmax(80px, 1fr) 76px 44px;
   }
 
   .bar-track {
@@ -98,13 +98,28 @@
   }
 
   .bar-fill {
+    display: block;
     height: 100%;
     min-width: 3px;
     border-radius: inherit;
-    background: var(--link-fg);
+    background: var(--bar-color, var(--link-fg));
+    box-shadow: 0 0 14px color-mix(in srgb, var(--bar-color, var(--link-fg)) 46%, transparent);
   }
 
-  .radar-card {
+  .score-value {
+    color: var(--body-fg);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .mood-right-label {
+    color: var(--body-quiet-color);
+  }
+
+  .radar-grid-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
     grid-column: 1 / -1;
   }
 
@@ -149,7 +164,8 @@
 
   @media (max-width: 900px) {
     .summary-grid,
-    .dashboard-grid {
+    .dashboard-grid,
+    .radar-grid-section {
       grid-template-columns: 1fr;
     }
 
@@ -194,8 +210,8 @@
       <div class="metric-value">{{ primary_genre }}</div>
     </div>
     <div class="preference-card">
-      <p class="metric-title">가입유형</p>
-      <div class="metric-value">{{ signup_type }}</div>
+      <p class="metric-title">주요 성향</p>
+      <div class="metric-value">{{ primary_mood }}</div>
     </div>
     <div class="preference-card">
       <p class="metric-title">벡터 갱신일</p>
@@ -211,8 +227,8 @@
       {% for score in genre_scores %}
       <div class="bar-row">
         <span>{{ score.label }}</span>
-        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%"></span></span>
-        <span>{{ score.value }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%; --bar-color: {{ score.color }}"></span></span>
+        <span class="score-value">{{ score.display_value }}</span>
       </div>
       {% endfor %}
     </div>
@@ -222,25 +238,44 @@
       {% for score in mood_scores %}
       <div class="bar-row mood-row">
         <span>{{ score.left }}</span>
-        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%"></span></span>
-        <span>{{ score.right }}</span>
+        <span class="bar-track"><span class="bar-fill" style="width: {{ score.percent }}%; --bar-color: {{ score.color }}"></span></span>
+        <span class="mood-right-label">{{ score.right }}</span>
+        <span class="score-value">{{ score.display_value }}</span>
       </div>
       {% endfor %}
     </div>
 
-    <div class="preference-card radar-card">
-      <h2 class="card-title">취향 레이더 차트</h2>
-      <div class="radar-wrap">
-        <svg width="360" height="330" viewBox="0 0 300 300" role="img" aria-label="취향 레이더 차트">
-          {% for polygon in radar.grid %}
-          <polygon class="radar-grid" points="{{ polygon }}"></polygon>
-          {% endfor %}
-          {% for label in radar.labels %}
-          <line class="radar-axis" x1="{{ radar.center }}" y1="{{ radar.center }}" x2="{{ label.x }}" y2="{{ label.y }}"></line>
-          <text class="radar-label" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
-          {% endfor %}
-          <polygon class="radar-shape" points="{{ radar.points }}"></polygon>
-        </svg>
+    <div class="radar-grid-section">
+      <div class="preference-card">
+        <h2 class="card-title">취향 레이더 차트</h2>
+        <div class="radar-wrap">
+          <svg width="360" height="330" viewBox="0 0 300 300" role="img" aria-label="취향 레이더 차트">
+            {% for polygon in genre_radar.grid %}
+            <polygon class="radar-grid" points="{{ polygon }}"></polygon>
+            {% endfor %}
+            {% for label in genre_radar.labels %}
+            <line class="radar-axis" x1="{{ genre_radar.center }}" y1="{{ genre_radar.center }}" x2="{{ label.x }}" y2="{{ label.y }}"></line>
+            <text class="radar-label" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+            {% endfor %}
+            <polygon class="radar-shape" points="{{ genre_radar.points }}"></polygon>
+          </svg>
+        </div>
+      </div>
+
+      <div class="preference-card">
+        <h2 class="card-title">성향 레이더 차트</h2>
+        <div class="radar-wrap">
+          <svg width="360" height="330" viewBox="0 0 300 300" role="img" aria-label="성향 레이더 차트">
+            {% for polygon in mood_radar.grid %}
+            <polygon class="radar-grid" points="{{ polygon }}"></polygon>
+            {% endfor %}
+            {% for label in mood_radar.labels %}
+            <line class="radar-axis" x1="{{ mood_radar.center }}" y1="{{ mood_radar.center }}" x2="{{ label.x }}" y2="{{ label.y }}"></line>
+            <text class="radar-label" x="{{ label.x }}" y="{{ label.y }}">{{ label.text }}</text>
+            {% endfor %}
+            <polygon class="radar-shape" points="{{ mood_radar.points }}"></polygon>
+          </svg>
+        </div>
       </div>
     </div>
   </section>
