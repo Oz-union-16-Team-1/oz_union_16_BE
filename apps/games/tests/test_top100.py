@@ -101,13 +101,40 @@ class GameTop100APITest(APITestCase):
         self.assertGreater(len(result), 0)
         self.assertTrue(all(g.name.lower().startswith("ma") for g in result))
 
-    def test_service_search_does_not_match_title_middle(self):
-        """일반 검색은 제목 중간에만 포함된 검색어는 제외한다."""
+    def test_service_search_matches_title_middle_after_prefix_matches(self):
+        """일반 검색은 제목 중간에 포함된 검색어도 검색한다."""
         result = GameTop100Service.get_top_100_games(
             genre_id=0, search="ain", fuzzy=False
         )
 
-        self.assertEqual(result, [])
+        self.assertEqual([game.game_id for game in result], [self.game_main.game_id])
+
+    def test_service_search_prioritizes_title_prefix_before_contains(self):
+        """검색 결과는 앞부분 일치 후보를 포함 일치 후보보다 먼저 반환한다."""
+        release_date = timezone.now() - timezone.timedelta(days=1)
+        Game.objects.create(
+            game_id=2401,
+            name="Alpha Search Game",
+            total_rating=70.0,
+            total_rating_count=50,
+            first_release_date=release_date,
+            genres=[7],
+        )
+        Game.objects.create(
+            game_id=2402,
+            name="High Rated Alpha Game",
+            total_rating=100.0,
+            total_rating_count=999,
+            first_release_date=release_date,
+            genres=[7],
+        )
+
+        result = GameTop100Service.get_top_100_games(
+            genre_id=13,
+            search="Alpha",
+        )
+
+        self.assertEqual([game.game_id for game in result[:2]], [2401, 2402])
 
     def test_service_search_matches_korean_title_prefix(self):
         """한글 검색어도 name_ko 앞부분 기준으로 검색할 수 있다."""
