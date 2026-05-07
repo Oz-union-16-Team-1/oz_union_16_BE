@@ -85,6 +85,26 @@ MOOD_BAR_COLORS = (
     "#ec4899",
 )
 
+GENRE_BAR_COLORS = (
+    "#ff4d4f",
+    "#ff9f1c",
+    "#f7d154",
+    "#35c759",
+    "#2f80ed",
+    "#7c5cff",
+    "#00c2c7",
+    "#ff5ec4",
+)
+
+MOOD_BAR_COLORS = (
+    "#ff6b6b",
+    "#f59e0b",
+    "#22c55e",
+    "#06b6d4",
+    "#8b5cf6",
+    "#ec4899",
+)
+
 
 class UserPreferenceDashboard(UserPreference):
     class Meta:

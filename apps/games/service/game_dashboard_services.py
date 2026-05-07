@@ -8,6 +8,7 @@ from django.db.models import Avg, Count, QuerySet
 from django.utils import timezone
 
 from apps.games.models import Game
+from apps.games.serializer.game_list_detail_serializers import GameListDetailSerializer
 from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.match.models import MatchGameRating
 from apps.users.models import UserLikeBookmark
@@ -46,7 +47,11 @@ class GameDashboardService:
         recommendation_history = RecommendationHistoryAdapter.load().queryset(game)
 
         return {
+            "frontend_detail": GameListDetailSerializer(game).data,
             "basic_info": cls._get_basic_info(game, ratings, likes_count),
+            "igdb_metrics": cls._get_igdb_metrics(game),
+            "content_summary": cls._get_content_summary(game),
+            "metadata_summary": cls._get_metadata_summary(game),
             "performance_metrics": cls._get_performance_metrics(
                 ratings=ratings,
                 recommendation_history=recommendation_history,
@@ -77,14 +82,79 @@ class GameDashboardService:
 
         return {
             "game_name": game.name,
+            "game_name_ko": game.name_ko or "",
             "game_id": game.game_id,
+            "slug": game.slug,
             "genres": cls._get_genre_names(game),
             "total_like_count": likes_count,
+            "release_date": (
+                game.first_release_date.date().isoformat()
+                if game.first_release_date
+                else ""
+            ),
+            "developer": cls._get_company_name(game, "developer"),
+            "publisher": cls._get_company_name(game, "publisher"),
+            "is_ban": game.is_ban,
             "total_rating_count": rating_summary["total_rating_count"] or 0,
             "average_star_rating": cls._round_or_none(
                 rating_summary["average_star_rating"]
             ),
-            "is_ban": game.is_ban,
+        }
+
+    @classmethod
+    def _get_igdb_metrics(cls, game: Game) -> dict[str, Any]:
+        return {
+            "rating": cls._round_or_none(game.rating),
+            "rating_count": game.rating_count or 0,
+            "aggregated_rating": cls._round_or_none(game.aggregated_rating),
+            "aggregated_rating_count": game.aggregated_rating_count or 0,
+            "total_rating": cls._round_or_none(game.total_rating),
+            "total_rating_count": game.total_rating_count or 0,
+            "follows": game.follows or 0,
+            "hypes": game.hypes or 0,
+        }
+
+    @classmethod
+    def _get_content_summary(cls, game: Game) -> dict[str, Any]:
+        screenshots = cls._count_json_items(game.screenshots)
+        videos = cls._count_json_items(game.videos)
+        websites = cls._count_json_items(game.websites)
+        has_summary = cls._has_text(game.summary) or cls._has_text(game.summary_ko)
+        has_storyline = cls._has_text(game.storyline) or cls._has_text(
+            game.storyline_ko
+        )
+        completed_items = sum(
+            [
+                bool(game.cover),
+                screenshots > 0,
+                videos > 0,
+                websites > 0,
+                has_summary,
+                has_storyline,
+            ]
+        )
+
+        return {
+            "cover_status": "O" if game.cover else "X",
+            "screenshot_count": screenshots,
+            "video_count": videos,
+            "website_count": websites,
+            "has_summary": has_summary,
+            "has_storyline": has_storyline,
+            "completion_percent": round(completed_items / 6 * 100),
+        }
+
+    @classmethod
+    def _get_metadata_summary(cls, game: Game) -> dict[str, Any]:
+        return {
+            "category": game.category if game.category is not None else "-",
+            "status": game.status if game.status is not None else "-",
+            "game_type": game.game_type if game.game_type is not None else "-",
+            "theme_count": cls._count_json_items(game.themes),
+            "keyword_count": cls._count_json_items(game.keywords),
+            "game_mode_count": cls._count_json_items(game.game_modes),
+            "player_perspective_count": cls._count_json_items(game.player_perspectives),
+            "multiplayer_mode_count": cls._count_json_items(game.multiplayer_modes),
         }
 
     @classmethod
@@ -162,6 +232,34 @@ class GameDashboardService:
             if isinstance(genre_id, int) and genre_id in IGDB_GENRE_NAME_MAP:
                 names.append(IGDB_GENRE_NAME_MAP[genre_id])
         return names
+
+    @staticmethod
+    def _get_company_name(game: Game, role: str) -> str:
+        companies = game.involved_companies or []
+        if not isinstance(companies, list):
+            return "-"
+
+        for company in companies:
+            if not isinstance(company, dict) or not company.get(role):
+                continue
+
+            company_name = company.get("company_name")
+            if isinstance(company_name, str) and company_name.strip():
+                return company_name.strip()
+
+        return "-"
+
+    @staticmethod
+    def _count_json_items(value: Any) -> int:
+        if isinstance(value, list):
+            return len(value)
+        if isinstance(value, dict):
+            return len(value)
+        return 0
+
+    @staticmethod
+    def _has_text(value: Any) -> bool:
+        return isinstance(value, str) and bool(value.strip())
 
     @staticmethod
     def _build_rating_trend(ratings: QuerySet[MatchGameRating]) -> dict[str, Any]:
