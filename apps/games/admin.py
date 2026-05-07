@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.utils.html import format_html, format_html_join
 
 from apps.games.models import Game
+from apps.games.service.game_dashboard_services import GameDashboardService
 from apps.match.constants import IGDB_GENRE_NAME_MAP
 from apps.match.models import MatchGamePreference
 
@@ -485,8 +486,10 @@ class GameAdmin(admin.ModelAdmin):
         context = dict(context)
         chart_payload = None
         vector_rows: list[dict] = []
+        dashboard = None
 
         if obj is not None:
+            dashboard = GameDashboardService.get_dashboard(obj.game_id)
             values = self._get_match_vector(obj)
             if values is not None:
                 chart_payload = {
@@ -498,6 +501,7 @@ class GameAdmin(admin.ModelAdmin):
 
         context["game_vector_chart"] = chart_payload
         context["game_vector_rows"] = vector_rows
+        context["dashboard"] = dashboard
 
         return super().render_change_form(
             request,
