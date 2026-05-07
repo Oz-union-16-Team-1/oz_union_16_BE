@@ -1,63 +1,72 @@
 import json
-import time
+import logging
 from typing import Generator
-from uuid import UUID
 
-from django.core.cache import cache
-
-from apps.chatbot.models.models import ChatbotSession
-from apps.chatbot.services.chatbot_answer_builder_services import (
-    build_answer,
-    build_suggested_questions,
+from apps.chatbot.models.models import ChatbotMessage, ChatbotSession
+from apps.chatbot.services.chatbot_llm_services import (
+    GeminiUnavailable,
+    stream_answer,
 )
 from apps.chatbot.services.chatbot_sessions_services import build_session_payload
 
-STREAM_LOCK_TTL = 60
+logger = logging.getLogger(__name__)
 
+LLM_FAILURE_MESSAGE = (
+    "응답을 생성하는 중 일시적인 오류가 발생했어요. 잠시 후 다시 질문해 주세요."
+)
 
-def _normalize_session_id(session_id: UUID | str) -> str:
-    return str(session_id)
-
-
-def _stream_lock_key(session_id: UUID | str) -> str:
-    normalized_session_id = _normalize_session_id(session_id)
-    return f"chatbot:streaming:{normalized_session_id}"
-
-
-def acquire_stream_lock(session_id: UUID | str) -> bool:
-    return cache.add(_stream_lock_key(session_id), True, timeout=STREAM_LOCK_TTL)
-
-
-def release_stream_lock(session_id: UUID | str) -> None:
-    cache.delete(_stream_lock_key(session_id))
-
-
-def is_streaming(session_id: UUID | str) -> bool:
-    return cache.get(_stream_lock_key(session_id)) is not None
-
-
-def chunk_text(text: str, size: int = 6) -> list[str]:
-    return [text[i : i + size] for i in range(0, len(text), size)]
+# Up to 20 turns (40 messages) of conversation history to send to Gemini.
+HISTORY_MESSAGE_LIMIT = 40
 
 
 def format_sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _build_gemini_contents(session: ChatbotSession) -> list[dict]:
+    """Pull the most recent N messages for this session and convert them
+    to Gemini's `contents` schema (role: user|model)."""
+    recent = list(
+        ChatbotMessage.objects.filter(session=session).order_by("-created_at")[
+            :HISTORY_MESSAGE_LIMIT
+        ]
+    )
+    recent.reverse()
+    contents: list[dict] = []
+    for message in recent:
+        role = "model" if message.role == ChatbotMessage.Role.ASSISTANT else "user"
+        contents.append({"role": role, "parts": [{"text": message.content}]})
+    return contents
+
+
 def generate_stream(
     session: ChatbotSession, question: str
 ) -> Generator[str, None, None]:
-    answer = build_answer(question)
-    suggested_questions = build_suggested_questions(question)
     session_payload = build_session_payload(session)
 
     yield format_sse("start", session_payload)
 
-    for chunk in chunk_text(answer):
-        yield format_sse("chunk", {"content": chunk})
-        time.sleep(0.05)
+    contents = _build_gemini_contents(session)
+    collected: list[str] = []
 
-    if suggested_questions:
-        yield format_sse("suggestions", {"questions": suggested_questions})
+    try:
+        for chunk in stream_answer(contents):
+            collected.append(chunk)
+            yield format_sse("chunk", {"content": chunk})
+    except GeminiUnavailable:
+        collected = [LLM_FAILURE_MESSAGE]
+        yield format_sse("chunk", {"content": LLM_FAILURE_MESSAGE})
+    except Exception:
+        logger.exception("Unexpected error while streaming chatbot answer.")
+        collected = [LLM_FAILURE_MESSAGE]
+        yield format_sse("chunk", {"content": LLM_FAILURE_MESSAGE})
+
+    full_response = "".join(collected).strip()
+    if full_response:
+        ChatbotMessage.objects.create(
+            session=session,
+            role=ChatbotMessage.Role.ASSISTANT,
+            content=full_response,
+        )
 
     yield format_sse("complete", session_payload)

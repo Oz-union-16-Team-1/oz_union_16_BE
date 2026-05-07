@@ -243,6 +243,18 @@ SURVEY_EMBEDDING_MODEL = os.getenv(
     "gemini-embedding-001",
 )
 SURVEY_EMBEDDING_TIMEOUT = int(os.getenv("SURVEY_EMBEDDING_TIMEOUT", "10"))
+# System chatbot LLM settings
+SYSTEM_CHATBOT_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+SYSTEM_CHATBOT_GEMINI_MODEL = os.getenv(
+    "SYSTEM_CHATBOT_GEMINI_MODEL",
+    "gemini-2.5-flash",
+)
+SYSTEM_CHATBOT_GEMINI_BASE_URL = os.getenv(
+    "SYSTEM_CHATBOT_GEMINI_BASE_URL",
+    "https://generativelanguage.googleapis.com",
+)
+SYSTEM_CHATBOT_GEMINI_TIMEOUT = int(os.getenv("SYSTEM_CHATBOT_GEMINI_TIMEOUT", "30"))
+
 GAME_TRANSLATION_GEMINI_API_KEY = os.getenv(
     "GAME_TRANSLATION_GEMINI_API_KEY",
 )
